@@ -98,11 +98,8 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     private void setOtherText() {
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
-        mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
-        mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
-        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         mBinding.globalHistoryText.setText((globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode))[Setting.getGlobalHistoryMode()]);
     }
@@ -136,11 +133,8 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
-        mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
-        mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
-        mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
         mBinding.searchThread.setOnClickListener(this::setSearchThread);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
@@ -293,18 +287,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
     }
 
-    private void setHomeHistory(View view) {
-        Setting.putHomeHistory(!Setting.isHomeHistory());
-        mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
-        RefreshEvent.history();
-        RefreshEvent.home();
-    }
 
-    private void setHomeVodAutoLoad(View view) {
-        Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
-        mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
-        RefreshEvent.home();
-    }
 
     private void setEpisodeHistory(View view) {
         Setting.putEpisodeHistory(!Setting.isEpisodeHistory());
@@ -316,10 +299,6 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
     }
 
-    private void setHomeSiteLock(View view) {
-        Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
-        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
-    }
 
     private void setSearchThread(View view) {
     int current = Setting.getSearchThread();
