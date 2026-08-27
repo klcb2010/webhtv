@@ -116,7 +116,7 @@ public class History implements Diffable<History> {
 
     public static List<History> get() {
         if (Setting.isGlobalHistoryEnabled()) {
-            List<History> items = AppDatabase.get().getHistoryDao().findAll();
+            List<History> items = new java.util.ArrayList<>(AppDatabase.get().getHistoryDao().findAll());
             items.sort((a, b) -> Long.compare(b.getCreateTime(), a.getCreateTime()));
             return items;
         }

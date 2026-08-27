@@ -768,6 +768,14 @@ public class Setting {
         return getGlobalHistoryMode() != GLOBAL_HISTORY_OFF;
     }
 
+    public static boolean isGlobalHistoryAuto() {
+        return getGlobalHistoryMode() == GLOBAL_HISTORY_AUTO;
+    }
+
+    public static boolean isGlobalHistorySearch() {
+        return getGlobalHistoryMode() == GLOBAL_HISTORY_SEARCH;
+    }
+
     private static int clampGlobalHistoryMode(int mode) {
         return mode == GLOBAL_HISTORY_AUTO || mode == GLOBAL_HISTORY_SEARCH ? mode : GLOBAL_HISTORY_OFF;
     }

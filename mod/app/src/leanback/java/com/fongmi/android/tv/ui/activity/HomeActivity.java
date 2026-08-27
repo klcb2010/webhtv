@@ -65,6 +65,7 @@ import com.fongmi.android.tv.ui.presenter.HistoryPresenter;
 import com.fongmi.android.tv.ui.presenter.ProgressPresenter;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
 import com.fongmi.android.tv.utils.Clock;
+import com.fongmi.android.tv.utils.HistoryResume;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -468,6 +469,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void setFunc() {
         List<Func> items = new ArrayList<>();
+        // 关闭「默认加载点播」时显示点播入口；关闭「首页最近观看」时显示历史入口
+        if (!Setting.isHomeVodAutoLoad()) items.add(Func.create(R.string.home_vod));
+        if (!Setting.isHomeHistory()) items.add(Func.create(R.string.home_history_button));
         if (LiveConfig.hasUrl()) items.add(Func.create(R.string.home_live));
         items.add(Func.create(R.string.home_search));
         items.add(Func.create(R.string.home_keep));
@@ -557,6 +561,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         switch (event.getType()) {
             case HOME:
                 setTitle();
+                setFunc();
                 SpiderDebug.log("site-dialog", "home refresh start key=%s homePage=%s", getHome().getKey(), getHome().hasHomePage());
                 if (mWeb != null && mWeb.isVisible()) {
                     if (!mWeb.load(getHome(), true)) getVideo(true);
@@ -566,6 +571,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                 SpiderDebug.log("site-dialog", "home refresh end key=%s", getHome().getKey());
                 break;
             case HISTORY:
+                setFunc();
                 getHistory();
                 break;
             case SIZE:
@@ -612,7 +618,16 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onItemClick(Func item) {
-        if (item.getResId() == R.string.home_live) LiveActivity.start(this);
+        if (item.getResId() == R.string.home_vod) {
+            Result homeResult = mHomeResult != null && !mHomeResult.getTypes().isEmpty() ? mHomeResult : mResult;
+            if (homeResult == null || homeResult.getTypes().isEmpty()) {
+                getVideo(true);
+            } else {
+                VodActivity.start(this, getHome().getKey(), homeResult, 0);
+            }
+        } else if (item.getResId() == R.string.home_history_button) {
+            HistoryActivity.start(this);
+        } else if (item.getResId() == R.string.home_live) LiveActivity.start(this);
         else if (item.getResId() == R.string.home_keep) KeepActivity.start(this);
         else if (item.getResId() == R.string.home_push) PushActivity.start(this);
         else if (item.getResId() == R.string.home_search) SearchActivity.start(this);
@@ -653,7 +668,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onItemClick(History item) {
-        VideoActivity.start(this, item.getSiteKey(), item.getVodId(), item.getVodName(), item.getVodPic(), null, item.getWallPic());
+        HistoryResume.open(this, item);
     }
 
     @Override

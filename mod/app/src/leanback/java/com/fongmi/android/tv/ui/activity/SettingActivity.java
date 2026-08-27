@@ -290,11 +290,13 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         Setting.putHomeHistory(!Setting.isHomeHistory());
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         RefreshEvent.history();
+        RefreshEvent.home();
     }
 
     private void setHomeVodAutoLoad(View view) {
         Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
+        RefreshEvent.home();
     }
 
     private void setEpisodeHistory(View view) {
