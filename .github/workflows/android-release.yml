@@ -42,6 +42,11 @@ env:
   CNB_REPO_SLUG: fish2035/webhtv-release
   CNB_REPO_URL: https://cnb.cool/fish2035/webhtv-release.git
 
+  # ============================================================
+  # 上游仓库
+  # 这里只用于检测 / 同步源码
+  # 不用于 GitHub Release
+  # ============================================================
   UPSTREAM_REPO: https://github.com/fish2018/webhtv.git
   UPSTREAM_BRANCH: main
 
@@ -52,9 +57,15 @@ jobs:
     timeout-minutes: 90
 
     steps:
+
       # ============================================================
-      # Checkout
-      # 使用 PAT_TOKEN，保证后续 git push 有权限
+      # Checkout 当前仓库
+      #
+      # origin = 当前仓库
+      # 即：
+      # klcb2010/webhtv
+      #
+      # PAT_TOKEN 用于后续 git push / gh release
       # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,18 +78,25 @@ jobs:
       # 检测并同步上游
       #
       # 上游：
-      #   fish2018/webhtv
+      # fish2018/webhtv
       #
       # 保护：
-      #   README.md
-      #   mod/
-      #   .github/workflows/android-release.yml
+      # README.md
+      # mod/
+      # .github/workflows/android-release.yml
       #
-      # 没有实际变化：
-      #   不提交
+      # 逻辑：
       #
-      # 有实际变化：
-      #   自动 commit + push
+      # 1. fetch 上游
+      # 2. 判断上游 HEAD 是否已经包含在当前 HEAD
+      # 3. 没有更新 -> 不提交
+      # 4. 有更新 -> 同步上游源码
+      # 5. 恢复三个受保护项目
+      # 6. 没有实际文件变化 -> 不提交
+      # 7. 有实际变化 -> commit + push
+      #
+      # 注意：
+      # 这里完全不会访问 upstream/releases
       # ============================================================
       - name: Check and sync upstream
         run: |
@@ -87,9 +105,10 @@ jobs:
           echo "=========================================="
           echo "检查上游更新"
           echo "=========================================="
-          echo "上游仓库: $UPSTREAM_REPO"
-          echo "上游分支: $UPSTREAM_BRANCH"
-          echo "当前分支: ${GITHUB_REF_NAME}"
+          echo "当前仓库 : ${GITHUB_REPOSITORY}"
+          echo "当前分支 : ${GITHUB_REF_NAME}"
+          echo "上游仓库 : ${UPSTREAM_REPO}"
+          echo "上游分支 : ${UPSTREAM_BRANCH}"
           echo "=========================================="
 
           CURRENT_BRANCH="${GITHUB_REF_NAME}"
@@ -99,84 +118,137 @@ jobs:
             exit 1
           fi
 
-          # 添加 / 更新 upstream
+          # --------------------------------------------------------
+          # 确保 origin 始终是当前仓库
+          # --------------------------------------------------------
+          echo ""
+          echo "当前 Git remote："
+          git remote -v
+
+          # --------------------------------------------------------
+          # 添加 upstream
+          # --------------------------------------------------------
           git remote remove upstream 2>/dev/null || true
           git remote add upstream "$UPSTREAM_REPO"
 
-          # 获取上游最新代码
-          git fetch --no-tags --prune upstream "$UPSTREAM_BRANCH"
+          echo ""
+          echo "=========================================="
+          echo "获取上游源码"
+          echo "=========================================="
+
+          git fetch \
+            --no-tags \
+            --prune \
+            upstream \
+            "$UPSTREAM_BRANCH"
+
+          CURRENT_SHA="$(git rev-parse HEAD)"
+          UPSTREAM_SHA="$(git rev-parse "upstream/$UPSTREAM_BRANCH")"
 
           echo ""
-          echo "当前 HEAD:"
-          git rev-parse HEAD
-
-          echo ""
-          echo "上游 HEAD:"
-          git rev-parse "upstream/$UPSTREAM_BRANCH"
+          echo "当前 HEAD : $CURRENT_SHA"
+          echo "上游 HEAD : $UPSTREAM_SHA"
 
           # --------------------------------------------------------
-          # 判断当前仓库是否已经包含上游最新提交
+          # 判断上游是否已经包含在当前仓库
           # --------------------------------------------------------
-          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+          if git merge-base \
+            --is-ancestor \
+            "upstream/$UPSTREAM_BRANCH" \
+            HEAD; then
+
             echo ""
-            echo "✅ 当前仓库已经包含上游最新提交"
-            echo "无需同步"
+            echo "=========================================="
+            echo "✅ 上游没有新的提交"
+            echo "=========================================="
+            echo "跳过同步和提交"
             exit 0
           fi
 
           echo ""
-          echo "⚠️ 检测到上游有新提交"
-          echo ""
+          echo "=========================================="
+          echo "⚠️ 检测到上游更新"
+          echo "=========================================="
 
           # --------------------------------------------------------
-          # 保存需要保护的文件
+          # 显示上游新增提交
+          # --------------------------------------------------------
+          echo ""
+          echo "上游新增提交："
+
+          git log \
+            --oneline \
+            --decorate \
+            HEAD.."upstream/$UPSTREAM_BRANCH" \
+            | head -30 || true
+
+          # --------------------------------------------------------
+          # 保存保护文件
           # --------------------------------------------------------
           rm -rf /tmp/webhtv-protected
           mkdir -p /tmp/webhtv-protected
 
+          echo ""
+          echo "=========================================="
+          echo "保护本地文件"
+          echo "=========================================="
+
           if [ -f README.md ]; then
-            cp -a README.md /tmp/webhtv-protected/README.md
-            echo "🔒 已保护 README.md"
+            cp -a \
+              README.md \
+              /tmp/webhtv-protected/README.md
+
+            echo "🔒 README.md"
           fi
 
           if [ -d mod ]; then
-            cp -a mod /tmp/webhtv-protected/mod
-            echo "🔒 已保护 mod/"
+            cp -a \
+              mod \
+              /tmp/webhtv-protected/mod
+
+            echo "🔒 mod/"
           fi
 
           if [ -f .github/workflows/android-release.yml ]; then
-            mkdir -p /tmp/webhtv-protected/workflows
+            mkdir -p \
+              /tmp/webhtv-protected/workflows
 
             cp -a \
               .github/workflows/android-release.yml \
               /tmp/webhtv-protected/workflows/android-release.yml
 
-            echo "🔒 已保护 .github/workflows/android-release.yml"
+            echo "🔒 .github/workflows/android-release.yml"
           fi
 
           # --------------------------------------------------------
-          # 导出上游源码
+          # 导出上游最新源码
           # --------------------------------------------------------
           rm -rf /tmp/webhtv-upstream
           mkdir -p /tmp/webhtv-upstream
 
-          git archive "upstream/$UPSTREAM_BRANCH" \
+          git archive \
+            "upstream/$UPSTREAM_BRANCH" \
             | tar -x -C /tmp/webhtv-upstream
 
           # --------------------------------------------------------
           # 同步上游
           #
-          # --delete：
-          # 上游删除的文件，当前仓库同步删除
-          #
-          # 以下文件 / 目录永远不覆盖
+          # 以下三个路径绝不覆盖
           # --------------------------------------------------------
-          rsync -a --delete \
+          echo ""
+          echo "=========================================="
+          echo "同步上游源码"
+          echo "=========================================="
+
+          rsync \
+            -a \
+            --delete \
             --exclude='.git/' \
             --exclude='README.md' \
             --exclude='mod/' \
             --exclude='.github/workflows/android-release.yml' \
-            /tmp/webhtv-upstream/ ./
+            /tmp/webhtv-upstream/ \
+            ./
 
           # --------------------------------------------------------
           # 恢复 README.md
@@ -185,6 +257,8 @@ jobs:
             cp -a \
               /tmp/webhtv-protected/README.md \
               README.md
+
+            echo "🔒 已恢复 README.md"
           fi
 
           # --------------------------------------------------------
@@ -196,10 +270,12 @@ jobs:
             cp -a \
               /tmp/webhtv-protected/mod \
               mod
+
+            echo "🔒 已恢复 mod/"
           fi
 
           # --------------------------------------------------------
-          # 恢复 android-release.yml
+          # 恢复当前 workflow
           # --------------------------------------------------------
           if [ -f /tmp/webhtv-protected/workflows/android-release.yml ]; then
             mkdir -p .github/workflows
@@ -207,6 +283,8 @@ jobs:
             cp -a \
               /tmp/webhtv-protected/workflows/android-release.yml \
               .github/workflows/android-release.yml
+
+            echo "🔒 已恢复 .github/workflows/android-release.yml"
           fi
 
           # --------------------------------------------------------
@@ -216,57 +294,77 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "同步后的实际变化"
+          echo "检查实际文件变化"
           echo "=========================================="
 
-          git diff --cached --stat || true
-
-          # 没有实际变化，不提交
           if git diff --cached --quiet; then
+
             echo ""
-            echo "✅ 上游存在新提交，但保护规则过滤后没有实际文件变化"
+            echo "=========================================="
+            echo "✅ 上游虽然有新提交"
+            echo "但保护文件后没有实际变化"
             echo "跳过提交"
+            echo "=========================================="
+
             exit 0
           fi
 
           echo ""
-          echo "=========================================="
-          echo "检测到实际文件变化"
-          echo "=========================================="
+          echo "实际变化："
+          git diff --cached --stat
 
+          echo ""
+          echo "变化文件："
           git diff --cached --name-status
 
           # --------------------------------------------------------
-          # 再次确认保护文件没有进入修改
+          # 强制确认三个保护对象没有被上游覆盖
           # --------------------------------------------------------
           echo ""
           echo "=========================================="
           echo "检查保护文件"
           echo "=========================================="
 
-          if git diff --cached -- README.md | grep -q '^diff'; then
-            echo "⚠️ README.md 出现变化，检查保护逻辑"
+          PROTECTED_CHANGED=0
+
+          if git diff --cached --quiet -- README.md; then
+            echo "✅ README.md 未被修改"
           else
-            echo "✅ README.md 已保护"
+            echo "❌ README.md 被修改"
+            PROTECTED_CHANGED=1
           fi
 
-          if git diff --cached -- mod/ | grep -q '^diff'; then
-            echo "⚠️ mod/ 出现变化，检查保护逻辑"
+          if git diff --cached --quiet -- mod/; then
+            echo "✅ mod/ 未被修改"
           else
-            echo "✅ mod/ 已保护"
+            echo "❌ mod/ 被修改"
+            PROTECTED_CHANGED=1
           fi
 
-          if git diff --cached -- .github/workflows/android-release.yml | grep -q '^diff'; then
-            echo "⚠️ android-release.yml 出现变化，检查保护逻辑"
+          if git diff --cached --quiet -- .github/workflows/android-release.yml; then
+            echo "✅ android-release.yml 未被修改"
           else
-            echo "✅ android-release.yml 已保护"
+            echo "❌ android-release.yml 被修改"
+            PROTECTED_CHANGED=1
+          fi
+
+          if [ "$PROTECTED_CHANGED" -ne 0 ]; then
+            echo ""
+            echo "❌ 保护文件检测失败，停止提交"
+            git reset
+            exit 1
           fi
 
           # --------------------------------------------------------
           # Git 配置
           # --------------------------------------------------------
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           # --------------------------------------------------------
           # 提交
@@ -275,9 +373,19 @@ jobs:
             -m "chore: sync upstream fish2018/webhtv"
 
           # --------------------------------------------------------
-          # 推送
+          # 推送到当前仓库
+          #
+          # 明确使用 origin
+          # 不使用 upstream
           # --------------------------------------------------------
-          git push origin "HEAD:$CURRENT_BRANCH"
+          echo ""
+          echo "=========================================="
+          echo "推送到当前仓库"
+          echo "=========================================="
+
+          git push \
+            origin \
+            "HEAD:$CURRENT_BRANCH"
 
           echo ""
           echo "=========================================="
@@ -304,7 +412,6 @@ jobs:
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
         run: |
-          # 修复资源文件中的占位符错误
           find . \
             -name "strings.xml" \
             -type f \
@@ -317,7 +424,6 @@ jobs:
             -exec sed -i \
             '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 解码 JKS
           mkdir -p app/signing
 
           echo "$B64_DATA" \
@@ -668,10 +774,17 @@ jobs:
       # ============================================================
       # Create GitHub Release
       #
-      # 关键：
-      # 使用 PAT_TOKEN，而不是 github.token
-      # 解决：
-      # HTTP 403: Resource not accessible by integration
+      # 重要：
+      #
+      # --repo "${GITHUB_REPOSITORY}"
+      #
+      # 强制指定目标仓库为：
+      #
+      # klcb2010/webhtv
+      #
+      # 即使存在 upstream remote，也不会去：
+      #
+      # fish2018/webhtv/releases
       # ============================================================
       - name: Create GitHub Release
         env:
@@ -693,6 +806,7 @@ jobs:
           echo "=========================================="
           echo "创建 GitHub Release"
           echo "=========================================="
+          echo "目标仓库: ${GITHUB_REPOSITORY}"
           echo "Tag: ${{ steps.meta.outputs.tag }}"
           echo "Title: ${{ steps.meta.outputs.title }}"
           echo "Channel: ${{ steps.meta.outputs.channel }}"
@@ -700,7 +814,8 @@ jobs:
 
           gh release create \
             "${{ steps.meta.outputs.tag }}" \
-            --target "$GITHUB_SHA" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
             --title "${{ steps.meta.outputs.title }}" \
             --notes "$NOTES" \
             $PRERELEASE_FLAG \
@@ -708,7 +823,9 @@ jobs:
             dist/*.json
 
           echo ""
+          echo "=========================================="
           echo "✅ GitHub Release 创建成功"
+          echo "=========================================="
 
       # ============================================================
       # Sync to CNB
