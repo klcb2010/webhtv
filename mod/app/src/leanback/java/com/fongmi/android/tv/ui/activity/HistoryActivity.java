@@ -12,7 +12,6 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.databinding.ActivityHistoryBinding;
 import com.fongmi.android.tv.event.RefreshEvent;
-import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.HistoryAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
@@ -22,6 +21,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+/**
+ * 电视端历史页。删除交互与手机端一致：
+ * 1) 点「删除」→ 进入删除模式（封面显示删除图标）
+ * 2) 点某一封面 → 删除单条
+ * 3) 再点「删除」→ 确认后清空全部
+ * 4) 返回键 → 退出删除模式
+ */
 public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnClickListener {
 
     private ActivityHistoryBinding mBinding;
@@ -40,21 +46,40 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
     protected void initView(Bundle savedInstanceState) {
         setRecyclerView();
         getHistory();
-        if (mBinding.deleteButton != null) mBinding.deleteButton.setOnClickListener(v -> onDelete());
+        if (mBinding.deleteButton != null) {
+            mBinding.deleteButton.setOnClickListener(v -> onDelete());
+            updateDeleteButtonText();
+        }
         if (mBinding.reportButton != null) mBinding.reportButton.setVisibility(android.view.View.GONE);
     }
 
     private void onDelete() {
-        if (mAdapter.isDelete()) {
-            new MaterialAlertDialogBuilder(this)
-                    .setTitle(R.string.dialog_delete_record)
-                    .setMessage(R.string.dialog_delete_history)
-                    .setNegativeButton(R.string.dialog_negative, null)
-                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> mAdapter.clear())
-                    .show();
-        } else if (mAdapter.getItemCount() > 0) {
+        if (mAdapter.getItemCount() == 0) return;
+        if (!mAdapter.isDelete()) {
+            // 第一次：进入删除模式，显示封面删除图标
             mAdapter.setDelete(true);
+            updateDeleteButtonText();
+            return;
         }
+        // 第二次：确认清空全部
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.dialog_delete_record)
+                .setMessage(R.string.dialog_delete_history)
+                .setNegativeButton(R.string.dialog_negative, null)
+                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
+                    mAdapter.clear();
+                    mBinding.progressLayout.showContent(true, 0);
+                    updateDeleteButtonText();
+                    RefreshEvent.history();
+                })
+                .show();
+    }
+
+    private void updateDeleteButtonText() {
+        if (mBinding.deleteButton == null) return;
+        mBinding.deleteButton.setText(mAdapter != null && mAdapter.isDelete()
+                ? R.string.dialog_delete_record
+                : R.string.setting_delete);
     }
 
     private void setRecyclerView() {
@@ -66,7 +91,10 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
     }
 
     private void getHistory() {
-        mAdapter.setItems(History.get(), () -> mBinding.progressLayout.showContent(true, mAdapter.getItemCount()));
+        mAdapter.setItems(History.get(), () -> {
+            mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
+            updateDeleteButtonText();
+        });
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -83,19 +111,28 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
     public void onItemDelete(History item) {
         mAdapter.remove(item.deleteAndSync(), () -> {
             mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
-            if (mAdapter.getItemCount() == 0) mAdapter.setDelete(false);
+            if (mAdapter.getItemCount() == 0) {
+                mAdapter.setDelete(false);
+                updateDeleteButtonText();
+            }
+            RefreshEvent.history();
         });
     }
 
     @Override
     public boolean onLongClick() {
         mAdapter.setDelete(!mAdapter.isDelete());
+        updateDeleteButtonText();
         return true;
     }
 
     @Override
     protected void onBackInvoked() {
-        if (mAdapter.isDelete()) mAdapter.setDelete(false);
-        else super.onBackInvoked();
+        if (mAdapter != null && mAdapter.isDelete()) {
+            mAdapter.setDelete(false);
+            updateDeleteButtonText();
+        } else {
+            super.onBackInvoked();
+        }
     }
 }

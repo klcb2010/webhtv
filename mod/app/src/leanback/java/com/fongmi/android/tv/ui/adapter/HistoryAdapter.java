@@ -11,8 +11,11 @@ import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.databinding.AdapterVodBinding;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.ResUtil;
+
+import java.util.ArrayList;
 
 public class HistoryAdapter extends BaseDiffAdapter<History, HistoryAdapter.ViewHolder> {
 
@@ -27,7 +30,9 @@ public class HistoryAdapter extends BaseDiffAdapter<History, HistoryAdapter.View
 
     public interface OnClickListener {
         void onItemClick(History item);
+
         void onItemDelete(History item);
+
         boolean onLongClick();
     }
 
@@ -49,7 +54,11 @@ public class HistoryAdapter extends BaseDiffAdapter<History, HistoryAdapter.View
 
     @Override
     public void clear() {
-        for (History item : new java.util.ArrayList<>(getItems())) item.deleteAndSync();
+        if (Setting.isGlobalHistoryEnabled()) {
+            for (History item : new ArrayList<>(getItems())) item.deleteAndSync();
+        } else {
+            History.deleteAndSync(VodConfig.getCid());
+        }
         super.clear();
         setDelete(false);
     }
@@ -78,16 +87,18 @@ public class HistoryAdapter extends BaseDiffAdapter<History, HistoryAdapter.View
         boolean same = item.getVodName() != null && item.getVodName().equals(remark);
         setClickListener(holder.itemView, item);
         holder.binding.name.setText(item.getVodName());
-        holder.binding.remark.setVisibility(!same && remark != null && !remark.isEmpty() ? View.VISIBLE : View.GONE);
-        holder.binding.remark.setText(remark);
-        holder.binding.site.setVisibility(View.VISIBLE);
         holder.binding.site.setText(item.getSiteName());
+        holder.binding.site.setVisibility(item.getSiteVisible());
+        holder.binding.remark.setText(remark);
+        // 删除模式：封面中央删除图标；非删除模式才显示备注
+        holder.binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
+        holder.binding.remark.setVisibility(delete || same || remark == null || remark.isEmpty() ? View.GONE : View.VISIBLE);
         ImgUtil.load(item.getVodName(), item.getVodPic(), holder.binding.image);
-        holder.binding.getRoot().setSelected(delete);
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public final AdapterVodBinding binding;
+
         public ViewHolder(@NonNull AdapterVodBinding binding) {
             super(binding.getRoot());
             this.binding = binding;

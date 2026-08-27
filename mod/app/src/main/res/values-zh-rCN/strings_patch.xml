@@ -10,3 +10,8 @@
         <item>自动匹配播放源</item>
         <item>搜索后选择播放源</item>
     </string-array>
+
+    <string name="dialog_delete_record">删除全部记录？</string>
+    <string name="dialog_delete_history">将删除全部历史记录。</string>
+    <string name="dialog_negative">取消</string>
+    <string name="dialog_positive">确定</string>
