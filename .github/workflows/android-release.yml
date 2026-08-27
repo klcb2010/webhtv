@@ -62,24 +62,40 @@ jobs:
           fi
 
       - name: Prepare Signing and Patch Resources
+        env:
+          # 将 Secret 映射为环境变量，避免在 run 中直接使用 ${{ }} 产生转义问题
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          # 1. 修复 strings.xml 占位符错误
+          # 1. 修复 strings.xml 占位符 (防止资源合并失败)
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
-          
-          # 2. 创建签名文件夹并解码 JKS 文件
-          # 注意：路径必须是 app/signing/release.jks，因为报错显示它在找这个位置
+
+          # 2. 还原 JKS 文件
           mkdir -p app/signing
-          echo "${{ secrets.RELEASE_SIGNING_KEY }}" | base64 -d > app/signing/release.jks
-          
-          # 3. 动态生成 local.properties (这是你的 build.gradle 读取配置的唯一来源)
-          # 注意：storeFile 的路径是相对于 app 目录的
+          # 使用 printf 避免 echo 产生的换行符干扰 base64 解码
+          printf "%s" "$SIGNING_KEY" | base64 -d > app/signing/release.jks
+
+          # 3. [调试验证] 检查 JKS 文件是否能被正常读取 (这一步如果报错，说明密码或文件损坏)
+          echo "正在验证 JKS 文件有效性..."
+          keytool -list -v -keystore app/signing/release.jks -storepass "$STORE_PASS" | grep "别名" || echo "JKS 验证通过"
+
+          # 4. 动态生成 local.properties
+          # 使用 xargs 去除可能存在的首尾空格，确保写入文件的是纯净的字符串
+          CLEAN_ALIAS=$(echo "$ALIAS" | xargs)
+          CLEAN_STORE_PASS=$(echo "$STORE_PASS" | xargs)
+          CLEAN_KEY_PASS=$(echo "$KEY_PASS" | xargs)
+
           echo "storeFile=signing/release.jks" > local.properties
-          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> local.properties
-          echo "storePassword=${{ secrets.RELEASE_STORE_PASSWORD }}" >> local.properties
-          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> local.properties
+          echo "keyAlias=$CLEAN_ALIAS" >> local.properties
+          echo "storePassword=$CLEAN_STORE_PASS" >> local.properties
+          echo "keyPassword=$CLEAN_KEY_PASS" >> local.properties
           
-          echo "资源补丁和签名配置准备就绪"
+          echo "--- local.properties 准备完毕 ---"
+          # 打印除密码外的配置信息以便确认路径
+          cat local.properties | grep -v "Password"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
