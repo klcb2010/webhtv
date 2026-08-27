@@ -3,7 +3,7 @@
 # 默影视 https://github.com/Silent1566/webhtv
 
 
-# 移植功能如下
+# 移植功能开关如下
 - 首页最近观看 -TV端
 - 默认加载点播 -TV端
 - 锁定后左右键 -TV端
