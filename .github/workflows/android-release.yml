@@ -62,9 +62,9 @@ jobs:
           fi
 
       - name: Prepare Signing and Patch Resources
-        shell: bash
         env:
-          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          # 这样映射可以确保密码里的 @ 符号被完整保留，不会被 shell 误解
+          B64_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
@@ -73,23 +73,22 @@ jobs:
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 2. 解码签名文件并存放在绝对路径
-          mkdir -p $GITHUB_WORKSPACE/app/signing
-          printf "%s" "$SIGNING_KEY" | base64 -d > $GITHUB_WORKSPACE/app/signing/release.jks
-          
-          # 3. 使用 Python 安全生成 local.properties (自动处理 @ 符号和空格)
-          # 我们直接使用 $GITHUB_WORKSPACE 绝对路径，排除一切相对路径导致的 null
-          python3 -c "
-          import os
-          path = os.path.join(os.environ['GITHUB_WORKSPACE'], 'app', 'signing', 'release.jks')
-          with open('local.properties', 'w') as f:
-          f.write(f'storeFile={path}\n')
-          f.write(f'keyAlias={os.environ[\"ALIAS\"].strip()}\n')
-          f.write(f'storePassword={os.environ[\"STORE_PASS\"].strip()}\n')
-          f.write(f'keyPassword={os.environ[\"KEY_PASS\"].strip()}\n')
-           "
-            echo "--- local.properties 调试信息 (隐藏密码) ---"
-            cat local.properties | grep -v "Password"
+          # 2. 解码签名文件并获取绝对路径 (解决 null 的终极方案)
+          mkdir -p app/signing
+          printf "%s" "$B64_KEY" | base64 -d > app/signing/release.jks
+          ABS_JKS_PATH=$(pwd)/app/signing/release.jks
+
+          # 3. 写入 local.properties (每一行都独立写入，不带任何缩进逻辑)
+          echo "storeFile=$ABS_JKS_PATH" > local.properties
+          echo "keyAlias=$ALIAS" >> local.properties
+          echo "storePassword=$STORE_PASS" >> local.properties
+          echo "keyPassword=$KEY_PASS" >> local.properties
+
+          # 4. 调试输出 (验证文件是否存在，别名是否正确)
+          echo "--- 准备工作检查 ---"
+          ls -l local.properties
+          echo "storeFile 路径为: $ABS_JKS_PATH"
+          echo "keyAlias 别名为: $ALIAS"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
