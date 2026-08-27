@@ -80,7 +80,7 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
         holder.binding.remark.setText(item.getVodRemarks());
         ImgUtil.load(item.getVodPic(), holder.binding.image);
         
-        // 根据删除模式显示图标
+        // 关键：控制封面中间删除图标的显隐
         holder.binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
         
         holder.itemView.setOnClickListener(v -> {
