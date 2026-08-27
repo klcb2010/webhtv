@@ -68,34 +68,53 @@ jobs:
           STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          # 1. 修复 strings.xml
+          # 1. 修复资源文件
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 2. 解码签名文件 (使用更加稳健的解码方式)
+          # 2. 安全解码 JKS
           mkdir -p app/signing
-          echo "$SIGNING_KEY" | base64 --decode > app/signing/release.jks
+          # 先存为临时文件再解码，防止管道丢失数据
+          echo "$SIGNING_KEY" | tr -d '\n ' > signing_key.b64
+          base64 -d signing_key.b64 > app/signing/release.jks
           ABS_JKS_PATH=$(pwd)/app/signing/release.jks
 
-          # 3. 【核心验证步】在 Action 里直接测试别名和密码
-          echo "正在执行自检：测试别名和密码是否匹配..."
-          if keytool -list -v -keystore "$ABS_JKS_PATH" -storepass "$STORE_PASS" -alias "$ALIAS" > /dev/null 2>&1; then
-              echo "✅ 自检成功：别名和密码均正确。"
-          else
-              echo "❌ 自检失败：别名 [$ALIAS] 或密码不正确，或者 JKS 文件损坏。"
-              echo "请检查 GitHub Secrets 中的 RELEASE_KEY_ALIAS 和密码是否与本地一致。"
+          # 3. --- 核心诊断环节 ---
+          echo "==== 正在进行深度诊断 ===="
+          
+          # 检查文件大小是否正常（如果只有几十字节说明 base64 解码坏了）
+          echo "JKS 文件大小: $(wc -c < app/signing/release.jks) 字节"
+
+          # 尝试列出 JKS 里的所有别名（不带 -alias 过滤，只用密码）
+          # 这能测试出 STORE_PASS 是否正确
+          echo "尝试读取 KeyStore 列表..."
+          if ! keytool -list -keystore "$ABS_JKS_PATH" -storepass "$STORE_PASS" > jks_list.txt 2>&1; then
+              echo "❌ 诊断结论：STORE_PASSWORD 错误或 JKS 文件损坏！"
+              cat jks_list.txt
               exit 1
           fi
 
-          # 4. 使用 EOF 方式写入 local.properties (最不容易出错的粘贴方式)
-          cat > local.properties <<EOF
-          storeFile=$ABS_JKS_PATH
-          keyAlias=$ALIAS
-          storePassword=$STORE_PASS
-          keyPassword=$KEY_PASS
-          EOF
+          echo "✅ 密码正确。KeyStore 中的别名如下："
+          cat jks_list.txt | grep "PrivateKeyEntry" || cat jks_list.txt
+          
+          # 检查你的 ALIAS 是否在列表里 (去掉前后空格)
+          CLEAN_ALIAS=$(echo "$ALIAS" | xargs)
+          if ! grep -q "$CLEAN_ALIAS" jks_list.txt; then
+              echo "❌ 诊断结论：别名不匹配！"
+              echo "你在 Secret 里填的是: [$CLEAN_ALIAS]"
+              echo "但 JKS 文件里实际存在的别名请看上方列表。"
+              exit 1
+          fi
+          
+          echo "✅ 别名匹配成功！"
 
-          echo "local.properties 写入完成。"
+          # 4. 写入 local.properties
+          echo "storeFile=$ABS_JKS_PATH" > local.properties
+          echo "keyAlias=$CLEAN_ALIAS" >> local.properties
+          echo "storePassword=$STORE_PASS" >> local.properties
+          echo "keyPassword=$KEY_PASS" >> local.properties
+          
+          echo "==== 诊断全部通过，开始编译 ===="
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
