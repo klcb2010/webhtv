@@ -63,32 +63,39 @@ jobs:
 
       - name: Prepare Signing and Patch Resources
         env:
-          # 这样映射可以确保密码里的 @ 符号被完整保留，不会被 shell 误解
-          B64_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          # 1. 修复 strings.xml 占位符
+          # 1. 修复 strings.xml
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 2. 解码签名文件并获取绝对路径 (解决 null 的终极方案)
+          # 2. 解码签名文件 (使用更加稳健的解码方式)
           mkdir -p app/signing
-          printf "%s" "$B64_KEY" | base64 -d > app/signing/release.jks
+          echo "$SIGNING_KEY" | base64 --decode > app/signing/release.jks
           ABS_JKS_PATH=$(pwd)/app/signing/release.jks
 
-          # 3. 写入 local.properties (每一行都独立写入，不带任何缩进逻辑)
-          echo "storeFile=$ABS_JKS_PATH" > local.properties
-          echo "keyAlias=$ALIAS" >> local.properties
-          echo "storePassword=$STORE_PASS" >> local.properties
-          echo "keyPassword=$KEY_PASS" >> local.properties
+          # 3. 【核心验证步】在 Action 里直接测试别名和密码
+          echo "正在执行自检：测试别名和密码是否匹配..."
+          if keytool -list -v -keystore "$ABS_JKS_PATH" -storepass "$STORE_PASS" -alias "$ALIAS" > /dev/null 2>&1; then
+              echo "✅ 自检成功：别名和密码均正确。"
+          else
+              echo "❌ 自检失败：别名 [$ALIAS] 或密码不正确，或者 JKS 文件损坏。"
+              echo "请检查 GitHub Secrets 中的 RELEASE_KEY_ALIAS 和密码是否与本地一致。"
+              exit 1
+          fi
 
-          # 4. 调试输出 (验证文件是否存在，别名是否正确)
-          echo "--- 准备工作检查 ---"
-          ls -l local.properties
-          echo "storeFile 路径为: $ABS_JKS_PATH"
-          echo "keyAlias 别名为: $ALIAS"
+          # 4. 使用 EOF 方式写入 local.properties (最不容易出错的粘贴方式)
+          cat > local.properties <<EOF
+          storeFile=$ABS_JKS_PATH
+          keyAlias=$ALIAS
+          storePassword=$STORE_PASS
+          keyPassword=$KEY_PASS
+          EOF
+
+          echo "local.properties 写入完成。"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
