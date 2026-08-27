@@ -12,7 +12,6 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.databinding.ActivityHistoryBinding;
 import com.fongmi.android.tv.event.RefreshEvent;
-import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.HistoryAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
@@ -46,13 +45,19 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
 
     private void onDelete() {
         if (mAdapter.isDelete()) {
+            // 第二次点击：弹出 Material 对话框执行全删
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.dialog_delete_record)
                     .setMessage(R.string.dialog_delete_history)
                     .setNegativeButton(R.string.dialog_negative, null)
-                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> mAdapter.clear())
+                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
+                        mAdapter.clear();
+                        mAdapter.setDelete(false);
+                        mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
+                    })
                     .show();
         } else if (mAdapter.getItemCount() > 0) {
+            // 第一次点击：切换适配器为删除模式
             mAdapter.setDelete(true);
         }
     }
@@ -81,6 +86,7 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
 
     @Override
     public void onItemDelete(History item) {
+        // 单条删除逻辑
         mAdapter.remove(item.deleteAndSync(), () -> {
             mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
             if (mAdapter.getItemCount() == 0) mAdapter.setDelete(false);
@@ -95,7 +101,10 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
 
     @Override
     protected void onBackInvoked() {
-        if (mAdapter.isDelete()) mAdapter.setDelete(false);
-        else super.onBackInvoked();
+        if (mAdapter != null && mAdapter.isDelete()) {
+            mAdapter.setDelete(false);
+        } else {
+            super.onBackInvoked();
+        }
     }
 }
