@@ -1,2 +1,4 @@
     <string name="setting_home_history">首页最近观看</string>
     <string name="setting_home_vod_auto_load">默认加载点播</string>
+    <string name="setting_episode_history">集数历史</string>
+    <string name="setting_play_back_to_detail">返回详情页</string>

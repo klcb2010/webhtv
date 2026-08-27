@@ -94,6 +94,8 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
+        mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
+        mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
         mBinding.languageText.setText((language = ResUtil.getStringArray(R.array.select_language))[Setting.getLanguageIndex()]);
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
     }
@@ -130,6 +132,8 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.incognito.setOnClickListener(this::setIncognito);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
+        mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
+        mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -284,6 +288,16 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setHomeVodAutoLoad(View view) {
         Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
+    }
+
+    private void setEpisodeHistory(View view) {
+        Setting.putEpisodeHistory(!Setting.isEpisodeHistory());
+        mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
+    }
+
+    private void setPlayBackToDetail(View view) {
+        Setting.putPlayBackToDetail(!Setting.isPlayBackToDetail());
+        mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
     }
 
     private void setSize(View view) {

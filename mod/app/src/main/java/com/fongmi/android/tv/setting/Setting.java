@@ -715,6 +715,22 @@ public class Setting {
         Prefers.put("home_vod_auto_load", autoLoad);
     }
 
+    public static boolean isEpisodeHistory() {
+        return Prefers.getBoolean("episode_history", true);
+    }
+
+    public static void putEpisodeHistory(boolean episodeHistory) {
+        Prefers.put("episode_history", episodeHistory);
+    }
+
+    public static boolean isPlayBackToDetail() {
+        return Prefers.getBoolean("play_back_to_detail", true);
+    }
+
+    public static void putPlayBackToDetail(boolean backToDetail) {
+        Prefers.put("play_back_to_detail", backToDetail);
+    }
+
     public static boolean hasFileAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return Environment.isExternalStorageManager();
         return ContextCompat.checkSelfPermission(App.get(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(App.get(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;

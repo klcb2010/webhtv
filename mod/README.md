@@ -1,14 +1,8 @@
-# mod — 本地补丁（首页两个开关）
+# mod — 四个设置开关
 
-## 内容
-- 设置页增加：**首页最近观看**、**默认加载点播**
-- 电视端 `HomeActivity` 按开关控制首页行为
+1. 首页最近观看 (home_history，默认开)
+2. 默认加载点播 (home_vod_auto_load，默认开)
+3. 集数历史 (episode_history，默认开)
+4. 返回详情页 (play_back_to_detail，默认开)
 
-## 本地手动应用
-在仓库根目录：
-```bash
-bash mod/apply.sh
-```
-
-## CI
-`.github/workflows` 里会在 Gradle 打包前自动执行 `bash mod/apply.sh`。
+打包前执行：`bash mod/apply.sh`

@@ -1,2 +1,4 @@
     <string name="setting_home_history">Home recent history</string>
     <string name="setting_home_vod_auto_load">Auto load VOD on home</string>
+    <string name="setting_episode_history">Episode history</string>
+    <string name="setting_play_back_to_detail">Back to detail</string>
