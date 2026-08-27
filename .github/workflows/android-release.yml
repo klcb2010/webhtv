@@ -62,40 +62,34 @@ jobs:
           fi
 
       - name: Prepare Signing and Patch Resources
+        shell: bash
         env:
-          # 将 Secret 映射为环境变量，避免在 run 中直接使用 ${{ }} 产生转义问题
           SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
           KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          # 1. 修复 strings.xml 占位符 (防止资源合并失败)
+          # 1. 修复 strings.xml 占位符
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 2. 还原 JKS 文件
-          mkdir -p app/signing
-          # 使用 printf 避免 echo 产生的换行符干扰 base64 解码
-          printf "%s" "$SIGNING_KEY" | base64 -d > app/signing/release.jks
-
-          # 3. [调试验证] 检查 JKS 文件是否能被正常读取 (这一步如果报错，说明密码或文件损坏)
-          echo "正在验证 JKS 文件有效性..."
-          keytool -list -v -keystore app/signing/release.jks -storepass "$STORE_PASS" | grep "别名" || echo "JKS 验证通过"
-
-          # 4. 动态生成 local.properties
-          # 使用 xargs 去除可能存在的首尾空格，确保写入文件的是纯净的字符串
-          CLEAN_ALIAS=$(echo "$ALIAS" | xargs)
-          CLEAN_STORE_PASS=$(echo "$STORE_PASS" | xargs)
-          CLEAN_KEY_PASS=$(echo "$KEY_PASS" | xargs)
-
-          echo "storeFile=signing/release.jks" > local.properties
-          echo "keyAlias=$CLEAN_ALIAS" >> local.properties
-          echo "storePassword=$CLEAN_STORE_PASS" >> local.properties
-          echo "keyPassword=$CLEAN_KEY_PASS" >> local.properties
+          # 2. 解码签名文件并存放在绝对路径
+          mkdir -p $GITHUB_WORKSPACE/app/signing
+          printf "%s" "$SIGNING_KEY" | base64 -d > $GITHUB_WORKSPACE/app/signing/release.jks
           
-          echo "--- local.properties 准备完毕 ---"
-          # 打印除密码外的配置信息以便确认路径
-          cat local.properties | grep -v "Password"
+          # 3. 使用 Python 安全生成 local.properties (自动处理 @ 符号和空格)
+          # 我们直接使用 $GITHUB_WORKSPACE 绝对路径，排除一切相对路径导致的 null
+          python3 -c "
+          import os
+          path = os.path.join(os.environ['GITHUB_WORKSPACE'], 'app', 'signing', 'release.jks')
+         with open('local.properties', 'w') as f:
+          f.write(f'storeFile={path}\n')
+          f.write(f'keyAlias={os.environ[\"ALIAS\"].strip()}\n')
+          f.write(f'storePassword={os.environ[\"STORE_PASS\"].strip()}\n')
+          f.write(f'keyPassword={os.environ[\"KEY_PASS\"].strip()}\n')
+           "
+            echo "--- local.properties 调试信息 (隐藏密码) ---"
+            cat local.properties | grep -v "Password"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
