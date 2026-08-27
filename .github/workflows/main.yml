@@ -1,4 +1,4 @@
-name: Android Release
+name: Android Release teat
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       release_channel:
-        description: "Release channel, auto uses beta on fongmi-sync"
+        description: "Release channel, auto uses beta on dev/fongmi-sync and stable on main"
         required: false
         default: auto
         type: choice
@@ -26,7 +26,7 @@ on:
         default: false
         type: boolean
       sync_cnb:
-        description: "Mirror APKs to CNB Release and sync CNB manifests"
+        description: "Optionally mirror APKs to CNB Release and sync CNB manifests"
         required: false
         default: false
         type: boolean
@@ -34,12 +34,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: android-release-update-channel
+  cancel-in-progress: false
+
 env:
   TZ: Asia/Shanghai
   CNB_API_ENDPOINT: https://api.cnb.cool
   CNB_WEB_ENDPOINT: https://cnb.cool
   CNB_REPO_SLUG: fish2035/webhtv-release
   CNB_REPO_URL: https://cnb.cool/fish2035/webhtv-release.git
+  UPDATE_CHANNEL_TAG: update-channel
 
 jobs:
   release:
@@ -53,60 +58,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply mod patches
-        run: |
-          if [ -f mod/apply.sh ]; then
-            bash mod/apply.sh
-          else
-            echo "No mod/apply.sh, skip"
-          fi
-
-      - name: Prepare Signing and Patch Resources
-        env:
-          # 必须对应 GitHub Secrets 里的名字
-          B64_DATA: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
-        run: |
-          # 1. 修复资源文件中的占位符错误
-          find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
-          find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
-
-          # 2. 解码 JKS 签名文件
-          mkdir -p app/signing
-          echo "$B64_DATA" | tr -d '\n ' | base64 -d > app/signing/release.jks
-          ABS_JKS_PATH=$(pwd)/app/signing/release.jks
-
-          # 3. 验证数据是否真的传进来了
-          if [ ! -s app/signing/release.jks ]; then
-            echo "❌ 错误：解码后的 JKS 文件为空，请检查 RELEASE_KEYSTORE_BASE64 是否填对！"
-            exit 1
-          fi
-
-          # 4. 密钥库访问自检 (如果这步报错，说明密码或别名绝对填错了)
-          echo "==== 正在验证密钥库访问权限 ===="
-          if ! keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" -alias "$ALIAS" > /dev/null 2>&1; then
-            echo "❌ 验证失败：密码或别名不正确！"
-            echo "当前尝试别名: $ALIAS"
-            echo "JKS 中真实的别名列表如下："
-            keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" | grep "PrivateKeyEntry"
-            exit 1
-          fi
-          echo "✅ 验证通过！"
-
-          # 5. 写入 local.properties (使用绝对路径解决 null 报错)
-          cat > local.properties <<EOF
-          storeFile=$ABS_JKS_PATH
-          keyAlias=$ALIAS
-          storePassword=$PASS
-          keyPassword=$PASS
-          EOF
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: gradle
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -127,14 +78,32 @@ jobs:
 
       - name: Install Android packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
+          # API 37 is not published in sdkmanager's stable channel; install the platform archive directly.
+          sdkmanager "platform-tools" "platforms;android-28" "build-tools;36.0.0"
+          curl -fsSL -o /tmp/platform-37.zip https://dl.google.com/android/repository/platform-37.0_r01.zip
+          rm -rf /tmp/platform-37 "$ANDROID_HOME/platforms/android-37"
+          mkdir -p /tmp/platform-37 "$ANDROID_HOME/platforms"
+          unzip -q /tmp/platform-37.zip -d /tmp/platform-37
+          platform_jar="$(find /tmp/platform-37 -name android.jar -print -quit)"
+          test -n "$platform_jar"
+          mv "$(dirname "$platform_jar")" "$ANDROID_HOME/platforms/android-37"
 
-      - name: Run WebSocket danmaku tests
+      - name: Run release-critical tests
         run: |
           chmod +x ./gradlew
           ./gradlew \
             :app:testMobileArm64_v8aDebugUnitTest \
             --tests 'com.fongmi.android.tv.player.danmaku.*' \
+            --tests 'com.fongmi.android.tv.UpdateChannelTest' \
+            --tests 'com.fongmi.android.tv.UpdaterFutureTest' \
+            --tests 'com.fongmi.android.tv.utils.GithubTest' \
+            --tests 'com.fongmi.android.tv.utils.GithubProxyTest' \
+            --tests 'com.fongmi.android.tv.ui.dialog.AboutDialogLayoutTest' \
+            --tests 'com.fongmi.android.tv.ui.dialog.UpdateDialogChannelVisibilityTest' \
+            --no-daemon
+          ./gradlew \
+            :app:testLeanbackArm64_v8aDebugUnitTest \
+            --tests 'com.fongmi.android.tv.ui.dialog.UpdateDialogLayoutTest' \
             --no-daemon
 
       - name: Resolve release tag
@@ -144,21 +113,23 @@ jobs:
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -1)"
           CHANNEL="${{ inputs.release_channel }}"
           if [ "$CHANNEL" = "auto" ] || [ -z "$CHANNEL" ]; then
-            if [ "${{ github.ref_name }}" = "fongmi-sync" ]; then
+            if [ "${{ github.ref_name }}" = "dev" ] || [ "${{ github.ref_name }}" = "fongmi-sync" ]; then
               CHANNEL="beta"
             else
               CHANNEL="stable"
             fi
           fi
+          COMMIT_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
+          TAG_TIME="$(date -d "@$COMMIT_EPOCH" +%Y%m%d%H%M)"
           if [ "$CHANNEL" = "beta" ]; then
             APK_SUFFIX="-beta"
             TAG_PATTERN="^v${VERSION_NAME}-beta-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-beta-$(date +%Y%m%d%H%M)"
+            TAG_DEFAULT="v${VERSION_NAME}-beta-$TAG_TIME"
             TAG_EXPECT="v${VERSION_NAME}-beta-yyyyMMddHHmm"
           else
             APK_SUFFIX=""
             TAG_PATTERN="^v${VERSION_NAME}-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-$(date +%Y%m%d%H%M)"
+            TAG_DEFAULT="v${VERSION_NAME}-$TAG_TIME"
             TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm"
           fi
           TAG="${{ inputs.release_tag }}"
@@ -169,9 +140,12 @@ jobs:
             echo "::error title=Invalid release tag::Expected $TAG_EXPECT, got: $TAG"
             exit 1
           fi
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "::error title=Release tag exists::$TAG already exists"
-            exit 1
+          if EXISTING_TAG_SHA="$(git rev-parse "$TAG^{commit}" 2>/dev/null)"; then
+            if [ "$EXISTING_TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "::error title=Existing release tag targets another commit::$TAG points to $EXISTING_TAG_SHA, expected $GITHUB_SHA"
+              exit 1
+            fi
+            echo "::notice title=Reusing release tag::$TAG already points to this commit"
           fi
           {
             echo "tag=$TAG"
@@ -239,6 +213,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+
           raw = os.environ.get("RELEASE_NOTES_RAW", "").strip()
           notes = (
               raw
@@ -270,6 +245,7 @@ jobs:
           import hashlib
           import json
           import os
+
           tag = "${{ steps.meta.outputs.tag }}"
           notes = os.environ.get("RELEASE_NOTES", "").strip()
           release_download_base = os.environ["GITHUB_RELEASE_DOWNLOAD_BASE"]
@@ -304,12 +280,58 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
           NOTES="${RELEASE_NOTES:-手动触发 GitHub Actions 构建发布。}"
-          gh release create "${{ steps.meta.outputs.tag }}" \
-            --target "$GITHUB_SHA" \
-            --title "${{ steps.meta.outputs.title }}" \
-            --notes "$NOTES" \
-            $PRERELEASE_FLAG \
-            dist/*.apk dist/*.json
+          if gh release view "${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload "${{ steps.meta.outputs.tag }}" dist/*.apk dist/*.json --clobber
+          else
+            gh release create "${{ steps.meta.outputs.tag }}" \
+              --target "$GITHUB_SHA" \
+              --title "${{ steps.meta.outputs.title }}" \
+              --notes "$NOTES" \
+              $PRERELEASE_FLAG \
+              dist/*.apk dist/*.json
+          fi
+
+      - name: Publish update channel manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf channel-manifests other-channel-manifests
+          mkdir -p channel-manifests other-channel-manifests
+          cp dist/*.json channel-manifests/
+
+          if [ "${{ steps.meta.outputs.channel }}" = "stable" ]; then
+            OTHER_TAG="$(gh release list --limit 100 --json tagName,isDraft,isPrerelease \
+              --jq '[.[] | select((.isDraft == false) and (.isPrerelease == true) and (.tagName | test("-beta-[0-9]{12}$")))] | first | .tagName // ""')"
+            OTHER_PATTERN="*-beta.json"
+          else
+            OTHER_TAG="$(gh release list --limit 100 --json tagName,isDraft,isPrerelease \
+              --jq '[.[] | select((.isDraft == false) and (.isPrerelease == false) and (.tagName | test("^v.+-[0-9]{12}$")))] | first | .tagName // ""')"
+            OTHER_PATTERN="*.json"
+          fi
+
+          if [ -n "$OTHER_TAG" ]; then
+            if gh release download "$OTHER_TAG" --pattern "$OTHER_PATTERN" --dir other-channel-manifests; then
+              for manifest in other-channel-manifests/*.json; do
+                [ -e "$manifest" ] || continue
+                if [ "${{ steps.meta.outputs.channel }}" = "beta" ] && [[ "$(basename "$manifest")" == *-beta.json ]]; then
+                  continue
+                fi
+                cp "$manifest" channel-manifests/
+              done
+            else
+              echo "::warning title=Channel manifest seed failed::Could not download $OTHER_PATTERN from $OTHER_TAG."
+            fi
+          fi
+
+          if ! gh release view "$UPDATE_CHANNEL_TAG" >/dev/null 2>&1; then
+            gh release create "$UPDATE_CHANNEL_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Update channel manifests" \
+              --notes "Machine-managed stable and beta update manifests." \
+              --prerelease
+          fi
+          gh release upload "$UPDATE_CHANNEL_TAG" channel-manifests/*.json --clobber
 
       - name: Sync to CNB
         if: ${{ inputs.sync_cnb }}
