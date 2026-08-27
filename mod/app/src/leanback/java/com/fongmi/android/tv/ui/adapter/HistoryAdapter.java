@@ -16,40 +16,50 @@ import java.util.List;
 
 public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHolder> {
 
-    private final OnItemClickListener mListener;
+    private final OnClickListener mListener;
     private final List<History> mItems;
-    private boolean delete; // 是否处于删除模式
+    private boolean delete;
 
-    public interface OnItemClickListener {
+    public interface OnClickListener {
         void onItemClick(History item);
         void onItemDelete(History item);
+        boolean onLongClick();
     }
 
-    public HistoryAdapter(OnItemClickListener listener) {
+    public HistoryAdapter(OnClickListener listener) {
         this.mListener = listener;
         this.mItems = new ArrayList<>();
-    }
-
-    public void setDelete(boolean delete) {
-        this.delete = delete;
-        notifyDataSetChanged();
     }
 
     public boolean isDelete() {
         return delete;
     }
 
-    public void addAll(List<History> items) {
+    public void setDelete(boolean delete) {
+        this.delete = delete;
+        notifyItemRangeChanged(0, mItems.size());
+    }
+
+    public void setItems(List<History> items, Runnable runnable) {
         mItems.clear();
         mItems.addAll(items);
         notifyDataSetChanged();
+        runnable.run();
     }
 
-    public void remove(History item) {
+    public History remove(History item, Runnable runnable) {
         int index = mItems.indexOf(item);
-        if (index == -1) return;
+        if (index == -1) return item;
         mItems.remove(index);
         notifyItemRemoved(index);
+        runnable.run();
+        return item;
+    }
+
+    public void clear() {
+        mItems.clear();
+        notifyDataSetChanged();
+        History.delete();
     }
 
     @Override
@@ -70,16 +80,15 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
         holder.binding.remark.setText(item.getVodRemarks());
         ImgUtil.load(item.getVodPic(), holder.binding.image);
         
-        // 核心：根据模式显示/隐藏删除图标
+        // 根据删除模式显示图标
         holder.binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
         
         holder.itemView.setOnClickListener(v -> {
-            if (delete) {
-                mListener.onItemDelete(item);
-            } else {
-                mListener.onItemClick(item);
-            }
+            if (delete) mListener.onItemDelete(item);
+            else mListener.onItemClick(item);
         });
+        
+        holder.itemView.setOnLongClickListener(v -> mListener.onLongClick());
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
