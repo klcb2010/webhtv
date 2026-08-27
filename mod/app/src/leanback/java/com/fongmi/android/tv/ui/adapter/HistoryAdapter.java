@@ -7,88 +7,85 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.fongmi.android.tv.Product;
-import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.History;
-import com.fongmi.android.tv.databinding.AdapterVodBinding;
+import com.fongmi.android.tv.databinding.ItemHistoryBinding;
 import com.fongmi.android.tv.utils.ImgUtil;
-import com.fongmi.android.tv.utils.ResUtil;
 
-public class HistoryAdapter extends BaseDiffAdapter<History, HistoryAdapter.ViewHolder> {
+import java.util.ArrayList;
+import java.util.List;
 
-    private final OnClickListener listener;
-    private int width, height;
-    private boolean delete;
+public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHolder> {
 
-    public HistoryAdapter(OnClickListener listener) {
-        this.listener = listener;
-        setLayoutSize();
-    }
+    private final OnItemClickListener mListener;
+    private final List<History> mItems;
+    private boolean delete; // 是否处于删除模式
 
-    public interface OnClickListener {
+    public interface OnItemClickListener {
         void onItemClick(History item);
         void onItemDelete(History item);
-        boolean onLongClick();
     }
 
-    private void setLayoutSize() {
-        int space = ResUtil.dp2px(48) + ResUtil.dp2px(16 * (Product.getColumn() - 1));
-        int base = ResUtil.getScreenWidth() - space;
-        width = base / Product.getColumn();
-        height = (int) (width / 0.75f);
+    public HistoryAdapter(OnItemClickListener listener) {
+        this.mListener = listener;
+        this.mItems = new ArrayList<>();
+    }
+
+    public void setDelete(boolean delete) {
+        this.delete = delete;
+        notifyDataSetChanged();
     }
 
     public boolean isDelete() {
         return delete;
     }
 
-    public void setDelete(boolean delete) {
-        this.delete = delete;
-        notifyItemRangeChanged(0, getItemCount());
+    public void addAll(List<History> items) {
+        mItems.clear();
+        mItems.addAll(items);
+        notifyDataSetChanged();
+    }
+
+    public void remove(History item) {
+        int index = mItems.indexOf(item);
+        if (index == -1) return;
+        mItems.remove(index);
+        notifyItemRemoved(index);
     }
 
     @Override
-    public void clear() {
-        for (History item : new java.util.ArrayList<>(getItems())) item.deleteAndSync();
-        super.clear();
-        setDelete(false);
-    }
-
-    private void setClickListener(View root, History item) {
-        root.setOnLongClickListener(view -> listener.onLongClick());
-        root.setOnClickListener(view -> {
-            if (isDelete()) listener.onItemDelete(item);
-            else listener.onItemClick(item);
-        });
+    public int getItemCount() {
+        return mItems.size();
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        ViewHolder holder = new ViewHolder(AdapterVodBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
-        holder.binding.getRoot().getLayoutParams().width = width;
-        holder.binding.image.getLayoutParams().height = height;
-        return holder;
+        return new ViewHolder(ItemHistoryBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        History item = getItem(position);
-        String remark = item.getVodRemarks();
-        boolean same = item.getVodName() != null && item.getVodName().equals(remark);
-        setClickListener(holder.itemView, item);
+        History item = mItems.get(position);
         holder.binding.name.setText(item.getVodName());
-        holder.binding.remark.setVisibility(!same && remark != null && !remark.isEmpty() ? View.VISIBLE : View.GONE);
-        holder.binding.remark.setText(remark);
-        holder.binding.site.setVisibility(View.VISIBLE);
-        holder.binding.site.setText(item.getSiteName());
-        ImgUtil.load(item.getVodName(), item.getVodPic(), holder.binding.image);
-        holder.binding.getRoot().setSelected(delete);
+        holder.binding.remark.setText(item.getVodRemarks());
+        ImgUtil.load(item.getVodPic(), holder.binding.image);
+        
+        // 核心：根据模式显示/隐藏删除图标
+        holder.binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
+        
+        holder.itemView.setOnClickListener(v -> {
+            if (delete) {
+                mListener.onItemDelete(item);
+            } else {
+                mListener.onItemClick(item);
+            }
+        });
     }
 
-    public static class ViewHolder extends RecyclerView.ViewHolder {
-        public final AdapterVodBinding binding;
-        public ViewHolder(@NonNull AdapterVodBinding binding) {
+    static class ViewHolder extends RecyclerView.ViewHolder {
+        private final ItemHistoryBinding binding;
+
+        ViewHolder(@NonNull ItemHistoryBinding binding) {
             super(binding.getRoot());
             this.binding = binding;
         }
