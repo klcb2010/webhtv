@@ -82,7 +82,7 @@ jobs:
           python3 -c "
           import os
           path = os.path.join(os.environ['GITHUB_WORKSPACE'], 'app', 'signing', 'release.jks')
-         with open('local.properties', 'w') as f:
+          with open('local.properties', 'w') as f:
           f.write(f'storeFile={path}\n')
           f.write(f'keyAlias={os.environ[\"ALIAS\"].strip()}\n')
           f.write(f'storePassword={os.environ[\"STORE_PASS\"].strip()}\n')
