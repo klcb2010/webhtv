@@ -54,6 +54,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private ActivitySettingBinding mBinding;
     private String[] size;
     private String[] language;
+    private String[] globalHistoryMode;
 
     public static void start(Activity activity) {
         activity.startActivity(new Intent(activity, SettingActivity.class));
@@ -96,6 +97,9 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
+        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
+        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
+        mBinding.globalHistoryText.setText((globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode))[Setting.getGlobalHistoryMode()]);
         mBinding.languageText.setText((language = ResUtil.getStringArray(R.array.select_language))[Setting.getLanguageIndex()]);
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
     }
@@ -134,6 +138,9 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
+        mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
+        mBinding.searchThread.setOnClickListener(this::setSearchThread);
+        mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -298,6 +305,24 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setPlayBackToDetail(View view) {
         Setting.putPlayBackToDetail(!Setting.isPlayBackToDetail());
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
+    }
+
+    private void setHomeSiteLock(View view) {
+        Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
+        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
+    }
+
+    private void setSearchThread(View view) {
+        int next = Setting.getSearchThread() + 5;
+        if (next > 100) next = 5;
+        Setting.putSearchThread(next);
+        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
+    }
+
+    private void setGlobalHistory(View view) {
+        Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % 3);
+        mBinding.globalHistoryText.setText((globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode))[Setting.getGlobalHistoryMode()]);
+        RefreshEvent.history();
     }
 
     private void setSize(View view) {

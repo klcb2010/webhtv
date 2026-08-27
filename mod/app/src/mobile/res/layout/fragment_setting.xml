@@ -397,6 +397,99 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/homeSiteLock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/setting_home_site_lock"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/homeSiteLockText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="On" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/searchThread"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/setting_search_thread"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/searchThreadText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="On" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/globalHistory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/setting_global_history"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/globalHistoryText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="On" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
 <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/incognito"
                 android:layout_width="match_parent"

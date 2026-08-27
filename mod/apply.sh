@@ -19,47 +19,36 @@ done < <(find "$MOD" -type f -print0)
 merge_strings() {
   local patch="$1"
   local target="$2"
-  [[ -f "$patch" && -f "$target" ]] || return 0
-  if grep -q 'name="setting_home_history"' "$target"; then
-    echo "[mod] strings already patched: $target"
-    # still try to add missing keys
-    for key in setting_episode_history setting_play_back_to_detail setting_home_vod_auto_load; do
-      if ! grep -q "name=\"$key\"" "$target"; then
-        :
-      fi
-    done
-  fi
-  local need=0
-  for key in setting_home_history setting_home_vod_auto_load setting_episode_history setting_play_back_to_detail; do
-    if ! grep -q "name=\"$key\"" "$target"; then need=1; break; fi
-  done
-  if [[ "$need" -eq 0 ]]; then
-    echo "[mod] all keys present: $target"
-    return 0
-  fi
-  # Remove old partial keys then re-merge full patch? Simpler: append missing lines only
+  [[ -f "$patch" && -f "$target" ]] || { echo "[mod] skip $target"; return 0; }
   local tmp
   tmp="$(mktemp)"
-  awk -v patchfile="$patch" '
-    BEGIN {
-      while ((getline line < patchfile) > 0) {
-        if (match(line, /name="([^"]+)"/, a)) keys[a[1]] = line
-      }
-      close(patchfile)
-    }
-    {
-      if (match($0, /name="([^"]+)"/, a) && (a[1] in keys)) {
-        # skip existing, will rewrite from keys at end? keep original
-        delete keys[a[1]]
-      }
-      if ($0 ~ /<\/resources>/) {
-        for (k in keys) print keys[k]
-      }
-      print
-    }
-  ' "$target" > "$tmp"
+  # Insert any missing string/array lines from patch before </resources>
+  python3 - "$patch" "$target" "$tmp" <<'PY'
+import sys, re
+patch, target, out = sys.argv[1:4]
+pt = open(patch, encoding="utf-8").read()
+tg = open(target, encoding="utf-8").read()
+# extract entries by name=
+entries = []
+for m in re.finditer(r'(?:^[ \t]*<string name="([^"]+)"[\s\S]*?</string>|^[ \t]*<string-array name="([^"]+)"[\s\S]*?</string-array>)', pt, re.M):
+    block = m.group(0)
+    name = m.group(1) or m.group(2)
+    entries.append((name, block if block.startswith(" ") or block.startswith("\t") else "    " + block.strip()))
+missing = []
+for name, block in entries:
+    if f'name="{name}"' not in tg:
+        missing.append(block if block.endswith("\n") else block + "\n")
+if not missing:
+    open(out, "w", encoding="utf-8").write(tg)
+    print(f"[mod] all keys present: {target}")
+else:
+    if "</resources>" not in tg:
+        raise SystemExit(f"no </resources> in {target}")
+    tg2 = tg.replace("</resources>", "".join(missing) + "</resources>", 1)
+    open(out, "w", encoding="utf-8").write(tg2)
+    print(f"[mod] merged {len(missing)} entries into {target}")
+PY
   mv "$tmp" "$target"
-  echo "[mod] merged strings into $target"
 }
 
 merge_strings "$MOD/app/src/main/res/values/strings_patch.xml" "$ROOT/app/src/main/res/values/strings.xml"

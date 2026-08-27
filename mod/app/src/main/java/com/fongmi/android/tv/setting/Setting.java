@@ -34,6 +34,11 @@ import java.util.Locale;
 
 public class Setting {
 
+    public static final int GLOBAL_HISTORY_OFF = 0;
+    public static final int GLOBAL_HISTORY_AUTO = 1;
+    public static final int GLOBAL_HISTORY_SEARCH = 2;
+
+
     private static final Type STRING_LIST = new TypeToken<List<String>>() {}.getType();
 
     public static final int LANGUAGE_FOLLOW_SYSTEM = 0;
@@ -729,6 +734,42 @@ public class Setting {
 
     public static void putPlayBackToDetail(boolean backToDetail) {
         Prefers.put("play_back_to_detail", backToDetail);
+    }
+
+    public static boolean isHomeSiteLock() {
+        return Prefers.getBoolean("home_site_lock", false);
+    }
+
+    public static void putHomeSiteLock(boolean homeSiteLock) {
+        Prefers.put("home_site_lock", homeSiteLock);
+    }
+
+    public static int getSearchThread() {
+        return clampSearchThread(Prefers.getInt("search_thread", 20));
+    }
+
+    public static void putSearchThread(int thread) {
+        Prefers.put("search_thread", clampSearchThread(thread));
+    }
+
+    private static int clampSearchThread(int thread) {
+        return Math.max(1, Math.min(thread, 100));
+    }
+
+    public static int getGlobalHistoryMode() {
+        return clampGlobalHistoryMode(Prefers.getInt("global_history_mode", GLOBAL_HISTORY_OFF));
+    }
+
+    public static void putGlobalHistoryMode(int mode) {
+        Prefers.put("global_history_mode", clampGlobalHistoryMode(mode));
+    }
+
+    public static boolean isGlobalHistoryEnabled() {
+        return getGlobalHistoryMode() != GLOBAL_HISTORY_OFF;
+    }
+
+    private static int clampGlobalHistoryMode(int mode) {
+        return mode == GLOBAL_HISTORY_AUTO || mode == GLOBAL_HISTORY_SEARCH ? mode : GLOBAL_HISTORY_OFF;
     }
 
     public static boolean hasFileAccess() {
