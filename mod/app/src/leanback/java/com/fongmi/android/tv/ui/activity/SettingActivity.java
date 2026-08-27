@@ -315,11 +315,31 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
     private void setSearchThread(View view) {
-        int next = Setting.getSearchThread() + 5;
-        if (next > 100) next = 5;
-        Setting.putSearchThread(next);
-        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
+    int current = Setting.getSearchThread();
+    int next;
+
+    switch (current) {
+        case 15:
+            next = 20;
+            break;
+        case 20:
+            next = 40;
+            break;
+        case 40:
+            next = 60;
+            break;
+        case 60:
+            next = 80;
+            break;
+        case 80:
+        default:
+            next = 15;
+            break;
     }
+
+    Setting.putSearchThread(next);
+    mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
+}
 
     private void setGlobalHistory(View view) {
         Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % 3);
