@@ -60,21 +60,33 @@ jobs:
           else
             echo "No mod/apply.sh, skip"
           fi
-      - name: Patch strings.xml for positional args
+
+      - name: Prepare Signing and Patch Resources
         run: |
-          echo "正在修复 strings.xml 中的占位符和命名空间错误..."
-          
-          # 1. 修复 'detail_title' 缺少位置索引的问题 (这是导致编译失败的 Fatal Error)
-          # 将第一个 %s 替换为 %1$s，将第二个 %s 替换为 %2$s
+          # 1. 修复 strings.xml 占位符错误
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
           
-          # 2. 移除错误的 <g> 标签 (解决 "Ignoring element with unknown namespace" 警告)
-          # 这一行会删除类似 <app:g> 或 <g> 这种导致编译器困惑的非法标签，保留标签内的文字
-          find . -name "strings.xml" -type f -exec sed -i 's/<[^:>]*:g[^>]*>//g' {} +
-          find . -name "strings.xml" -type f -exec sed -i 's/<\/[^:>]*:g>//g' {} +
+          # 2. 创建签名文件夹并解码 JKS 文件
+          # 注意：路径必须是 app/signing/release.jks，因为报错显示它在找这个位置
+          mkdir -p app/signing
+          echo "${{ secrets.RELEASE_SIGNING_KEY }}" | base64 -d > app/signing/release.jks
           
-          echo "修复完成。"
+          # 3. 动态生成 local.properties (这是你的 build.gradle 读取配置的唯一来源)
+          # 注意：storeFile 的路径是相对于 app 目录的
+          echo "storeFile=signing/release.jks" > local.properties
+          echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}" >> local.properties
+          echo "storePassword=${{ secrets.RELEASE_STORE_PASSWORD }}" >> local.properties
+          echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}" >> local.properties
+          
+          echo "资源补丁和签名配置准备就绪"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
