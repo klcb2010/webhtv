@@ -36,10 +36,14 @@ permissions:
 
 env:
   TZ: Asia/Shanghai
+
   CNB_API_ENDPOINT: https://api.cnb.cool
   CNB_WEB_ENDPOINT: https://cnb.cool
   CNB_REPO_SLUG: fish2035/webhtv-release
   CNB_REPO_URL: https://cnb.cool/fish2035/webhtv-release.git
+
+  UPSTREAM_REPO: https://github.com/fish2018/webhtv.git
+  UPSTREAM_BRANCH: main
 
 jobs:
   release:
@@ -48,11 +52,241 @@ jobs:
     timeout-minutes: 90
 
     steps:
+      # ============================================================
+      # Checkout
+      # 使用 PAT_TOKEN，保证后续 git push 有权限
+      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: true
 
+      # ============================================================
+      # 检测并同步上游
+      #
+      # 上游：
+      #   fish2018/webhtv
+      #
+      # 保护：
+      #   README.md
+      #   mod/
+      #   .github/workflows/android-release.yml
+      #
+      # 没有实际变化：
+      #   不提交
+      #
+      # 有实际变化：
+      #   自动 commit + push
+      # ============================================================
+      - name: Check and sync upstream
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "检查上游更新"
+          echo "=========================================="
+          echo "上游仓库: $UPSTREAM_REPO"
+          echo "上游分支: $UPSTREAM_BRANCH"
+          echo "当前分支: ${GITHUB_REF_NAME}"
+          echo "=========================================="
+
+          CURRENT_BRANCH="${GITHUB_REF_NAME}"
+
+          if [ -z "$CURRENT_BRANCH" ]; then
+            echo "❌ 无法确定当前分支"
+            exit 1
+          fi
+
+          # 添加 / 更新 upstream
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "$UPSTREAM_REPO"
+
+          # 获取上游最新代码
+          git fetch --no-tags --prune upstream "$UPSTREAM_BRANCH"
+
+          echo ""
+          echo "当前 HEAD:"
+          git rev-parse HEAD
+
+          echo ""
+          echo "上游 HEAD:"
+          git rev-parse "upstream/$UPSTREAM_BRANCH"
+
+          # --------------------------------------------------------
+          # 判断当前仓库是否已经包含上游最新提交
+          # --------------------------------------------------------
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+            echo ""
+            echo "✅ 当前仓库已经包含上游最新提交"
+            echo "无需同步"
+            exit 0
+          fi
+
+          echo ""
+          echo "⚠️ 检测到上游有新提交"
+          echo ""
+
+          # --------------------------------------------------------
+          # 保存需要保护的文件
+          # --------------------------------------------------------
+          rm -rf /tmp/webhtv-protected
+          mkdir -p /tmp/webhtv-protected
+
+          if [ -f README.md ]; then
+            cp -a README.md /tmp/webhtv-protected/README.md
+            echo "🔒 已保护 README.md"
+          fi
+
+          if [ -d mod ]; then
+            cp -a mod /tmp/webhtv-protected/mod
+            echo "🔒 已保护 mod/"
+          fi
+
+          if [ -f .github/workflows/android-release.yml ]; then
+            mkdir -p /tmp/webhtv-protected/workflows
+
+            cp -a \
+              .github/workflows/android-release.yml \
+              /tmp/webhtv-protected/workflows/android-release.yml
+
+            echo "🔒 已保护 .github/workflows/android-release.yml"
+          fi
+
+          # --------------------------------------------------------
+          # 导出上游源码
+          # --------------------------------------------------------
+          rm -rf /tmp/webhtv-upstream
+          mkdir -p /tmp/webhtv-upstream
+
+          git archive "upstream/$UPSTREAM_BRANCH" \
+            | tar -x -C /tmp/webhtv-upstream
+
+          # --------------------------------------------------------
+          # 同步上游
+          #
+          # --delete：
+          # 上游删除的文件，当前仓库同步删除
+          #
+          # 以下文件 / 目录永远不覆盖
+          # --------------------------------------------------------
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='README.md' \
+            --exclude='mod/' \
+            --exclude='.github/workflows/android-release.yml' \
+            /tmp/webhtv-upstream/ ./
+
+          # --------------------------------------------------------
+          # 恢复 README.md
+          # --------------------------------------------------------
+          if [ -f /tmp/webhtv-protected/README.md ]; then
+            cp -a \
+              /tmp/webhtv-protected/README.md \
+              README.md
+          fi
+
+          # --------------------------------------------------------
+          # 恢复 mod/
+          # --------------------------------------------------------
+          if [ -d /tmp/webhtv-protected/mod ]; then
+            rm -rf mod
+
+            cp -a \
+              /tmp/webhtv-protected/mod \
+              mod
+          fi
+
+          # --------------------------------------------------------
+          # 恢复 android-release.yml
+          # --------------------------------------------------------
+          if [ -f /tmp/webhtv-protected/workflows/android-release.yml ]; then
+            mkdir -p .github/workflows
+
+            cp -a \
+              /tmp/webhtv-protected/workflows/android-release.yml \
+              .github/workflows/android-release.yml
+          fi
+
+          # --------------------------------------------------------
+          # 检查实际变化
+          # --------------------------------------------------------
+          git add -A
+
+          echo ""
+          echo "=========================================="
+          echo "同步后的实际变化"
+          echo "=========================================="
+
+          git diff --cached --stat || true
+
+          # 没有实际变化，不提交
+          if git diff --cached --quiet; then
+            echo ""
+            echo "✅ 上游存在新提交，但保护规则过滤后没有实际文件变化"
+            echo "跳过提交"
+            exit 0
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "检测到实际文件变化"
+          echo "=========================================="
+
+          git diff --cached --name-status
+
+          # --------------------------------------------------------
+          # 再次确认保护文件没有进入修改
+          # --------------------------------------------------------
+          echo ""
+          echo "=========================================="
+          echo "检查保护文件"
+          echo "=========================================="
+
+          if git diff --cached -- README.md | grep -q '^diff'; then
+            echo "⚠️ README.md 出现变化，检查保护逻辑"
+          else
+            echo "✅ README.md 已保护"
+          fi
+
+          if git diff --cached -- mod/ | grep -q '^diff'; then
+            echo "⚠️ mod/ 出现变化，检查保护逻辑"
+          else
+            echo "✅ mod/ 已保护"
+          fi
+
+          if git diff --cached -- .github/workflows/android-release.yml | grep -q '^diff'; then
+            echo "⚠️ android-release.yml 出现变化，检查保护逻辑"
+          else
+            echo "✅ android-release.yml 已保护"
+          fi
+
+          # --------------------------------------------------------
+          # Git 配置
+          # --------------------------------------------------------
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # --------------------------------------------------------
+          # 提交
+          # --------------------------------------------------------
+          git commit \
+            -m "chore: sync upstream fish2018/webhtv"
+
+          # --------------------------------------------------------
+          # 推送
+          # --------------------------------------------------------
+          git push origin "HEAD:$CURRENT_BRANCH"
+
+          echo ""
+          echo "=========================================="
+          echo "✅ 上游同步完成并已提交"
+          echo "=========================================="
+
+      # ============================================================
+      # Apply mod patches
+      # ============================================================
       - name: Apply mod patches
         run: |
           if [ -f mod/apply.sh ]; then
@@ -61,52 +295,78 @@ jobs:
             echo "No mod/apply.sh, skip"
           fi
 
+      # ============================================================
+      # Prepare Signing and Patch Resources
+      # ============================================================
       - name: Prepare Signing and Patch Resources
         env:
-          # 必须对应 GitHub Secrets 里的名字
           B64_DATA: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
         run: |
-          # 1. 修复资源文件中的占位符错误
-          find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
-          find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
+          # 修复资源文件中的占位符错误
+          find . \
+            -name "strings.xml" \
+            -type f \
+            -exec sed -i \
+            '/name="detail_title"/s/%s/%1$s/1' {} +
 
-          # 2. 解码 JKS 签名文件
+          find . \
+            -name "strings.xml" \
+            -type f \
+            -exec sed -i \
+            '/name="detail_title"/s/%s/%2$s/1' {} +
+
+          # 解码 JKS
           mkdir -p app/signing
-          echo "$B64_DATA" | tr -d '\n ' | base64 -d > app/signing/release.jks
+
+          echo "$B64_DATA" \
+            | tr -d '\n ' \
+            | base64 -d \
+            > app/signing/release.jks
+
           ABS_JKS_PATH=$(pwd)/app/signing/release.jks
 
-          # 3. 验证数据是否真的传进来了
           if [ ! -s app/signing/release.jks ]; then
-            echo "❌ 错误：解码后的 JKS 文件为空，请检查 RELEASE_KEYSTORE_BASE64 是否填对！"
+            echo "❌ 错误：解码后的 JKS 文件为空"
             exit 1
           fi
 
-          # 4. 密钥库访问自检 (如果这步报错，说明密码或别名绝对填错了)
           echo "==== 正在验证密钥库访问权限 ===="
-          if ! keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" -alias "$ALIAS" > /dev/null 2>&1; then
-            echo "❌ 验证失败：密码或别名不正确！"
+
+          if ! keytool \
+            -list \
+            -keystore "$ABS_JKS_PATH" \
+            -storepass "$PASS" \
+            -alias "$ALIAS" \
+            > /dev/null 2>&1; then
+
+            echo "❌ 验证失败：密码或别名不正确"
             echo "当前尝试别名: $ALIAS"
+            echo ""
             echo "JKS 中真实的别名列表如下："
-            keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" | grep "PrivateKeyEntry"
+
+            keytool \
+              -list \
+              -keystore "$ABS_JKS_PATH" \
+              -storepass "$PASS" \
+              | grep "PrivateKeyEntry" || true
+
             exit 1
           fi
-          echo "✅ 验证通过！"
 
-          # 5. 写入 local.properties (使用绝对路径解决 null 报错)
+          echo "✅ JKS 验证通过"
+
           cat > local.properties <<EOF
           storeFile=$ABS_JKS_PATH
           keyAlias=$ALIAS
           storePassword=$PASS
           keyPassword=$PASS
           EOF
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: gradle
+
+      # ============================================================
+      # JDK 21
+      # ============================================================
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -114,35 +374,68 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      # ============================================================
+      # Python 3.10
+      # ============================================================
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
+      # ============================================================
+      # MPV Native
+      # ============================================================
       - name: Verify bundled MPV native assets
-        run: bash scripts/verify_mpv_native_assets.sh --require-elf
+        run: |
+          bash scripts/verify_mpv_native_assets.sh --require-elf
 
+      # ============================================================
+      # Android SDK
+      # ============================================================
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0"
 
+      # ============================================================
+      # WebSocket Danmaku tests
+      # ============================================================
       - name: Run WebSocket danmaku tests
         run: |
           chmod +x ./gradlew
+
           ./gradlew \
             :app:testMobileArm64_v8aDebugUnitTest \
             --tests 'com.fongmi.android.tv.player.danmaku.*' \
             --no-daemon
 
+      # ============================================================
+      # Resolve release tag
+      # ============================================================
       - name: Resolve release tag
         id: meta
         run: |
-          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -1)"
-          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -1)"
+          VERSION_NAME="$(
+            sed -n \
+              's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' \
+              app/build.gradle \
+              | head -1
+          )"
+
+          VERSION_CODE="$(
+            sed -n \
+              's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+              app/build.gradle \
+              | head -1
+          )"
+
           CHANNEL="${{ inputs.release_channel }}"
+
           if [ "$CHANNEL" = "auto" ] || [ -z "$CHANNEL" ]; then
             if [ "${{ github.ref_name }}" = "fongmi-sync" ]; then
               CHANNEL="beta"
@@ -150,6 +443,7 @@ jobs:
               CHANNEL="stable"
             fi
           fi
+
           if [ "$CHANNEL" = "beta" ]; then
             APK_SUFFIX="-beta"
             TAG_PATTERN="^v${VERSION_NAME}-beta-[0-9]{12}$"
@@ -161,18 +455,23 @@ jobs:
             TAG_DEFAULT="v${VERSION_NAME}-$(date +%Y%m%d%H%M)"
             TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm"
           fi
+
           TAG="${{ inputs.release_tag }}"
+
           if [ -z "$TAG" ]; then
             TAG="$TAG_DEFAULT"
           fi
+
           if ! printf '%s' "$TAG" | grep -Eq "$TAG_PATTERN"; then
             echo "::error title=Invalid release tag::Expected $TAG_EXPECT, got: $TAG"
             exit 1
           fi
+
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "::error title=Release tag exists::$TAG already exists"
             exit 1
           fi
+
           {
             echo "tag=$TAG"
             echo "title=${TAG#v}"
@@ -183,12 +482,16 @@ jobs:
             echo "apk_suffix=$APK_SUFFIX"
           } >> "$GITHUB_OUTPUT"
 
+      # ============================================================
+      # Configure release signing
+      # ============================================================
       - name: Configure release signing
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -197,27 +500,43 @@ jobs:
           STORE_PASSWORD="${RELEASE_STORE_PASSWORD:-$KEY_PASSWORD}"
           ALIAS="${RELEASE_KEY_ALIAS:-$KEY_ALIAS}"
           KEY_PASS="${RELEASE_KEY_PASSWORD:-$STORE_PASSWORD}"
-          if [ -z "$KS_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$ALIAS" ]; then
-            echo "::error title=Release signing not configured::Configure RELEASE_KEYSTORE_BASE64, RELEASE_KEY_ALIAS and RELEASE_STORE_PASSWORD in repository secrets."
+
+          if [ -z "$KS_BASE64" ] \
+            || [ -z "$STORE_PASSWORD" ] \
+            || [ -z "$ALIAS" ]; then
+
+            echo "::error title=Release signing not configured::Configure RELEASE_KEYSTORE_BASE64, RELEASE_KEY_ALIAS and RELEASE_STORE_PASSWORD."
+
             exit 1
           fi
+
           mkdir -p app/signing
-          printf '%s' "$KS_BASE64" | base64 --decode > app/signing/release.jks
+
+          printf '%s' "$KS_BASE64" \
+            | base64 --decode \
+            > app/signing/release.jks
+
           {
             echo "storeFile=$GITHUB_WORKSPACE/app/signing/release.jks"
             echo "keyAlias=$ALIAS"
             echo "storePassword=$STORE_PASSWORD"
             echo "keyPassword=$KEY_PASS"
           } > local.properties
+
           echo "Release signing configured"
 
+      # ============================================================
+      # Build four release APKs
+      # ============================================================
       - name: Build four release APKs
         env:
           WEBHTV_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
           WEBHTV_APK_SUFFIX: ${{ steps.meta.outputs.apk_suffix }}
         run: |
           chmod +x ./gradlew
+
           rm -rf Release/apk
+
           ./gradlew \
             :app:assembleMobileArm64_v8aRelease \
             :app:assembleMobileArmeabi_v7aRelease \
@@ -225,13 +544,25 @@ jobs:
             :app:assembleLeanbackArmeabi_v7aRelease \
             --no-daemon
 
+      # ============================================================
+      # Collect artifacts
+      # ============================================================
       - name: Collect artifacts
         run: |
           rm -rf dist
           mkdir -p dist
+
           cp Release/apk/*.apk dist/
+
+          echo "=========================================="
+          echo "APK:"
+          echo "=========================================="
+
           ls -lh dist/
 
+      # ============================================================
+      # Prepare release notes
+      # ============================================================
       - name: Prepare release notes input
         id: release_notes
         env:
@@ -239,7 +570,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+
           raw = os.environ.get("RELEASE_NOTES_RAW", "").strip()
+
           notes = (
               raw
               .replace("\\r\\n", "\n")
@@ -248,18 +581,33 @@ jobs:
               .replace('\\"', '"')
               .replace("\\'", "'")
           )
+
           delimiter = "RELEASE_NOTES_EOF"
+
           while delimiter in notes:
               delimiter += "_"
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"has_notes={'true' if notes else 'false'}\n")
+
+          with open(
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8"
+          ) as fh:
+              fh.write(
+                  f"has_notes={'true' if notes else 'false'}\n"
+              )
+
               fh.write(f"notes<<{delimiter}\n")
               fh.write(notes)
+
               if notes and not notes.endswith("\n"):
                   fh.write("\n")
+
               fh.write(f"{delimiter}\n")
           PY
 
+      # ============================================================
+      # Generate update manifests
+      # ============================================================
       - name: Generate update manifests
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
@@ -270,13 +618,19 @@ jobs:
           import hashlib
           import json
           import os
+
           tag = "${{ steps.meta.outputs.tag }}"
           notes = os.environ.get("RELEASE_NOTES", "").strip()
           release_download_base = os.environ["GITHUB_RELEASE_DOWNLOAD_BASE"]
+
           for apk in glob.glob("dist/*.apk"):
-              base = os.path.splitext(os.path.basename(apk))[0]
+              base = os.path.splitext(
+                  os.path.basename(apk)
+              )[0]
+
               with open(apk, "rb") as fh:
                   content = fh.read()
+
               data = {
                   "name": tag,
                   "desc": f"{tag} - ${{ steps.meta.outputs.short_sha }}",
@@ -286,31 +640,79 @@ jobs:
                   "size": len(content),
                   "sha256": hashlib.sha256(content).hexdigest(),
               }
+
               if notes:
                   data["notes"] = notes
-              with open(f"dist/{base}.json", "w", encoding="utf-8") as fh:
-                  json.dump(data, fh, ensure_ascii=False, indent=2)
+
+              with open(
+                  f"dist/{base}.json",
+                  "w",
+                  encoding="utf-8"
+              ) as fh:
+                  json.dump(
+                      data,
+                      fh,
+                      ensure_ascii=False,
+                      indent=2
+                  )
+
                   fh.write("\n")
           PY
+
+          echo "=========================================="
+          echo "Release manifests:"
+          echo "=========================================="
+
           ls -lh dist/
 
+      # ============================================================
+      # Create GitHub Release
+      #
+      # 关键：
+      # 使用 PAT_TOKEN，而不是 github.token
+      # 解决：
+      # HTTP 403: Resource not accessible by integration
+      # ============================================================
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
         run: |
+          set -e
+
           PRERELEASE_FLAG=""
-          if [ "${{ inputs.prerelease }}" = "true" ] || [ "${{ steps.meta.outputs.channel }}" = "beta" ]; then
+
+          if [ "${{ inputs.prerelease }}" = "true" ] \
+            || [ "${{ steps.meta.outputs.channel }}" = "beta" ]; then
+
             PRERELEASE_FLAG="--prerelease"
           fi
+
           NOTES="${RELEASE_NOTES:-手动触发 GitHub Actions 构建发布。}"
-          gh release create "${{ steps.meta.outputs.tag }}" \
+
+          echo "=========================================="
+          echo "创建 GitHub Release"
+          echo "=========================================="
+          echo "Tag: ${{ steps.meta.outputs.tag }}"
+          echo "Title: ${{ steps.meta.outputs.title }}"
+          echo "Channel: ${{ steps.meta.outputs.channel }}"
+          echo "=========================================="
+
+          gh release create \
+            "${{ steps.meta.outputs.tag }}" \
             --target "$GITHUB_SHA" \
             --title "${{ steps.meta.outputs.title }}" \
             --notes "$NOTES" \
             $PRERELEASE_FLAG \
-            dist/*.apk dist/*.json
+            dist/*.apk \
+            dist/*.json
 
+          echo ""
+          echo "✅ GitHub Release 创建成功"
+
+      # ============================================================
+      # Sync to CNB
+      # ============================================================
       - name: Sync to CNB
         if: ${{ inputs.sync_cnb }}
         env:
@@ -323,6 +725,9 @@ jobs:
         run: |
           .github/scripts/sync-cnb-release.sh
 
+      # ============================================================
+      # Upload workflow artifacts
+      # ============================================================
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
