@@ -63,46 +63,44 @@ jobs:
 
       - name: Prepare Signing and Patch Resources
         env:
-          # 关键修正：这里必须对应你 GitHub Secrets 里的真实名称
-          SIGN_KEY_DATA: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          # 必须对应 GitHub Secrets 里的名字
+          B64_DATA: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
         run: |
-          # 1. 修复 strings.xml 占位符错误 (防止编译中断)
+          # 1. 修复资源文件中的占位符错误
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%1$s/1' {} +
           find . -name "strings.xml" -type f -exec sed -i '/name="detail_title"/s/%s/%2$s/1' {} +
 
-          # 2. 空值检查：确保成功读取到了 Secret
-          if [ -z "$SIGN_KEY_DATA" ]; then
-            echo "❌ 错误：读取不到 RELEASE_KEYSTORE_BASE64，请检查 Secret 名称！"
+          # 2. 解码 JKS 签名文件
+          mkdir -p app/signing
+          echo "$B64_DATA" | tr -d '\n ' | base64 -d > app/signing/release.jks
+          ABS_JKS_PATH=$(pwd)/app/signing/release.jks
+
+          # 3. 验证数据是否真的传进来了
+          if [ ! -s app/signing/release.jks ]; then
+            echo "❌ 错误：解码后的 JKS 文件为空，请检查 RELEASE_KEYSTORE_BASE64 是否填对！"
             exit 1
           fi
 
-          # 3. 解码 JKS 签名文件
-          mkdir -p app/signing
-          echo "$SIGN_KEY_DATA" | tr -d '\n ' | base64 -d > app/signing/release.jks
-          
-          # 4. 验证文件大小
-          FILE_SIZE=$(wc -c < app/signing/release.jks)
-          echo "✅ JKS 文件解码成功，大小为: $FILE_SIZE 字节"
-          
-          if [ "$FILE_SIZE" -lt 100 ]; then
-            echo "❌ 错误：解码后文件太小，可能数据损坏！"
+          # 4. 密钥库访问自检 (如果这步报错，说明密码或别名绝对填错了)
+          echo "==== 正在验证密钥库访问权限 ===="
+          if ! keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" -alias "$ALIAS" > /dev/null 2>&1; then
+            echo "❌ 验证失败：密码或别名不正确！"
+            echo "当前尝试别名: $ALIAS"
+            echo "JKS 中真实的别名列表如下："
+            keytool -list -keystore "$ABS_JKS_PATH" -storepass "$PASS" | grep "PrivateKeyEntry"
             exit 1
           fi
+          echo "✅ 验证通过！"
 
           # 5. 写入 local.properties (使用绝对路径解决 null 报错)
-          ABS_JKS_PATH=$(pwd)/app/signing/release.jks
           cat > local.properties <<EOF
           storeFile=$ABS_JKS_PATH
           keyAlias=$ALIAS
-          storePassword=$STORE_PASS
-          keyPassword=$KEY_PASS
+          storePassword=$PASS
+          keyPassword=$PASS
           EOF
-          
-          echo "--- 准备就绪，开始编译 ---"
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
