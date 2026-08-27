@@ -1,1 +1,5 @@
-    <string name="home_history_button">History</string>
+<resources>
+    <string name="home_history_button">历史</string>
+    <string name="dialog_delete_record">删除记录</string>
+    <string name="dialog_delete_history">确定要删除全部历史记录吗？</string>
+</resources>
