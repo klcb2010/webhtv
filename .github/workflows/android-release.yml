@@ -28,7 +28,7 @@ on:
       sync_cnb:
         description: "Mirror APKs to CNB Release and sync CNB manifests"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
