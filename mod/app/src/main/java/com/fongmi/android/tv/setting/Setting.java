@@ -736,6 +736,15 @@ public class Setting {
         Prefers.put("play_back_to_detail", backToDetail);
     }
 
+
+    public static boolean isAutoBackup() {
+        return Prefers.getBoolean("auto_backup", false);
+    }
+
+    public static void putAutoBackup(boolean autoBackup) {
+        Prefers.put("auto_backup", autoBackup);
+    }
+
     public static boolean isHomeSiteLock() {
         return Prefers.getBoolean("home_site_lock", false);
     }

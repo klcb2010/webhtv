@@ -25,6 +25,7 @@ import com.fongmi.android.tv.impl.ConfigListener;
 import com.fongmi.android.tv.impl.LiveListener;
 import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.AutoBackupPolicy;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.dialog.AboutDialog;
@@ -93,6 +94,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setOtherText() {
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
+        mBinding.autoBackupText.setText(getSwitch(isAutoBackupEnabled()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
@@ -134,6 +136,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
+        mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
@@ -284,6 +287,26 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setIncognito(View view) {
         Setting.putIncognito(!Setting.isIncognito());
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
+    }
+
+    private boolean isAutoBackupEnabled() {
+        return AutoBackupPolicy.isEffective(Setting.isAutoBackup(), Setting.hasFileAccess());
+    }
+
+    private void setAutoBackup(View view) {
+        if (isAutoBackupEnabled()) {
+            Setting.putAutoBackup(false);
+            mBinding.autoBackupText.setText(getSwitch(false));
+            return;
+        }
+        PermissionUtil.requestFile(this, allGranted -> {
+            if (!allGranted) {
+                Notify.show(R.string.backup_permission_denied);
+                return;
+            }
+            Setting.putAutoBackup(true);
+            mBinding.autoBackupText.setText(getSwitch(true));
+        });
     }
 
     private void setHomeHistory(View view) {
