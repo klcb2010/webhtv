@@ -21,3 +21,22 @@
     <string name="exit_confirm_title">Exit app?</string>
     <string name="exit_confirm_message">The current page will close. Background playback will continue if it is running.</string>
     <string name="exit_confirm_positive">Exit</string>
+
+    <string name="setting_subtitle">Subtitle</string>
+    <string name="player_subtitle_auto_match">Auto match subtitle</string>
+    <string name="player_subtitle_language">Preferred language</string>
+    <string name="player_subtitle_assrt_token">Assrt token</string>
+    <string name="subtitle_auto_match_hit">Subtitle applied: %1$s</string>
+    <string name="subtitle_token_hint">Paste Assrt API token</string>
+    <string name="setting_configured">Configured</string>
+    <string name="setting_unconfigured">Not set</string>
+    <string-array name="select_subtitle_language">
+        <item>Chinese</item>
+        <item>Traditional Chinese</item>
+        <item>English</item>
+    </string-array>
+    <string-array name="select_subtitle_language_value">
+        <item>zh</item>
+        <item>cht</item>
+        <item>en</item>
+    </string-array>

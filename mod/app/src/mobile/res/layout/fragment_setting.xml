@@ -272,7 +272,92 @@
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
+        
         <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/subtitleAutoMatch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/player_subtitle_auto_match"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/subtitleAutoMatchText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="Off" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/subtitleLanguage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/player_subtitle_language"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/subtitleLanguageText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="zh" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/subtitleAssrtToken"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/player_subtitle_assrt_token"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/subtitleAssrtTokenText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="Not set" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+<androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/autoBackup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

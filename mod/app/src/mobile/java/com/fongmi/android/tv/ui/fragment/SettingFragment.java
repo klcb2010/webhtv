@@ -100,6 +100,9 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
         mBinding.autoBackupText.setText(getSwitch(isAutoBackupEnabled()));
+        mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
+        mBinding.subtitleLanguageText.setText(getSubtitleLanguageLabel());
+        mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
@@ -136,6 +139,9 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        mBinding.subtitleAutoMatch.setOnClickListener(this::setSubtitleAutoMatch);
+        mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
+        mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
         mBinding.searchThread.setOnClickListener(this::setSearchThread);
@@ -444,4 +450,49 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         super.onDestroyView();
         EventBus.getDefault().unregister(this);
     }
+
+    private String getSubtitleLanguageLabel() {
+        String[] labels = getResources().getStringArray(R.array.select_subtitle_language);
+        String[] values = getResources().getStringArray(R.array.select_subtitle_language_value);
+        String cur = Setting.getSubtitlePreferredLanguage();
+        for (int i = 0; i < values.length; i++) if (values[i].equals(cur)) return labels[i];
+        return cur;
+    }
+
+    private String getSubtitleTokenLabel() {
+        return getString(android.text.TextUtils.isEmpty(Setting.getSubtitleAssrtToken()) ? R.string.setting_unconfigured : R.string.setting_configured);
+    }
+
+    private void setSubtitleAutoMatch(View view) {
+        Setting.putSubtitleAutoMatchEnabled(!Setting.isSubtitleAutoMatchEnabled());
+        mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
+    }
+
+    private void setSubtitleLanguage(View view) {
+        String[] labels = getResources().getStringArray(R.array.select_subtitle_language);
+        String[] values = getResources().getStringArray(R.array.select_subtitle_language_value);
+        int idx = 0;
+        String cur = Setting.getSubtitlePreferredLanguage();
+        for (int i = 0; i < values.length; i++) if (values[i].equals(cur)) idx = i;
+        idx = (idx + 1) % values.length;
+        Setting.putSubtitlePreferredLanguage(values[idx]);
+        mBinding.subtitleLanguageText.setText(labels[idx]);
+    }
+
+    private void setSubtitleAssrtToken(View view) {
+        final android.widget.EditText input = new android.widget.EditText(view.getContext());
+        input.setHint(R.string.subtitle_token_hint);
+        input.setText(Setting.getSubtitleAssrtToken());
+        input.setSingleLine(true);
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(view.getContext())
+                .setTitle(R.string.player_subtitle_assrt_token)
+                .setView(input)
+                .setNegativeButton(R.string.dialog_negative, null)
+                .setPositiveButton(R.string.dialog_positive, (d, w) -> {
+                    Setting.putSubtitleAssrtToken(input.getText() == null ? "" : input.getText().toString());
+                    mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
+                })
+                .show();
+    }
+
 }

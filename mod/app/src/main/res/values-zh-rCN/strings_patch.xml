@@ -21,3 +21,22 @@
     <string name="exit_confirm_title">退出应用？</string>
     <string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
     <string name="exit_confirm_positive">退出</string>
+
+    <string name="setting_subtitle">字幕设置</string>
+    <string name="player_subtitle_auto_match">自动匹配字幕</string>
+    <string name="player_subtitle_language">字幕偏好语言</string>
+    <string name="player_subtitle_assrt_token">射手网 Token</string>
+    <string name="subtitle_auto_match_hit">已自动匹配字幕：%1$s</string>
+    <string name="subtitle_token_hint">粘贴射手网 API Token</string>
+    <string name="setting_configured">已配置</string>
+    <string name="setting_unconfigured">未配置</string>
+    <string-array name="select_subtitle_language">
+        <item>中文</item>
+        <item>繁体中文</item>
+        <item>英语</item>
+    </string-array>
+    <string-array name="select_subtitle_language_value">
+        <item>zh</item>
+        <item>cht</item>
+        <item>en</item>
+    </string-array>

@@ -39,4 +39,9 @@ if [[ -f "$ROOT/app/src/leanback/res/values-zh-rCN/strings.xml" ]]; then
 else
   merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
 fi
+
+# Assrt subtitle auto-match hooks
+if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
+  python3 "$MOD/hooks/inject_subtitle.py"
+fi
 echo "[mod] done"
