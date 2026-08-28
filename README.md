@@ -1,3 +1,7 @@
+
+
+# 注意 此仓库不被pg兼容
+
 # 移植默影视部分个性化开关到鱼壳  
 
 # 默影视 https://github.com/Silent1566/webhtv
