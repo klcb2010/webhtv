@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.setting.AutoBackupPolicy;
 import android.annotation.SuppressLint;
 import android.app.SearchManager;
 import android.content.Intent;
