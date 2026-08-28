@@ -186,12 +186,14 @@ public final class AssrtSubtitleMatch {
             if (TextUtils.isEmpty(downloadUrl)) return null;
             String filename = first(first, "filename", "name");
             if (TextUtils.isEmpty(filename)) filename = candidate.name;
-            File dir = Path.mkdir(new File(Path.cache(), "assrt_sub"));
+            File dir = new File(Path.cache(), "assrt_sub");
+            if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("mkdir_assrt");
             String suffix = suffix(filename);
             File target = new File(dir, Util.md5(candidate.id) + suffix);
             download(downloadUrl, target);
             if (isZip(target) || suffix.equalsIgnoreCase(".zip")) {
-                File folder = Path.mkdir(new File(dir, Util.md5(candidate.id) + "_zip"));
+                File folder = new File(dir, Util.md5(candidate.id) + "_zip");
+                if (!folder.exists() && !folder.mkdirs()) throw new IllegalStateException("mkdir_zip");
                 FileUtil.zipDecompress(target, folder);
                 File picked = pickSubtitle(folder);
                 return picked != null ? picked : target;
