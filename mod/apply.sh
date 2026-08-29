@@ -1,52 +1,79 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MOD="$(cd "$(dirname "$0")" && pwd)"
 echo "[mod] root=$ROOT"
+
 while IFS= read -r -d '' src; do
   rel="${src#"$MOD/"}"
-  case "$rel" in apply.sh|README.md|*.md) continue;; */strings_patch.xml) continue;; esac
+  case "$rel" in
+    apply.sh|README.md|*.md) continue ;;
+    */strings_patch.xml) continue ;;
+  esac
   dest="$ROOT/$rel"
   mkdir -p "$(dirname "$dest")"
   cp -f "$src" "$dest"
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
+
 merge() {
   local patch="$1" target="$2"
-  [[ -f "$patch" && -f "$target" ]] || return 0
-  python3 -c '
-import re, sys
-pt = open(sys.argv[1], encoding="utf-8").read()
-tg = open(sys.argv[2], encoding="utf-8").read()
-by = {}
-for m in re.finditer(
-    r"(?:^[ \t]*<string name=\"([^\"]+)\"[\s\S]*?</string>|^[ \t]*<string-array name=\"([^\"]+)\"[\s\S]*?</string-array>)",
-    pt,
-    re.M,
-):
-    block = m.group(0)
-    name = m.group(1) or m.group(2)
-    if not block.startswith(" "):
-        block = "    " + block.strip()
-    if not block.endswith("\n"):
-        block += "\n"
-    by[name] = block  # last wins
-changed = 0
-for name, block in by.items():
-    pat = re.compile(
-        r"[ \t]*<(string|string-array) name=\"%s\"[\s\S]*?</\1>\n?" % re.escape(name)
-    )
-    if pat.search(tg):
-        tg = pat.sub(block, tg, count=1)
-        changed += 1
-    else:
-        if "</resources>" in tg:
-            tg = tg.replace("</resources>", block + "</resources>", 1)
-            changed += 1
-open(sys.argv[2], "w", encoding="utf-8").write(tg)
-print("[mod] strings upsert", changed, sys.argv[2])
-' "$patch" "$target"
+  [[ -f "$patch" ]] || return 0
+
+  python3 - "$patch" "$target" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+patch_file = Path(sys.argv[1])
+target_file = Path(sys.argv[2])
+patch = patch_file.read_text(encoding="utf-8")
+
+# 精确提取 Android 资源节点，兼容 string-array 内的 item。
+node_pattern = re.compile(
+    r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="(?P<name>[^"]+)"[^>]*>.*?</(?P=tag)>[ \t]*$'
+)
+
+entries = {}
+order = []
+for m in node_pattern.finditer(patch):
+    name = m.group("name")
+    if name not in entries:
+        order.append(name)
+    entries[name] = m.group(0).strip()
+
+if not entries:
+    raise SystemExit(f"[mod] ERROR: no Android resources found in {patch_file}")
+
+if target_file.exists():
+    target = target_file.read_text(encoding="utf-8")
+else:
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n'
+
+existing = set(re.findall(
+    r'<(?:string|string-array|integer-array|plurals|bool|color|dimen|integer)\b[^>]*\bname="([^"]+)"',
+    target,
+))
+
+missing = [entries[name] for name in order if name not in existing]
+
+if missing:
+    marker = "</resources>"
+    if marker not in target:
+        raise SystemExit(f"[mod] ERROR: </resources> not found in {target_file}")
+    insert = "\n" + "\n\n".join(
+        "    " + line for block in missing for line in block.splitlines()
+    ) + "\n"
+    target = target.replace(marker, insert + marker, 1)
+    target_file.write_text(target, encoding="utf-8")
+    print(f"[mod] merged {len(missing)} resources -> {target_file}")
+else:
+    print(f"[mod] ok {target_file}")
+PY
 }
+
 merge "$MOD/app/src/main/res/values/strings_patch.xml" "$ROOT/app/src/main/res/values/strings.xml"
 merge "$MOD/app/src/main/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
 merge "$MOD/app/src/leanback/res/values/strings_patch.xml" "$ROOT/app/src/leanback/res/values/strings.xml"
@@ -56,10 +83,28 @@ else
   merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
 fi
 
+# 资源合并后立即验证 SettingFragment.java 依赖的数组。
+required=(
+  select_global_history_mode
+  select_subtitle_language
+  select_subtitle_language_value
+)
+
+for name in "${required[@]}"; do
+  if ! grep -Rqs --include='*.xml' "name=\"$name\"" \
+      "$ROOT/app/src/main/res" \
+      "$ROOT/app/src/mobile/res" \
+      "$ROOT/app/src/leanback/res" 2>/dev/null; then
+    echo "[mod] ERROR: required resource missing: $name"
+    exit 1
+  fi
+done
+
+echo "[mod] required resources verified"
+
 # Assrt subtitle auto-match hooks
 if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
   python3 "$MOD/hooks/inject_subtitle.py"
-
-
 fi
+
 echo "[mod] done"
