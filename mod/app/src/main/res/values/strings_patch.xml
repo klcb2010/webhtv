@@ -1,69 +1,86 @@
-<string name="setting_home_history">Home recent history</string>
-<string name="setting_home_vod_auto_load">Auto load VOD on home</string>
-<string name="setting_episode_history">Episode history</string>
-<string name="setting_play_back_to_detail">Back to detail</string>
-<string name="select_subtitle_language_value">Subtitle Language Value</string>
-<string name="setting_home_site_lock">Home source lock</string>
-<string name="setting_search_thread">Search threads</string>
-<string name="setting_global_history">Global history</string>
-<string name="select_subtitle_language">Select Subtitle Language</string>
-<string name="select_global_history_mode">select_global_history_mode</string>
-<string name="dialog_delete_record">Delete all records?</string>
-<string name="dialog_delete_history">All history records will be removed.</string>
-<string name="dialog_negative">Cancel</string>
-<string name="select_subtitle_language">Select Subtitle Language</string>
-<string name="dialog_positive">OK</string>
-<string name="setting_auto_backup">Auto backup</string>
-<string name="backup_permission_denied">Storage permission denied</string>
-<string name="exit_confirm_title">Exit app?</string>
-<string name="exit_confirm_message">The current page will close. Background playback will continue if it is running.</string>
-<string name="exit_confirm_positive">Exit</string>
-<string name="setting_subtitle">Subtitle</string>
-<string name="player_subtitle_auto_match">Auto match subtitle</string>
-<string name="player_subtitle_language">Preferred language</string>
-<string name="player_subtitle_assrt_token">Assrt token</string>
-<string name="subtitle_auto_match_hit">Subtitle applied: %1$s</string>
-<string name="subtitle_token_hint">Paste Assrt API token</string>
-<string name="setting_configured">Configured</string>
-<string name="setting_unconfigured">Not set</string>
-<string name="subtitle_manual_search">Search subtitle</string>
-<string name="subtitle_manual_searching">Searching subtitles…</string>
-<string name="subtitle_manual_select_title">Select subtitle (%1$d)</string>
-<string name="subtitle_manual_search_empty">No subtitles found</string>
-<string name="subtitle_manual_search_failed">Subtitle search failed</string>
-<string name="subtitle_manual_resolving">Loading subtitle…</string>
-<string name="subtitle_manual_applied">Subtitle applied: %1$s</string>
-<string name="subtitle_manual_apply_failed">Found subtitle but failed to apply</string>
-<string name="subtitle_manual_inactive">Start playback before searching subtitles</string>
-<string name="subtitle_auto_match_provider_unavailable">Configure Assrt token first</string>
-<string name="search_keyword">Keyword</string>
-<string name="setting_ai_recommendation">AI recommendation</string>
-<string name="setting_ai_endpoint">API endpoint / base URL</string>
-<string name="setting_ai_api_key">API key</string>
-<string name="setting_ai_model">Model</string>
-<string name="setting_ai_fetch">Get AI recommendations</string>
-<string name="ai_recommend_loading">Loading AI recommendations…</string>
-<string name="ai_recommend_empty">No recommendations</string>
-<string name="ai_recommend_failed">AI recommendation failed</string>
-<string name="ai_recommend_not_ready">Configure AI service first</string>
-<string name="ai_recommend_title">AI recommendations (%1$d)</string>
-<string name="ai_config_saved">Saved</string>
-<string name="setting_ai_config">AI config</string>
-<string name="setting_ai_enable">Enable AI service</string>
-<string name="setting_ai_protocol">Protocol</string>
-<string name="setting_ai_user_agent">Custom User-Agent</string>
-<string name="setting_ai_user_agent_hint">Optional</string>
-<string name="setting_ai_test">Test</string>
-<string name="setting_ai_testing">Testing AI…</string>
-<string name="setting_ai_test_ok">OK: %1$s</string>
-<string name="setting_ai_test_fail">Failed: %1$s</string>
-<string name="setting_ai_status_on">Configured</string>
-<string name="setting_ai_status_off">Not configured</string>
-<string name="setting_ai_recommendation_switch">AI recommendation</string>
-<string name="setting_ai_title_extraction">AI real title extraction</string>
-<string name="setting_ai_fetch_models">Fetch models</string>
-<string name="setting_ai_fetching_models">Fetching models…</string>
-<string name="setting_ai_fetch_models_fail">Fetch models failed: %1$s</string>
-<string name="setting_ai_need_key">Fill endpoint and API key first</string>
-<string name="ai_recommend_section">AI recommendations</string>
-<string name="ai_recommend_loading_short">Loading…</string>
+<resources>
+    <string name="setting_home_history">Home recent history</string>
+    <string name="setting_home_vod_auto_load">Auto load VOD on home</string>
+    <string name="setting_episode_history">Episode history</string>
+    <string name="setting_play_back_to_detail">Back to detail</string>
+    <string name="setting_home_site_lock">Home source lock</string>
+    <string name="setting_search_thread">Search threads</string>
+    <string name="setting_global_history">Global history</string>
+
+    <!-- 修正为字符串数组 -->
+    <string-array name="select_global_history_mode">
+        <item>Default</item>
+        <item>Global</item>
+    </string-array>
+
+    <string-array name="select_subtitle_language">
+        <item>Auto</item>
+        <item>Chinese</item>
+        <item>English</item>
+    </string-array>
+
+    <string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
+
+    <string name="dialog_delete_record">Delete all records?</string>
+    <string name="dialog_delete_history">All history records will be removed.</string>
+    <string name="dialog_negative">Cancel</string>
+    <string name="dialog_positive">OK</string>
+    <string name="setting_auto_backup">Auto backup</string>
+    <string name="backup_permission_denied">Storage permission denied</string>
+    <string name="exit_confirm_title">Exit app?</string>
+    <string name="exit_confirm_message">The current page will close. Background playback will continue if it is running.</string>
+    <string name="exit_confirm_positive">Exit</string>
+    <string name="setting_subtitle">Subtitle</string>
+    <string name="player_subtitle_auto_match">Auto match subtitle</string>
+    <string name="player_subtitle_language">Preferred language</string>
+    <string name="player_subtitle_assrt_token">Assrt token</string>
+    <string name="subtitle_auto_match_hit">Subtitle applied: %1$s</string>
+    <string name="subtitle_token_hint">Paste Assrt API token</string>
+    <string name="setting_configured">Configured</string>
+    <string name="setting_unconfigured">Not set</string>
+    <string name="subtitle_manual_search">Search subtitle</string>
+    <string name="subtitle_manual_searching">Searching subtitles…</string>
+    <string name="subtitle_manual_select_title">Select subtitle (%1$d)</string>
+    <string name="subtitle_manual_search_empty">No subtitles found</string>
+    <string name="subtitle_manual_search_failed">Subtitle search failed</string>
+    <string name="subtitle_manual_resolving">Loading subtitle…</string>
+    <string name="subtitle_manual_applied">Subtitle applied: %1$s</string>
+    <string name="subtitle_manual_apply_failed">Found subtitle but failed to apply</string>
+    <string name="subtitle_manual_inactive">Start playback before searching subtitles</string>
+    <string name="subtitle_auto_match_provider_unavailable">Configure Assrt token first</string>
+    <string name="search_keyword">Keyword</string>
+    <string name="setting_ai_recommendation">AI recommendation</string>
+    <string name="setting_ai_endpoint">API endpoint / base URL</string>
+    <string name="setting_ai_api_key">API key</string>
+    <string name="setting_ai_model">Model</string>
+    <string name="setting_ai_fetch">Get AI recommendations</string>
+    <string name="ai_recommend_loading">Loading AI recommendations…</string>
+    <string name="ai_recommend_empty">No recommendations</string>
+    <string name="ai_recommend_failed">AI recommendation failed</string>
+    <string name="ai_recommend_not_ready">Configure AI service first</string>
+    <string name="ai_recommend_title">AI recommendations (%1$d)</string>
+    <string name="ai_config_saved">Saved</string>
+    <string name="setting_ai_config">AI config</string>
+    <string name="setting_ai_enable">Enable AI service</string>
+    <string name="setting_ai_protocol">Protocol</string>
+    <string name="setting_ai_user_agent">Custom User-Agent</string>
+    <string name="setting_ai_user_agent_hint">Optional</string>
+    <string name="setting_ai_test">Test</string>
+    <string name="setting_ai_testing">Testing AI…</string>
+    <string name="setting_ai_test_ok">OK: %1$s</string>
+    <string name="setting_ai_test_fail">Failed: %1$s</string>
+    <string name="setting_ai_status_on">Configured</string>
+    <string name="setting_ai_status_off">Not configured</string>
+    <string name="setting_ai_recommendation_switch">AI recommendation</string>
+    <string name="setting_ai_title_extraction">AI real title extraction</string>
+    <string name="setting_ai_fetch_models">Fetch models</string>
+    <string name="setting_ai_fetching_models">Fetching models…</string>
+    <string name="setting_ai_fetch_models_fail">Fetch models failed: %1$s</string>
+    <string name="setting_ai_need_key">Fill endpoint and API key first</string>
+    <string name="ai_recommend_section">AI recommendations</string>
+    <string name="ai_recommend_loading_short">Loading…</string>
+</resources>
