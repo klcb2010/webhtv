@@ -2,6 +2,7 @@
 <string name="setting_home_vod_auto_load">Auto load VOD on home</string>
 <string name="setting_episode_history">Episode history</string>
 <string name="setting_play_back_to_detail">Back to detail</string>
+<string name="select_subtitle_language_value">Subtitle Language Value</string>
 <string name="setting_home_site_lock">Home source lock</string>
 <string name="setting_search_thread">Search threads</string>
 <string name="setting_global_history">Global history</string>
