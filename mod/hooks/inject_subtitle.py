@@ -87,8 +87,17 @@ for rel in [
   else:
     print("[mod] showSubtitleSearch present", rel)
 
-  # remove mistaken onSubtitleSearchClick if any
-  t = re.sub(r'\n\s*@Override\s*\n\s*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n\s*\}\n', '\n', t)
+  # remove mistaken onSubtitleSearchClick if any (with or without @Override)
+  t = re.sub(
+    r'\n[ \t]*@Override[ \t]*\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n',
+    '\n',
+    t,
+  )
+  t = re.sub(
+    r'\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n',
+    '\n',
+    t,
+  )
 
   p.write_text(t, encoding="utf-8")
   print("[mod] done", rel)

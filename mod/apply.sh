@@ -43,5 +43,25 @@ fi
 # Assrt subtitle auto-match hooks
 if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
   python3 "$MOD/hooks/inject_subtitle.py"
+
+# Strip invalid onSubtitleSearchClick @Override leftovers
+python3 - <<'PY'
+import pathlib, re
+for rel in [
+ "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+ "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+]:
+  p = pathlib.Path(rel)
+  if not p.exists():
+    continue
+  t = p.read_text(encoding="utf-8")
+  n = t
+  n = re.sub(r"\n[ \t]*@Override[ \t]*\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n", "\n", n)
+  n = re.sub(r"\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n", "\n", n)
+  if n != t:
+    p.write_text(n, encoding="utf-8")
+    print("[mod] stripped onSubtitleSearchClick", rel)
+PY
+
 fi
 echo "[mod] done"
