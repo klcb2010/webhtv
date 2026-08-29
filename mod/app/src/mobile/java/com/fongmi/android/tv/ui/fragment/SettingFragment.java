@@ -585,11 +585,14 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     }
 
     private android.app.Activity getActivitySafe() {
-        if (this instanceof android.app.Activity) return (android.app.Activity) this;
         try {
             return requireActivity();
         } catch (Throwable e) {
-            return null;
+            try {
+                return getActivity();
+            } catch (Throwable ignored) {
+                return null;
+            }
         }
     }
 

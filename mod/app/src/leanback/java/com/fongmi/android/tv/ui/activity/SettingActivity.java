@@ -600,12 +600,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
     private android.app.Activity getActivitySafe() {
-        if (this instanceof android.app.Activity) return (android.app.Activity) this;
-        try {
-            return requireActivity();
-        } catch (Throwable e) {
-            return null;
-        }
+        return this;
     }
 
     private void showAiRecommendList(android.app.Activity activity, java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items) {
