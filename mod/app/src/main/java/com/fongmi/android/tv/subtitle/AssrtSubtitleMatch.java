@@ -178,11 +178,10 @@ public final class AssrtSubtitleMatch {
     private static List<String> buildQueriesFromKeyword(String keyword) {
         List<String> qs = new ArrayList<>();
         if (!TextUtils.isEmpty(keyword)) qs.add(keyword.trim());
-        // 去掉集数再搜一次（扩大命中）
         String cleaned = keyword == null ? "" : keyword.trim();
         cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
         cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
-        if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword)) qs.add(cleaned);
+        if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword == null ? "" : keyword.trim())) qs.add(cleaned);
         return qs;
     }
 
@@ -226,14 +225,12 @@ public final class AssrtSubtitleMatch {
         String e = episode == null ? "" : episode.trim();
         if (!TextUtils.isEmpty(t) && !TextUtils.isEmpty(e)) qs.add(t + " " + e);
         if (!TextUtils.isEmpty(t)) qs.add(t);
-        // 去掉常见「第x集」尾巴再搜一次
-        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
+        String cleaned = t.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
         cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
         if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(t)) {
             if (!TextUtils.isEmpty(e)) qs.add(cleaned + " " + e);
             qs.add(cleaned);
         }
-        // 去重保序
         List<String> out = new ArrayList<>();
         for (String q : qs) {
             if (TextUtils.isEmpty(q)) continue;
