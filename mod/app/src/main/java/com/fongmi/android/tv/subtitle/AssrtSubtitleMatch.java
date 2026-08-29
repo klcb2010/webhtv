@@ -77,9 +77,8 @@ public final class AssrtSubtitleMatch {
         }
 
         public String label() {
-            String p = sourceTag();
-            if (!TextUtils.isEmpty(lang)) return "[" + p + "] " + name + "  (" + lang + ")";
-            return "[" + p + "] " + (name == null ? id : name);
+            if (!TextUtils.isEmpty(lang)) return (name == null ? id : name) + "  (" + lang + ")";
+            return name == null ? id : name;
         }
 
         public String sourceTag() {
@@ -87,7 +86,6 @@ public final class AssrtSubtitleMatch {
         }
     }
 
-    /** 无关键词时的回退显示名 */
     public static String displayName(Item item) {
         return displayNameForKeyword(item, item == null ? "" : item.name);
     }
@@ -182,18 +180,18 @@ public final class AssrtSubtitleMatch {
         if (!TextUtils.isEmpty(keyword)) qs.add(keyword.trim());
         // 去掉集数再搜一次（扩大命中）
         String cleaned = keyword == null ? "" : keyword.trim();
-        cleaned = cleaned.replaceAll("(?i)[\s\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
-        cleaned = cleaned.replaceAll("(?i)[\s\-_]*S\d{1,2}E\d{1,3}.*$", "").trim();
+        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
+        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
         if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword)) qs.add(cleaned);
         return qs;
     }
 
-    /** 显示名 = [来源] 片名 集数（与预填一致），不用远程乱文件名 */
+    /** 显示名 = 片名 集数（与预填一致），不用远程乱文件名、不带来源前缀 */
     public static String displayNameForKeyword(Item item, String keyword) {
-        String base = !TextUtils.isEmpty(keyword) ? keyword.trim() : (item == null ? "" : item.name);
-        if (TextUtils.isEmpty(base) && item != null) base = item.id;
-        String tag = item == null ? "?" : item.sourceTag();
-        return "[" + tag + "] " + base;
+        if (!TextUtils.isEmpty(keyword)) return keyword.trim();
+        if (item == null) return "";
+        if (!TextUtils.isEmpty(item.name)) return item.name;
+        return item.id == null ? "" : item.id;
     }
 
     public static void cancel() {
@@ -229,7 +227,7 @@ public final class AssrtSubtitleMatch {
         if (!TextUtils.isEmpty(t) && !TextUtils.isEmpty(e)) qs.add(t + " " + e);
         if (!TextUtils.isEmpty(t)) qs.add(t);
         // 去掉常见「第x集」尾巴再搜一次
-        String cleaned = t.replaceAll("(?i)[\\s\\-_]*第?\\d+[集期话].*$", "").trim();
+        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
         cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
         if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(t)) {
             if (!TextUtils.isEmpty(e)) qs.add(cleaned + " " + e);

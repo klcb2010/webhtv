@@ -27,23 +27,22 @@ public final class AssrtSubtitleSearchDialog {
 
     public static void show(FragmentActivity activity, PlayerManager player, String defaultKeyword) {
         if (activity == null || player == null) return;
-        // 迅雷不需要 Token；有 Token 时一并搜射手
         String keyword = defaultKeyword == null ? "" : defaultKeyword.trim();
-        if (TextUtils.isEmpty(keyword) && activity instanceof TrackDialog.SubtitleSearchHost host) {
-            keyword = host.getSubtitleSearchKeyword();
-            if (keyword == null) keyword = "";
+        // 优先用播放页 Host 提供的 片名+集数（即使传入为空也再取一次）
+        if (activity instanceof TrackDialog.SubtitleSearchHost host) {
+            try {
+                String fromHost = host.getSubtitleSearchKeyword();
+                if (!TextUtils.isEmpty(fromHost)) keyword = fromHost.trim();
+            } catch (Throwable ignored) {
+            }
         }
 
-        EditText input = new EditText(activity);
+        final EditText input = new EditText(activity);
         input.setSingleLine(true);
         input.setHint(R.string.search_keyword);
         input.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        if (!TextUtils.isEmpty(keyword)) {
-            input.setText(keyword);
-            input.setSelection(keyword.length());
-        }
+        final String prefill = keyword == null ? "" : keyword;
 
-        final String prefill = keyword;
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.subtitle_manual_search)
                 .setView(input)
@@ -51,8 +50,8 @@ public final class AssrtSubtitleSearchDialog {
                 .setPositiveButton(R.string.dialog_positive, null)
                 .create();
         dialog.setOnShowListener(d -> {
-            // 再保险填一次（部分机型 setText 在 show 前会被清）
-            if (TextUtils.isEmpty(input.getText()) && !TextUtils.isEmpty(prefill)) {
+            // 必须在 show 之后 setText，否则部分机型/主题会空白
+            if (!TextUtils.isEmpty(prefill)) {
                 input.setText(prefill);
                 input.setSelection(prefill.length());
             }
