@@ -34,12 +34,6 @@ SHOW = r"""
         } catch (Throwable ignored) {
         }
         try {
-            if (ep.isEmpty() && mHistory != null && mHistory.getEpisode() != null && !mHistory.getEpisode().isEmpty()) {
-                ep = mHistory.getEpisode().trim();
-            }
-        } catch (Throwable ignored) {
-        }
-        try {
             if (ep.isEmpty() && mHistory != null && mHistory.getVodRemarks() != null) {
                 ep = mHistory.getVodRemarks().trim();
             }
