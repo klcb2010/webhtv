@@ -4,21 +4,35 @@ import re
 
 SHOW = """
     private void showSubtitleSearch() {
+        AssrtSubtitleSearchDialog.show(this, player(), getSubtitleSearchKeyword());
+    }
+
+    public String getSubtitleSearchKeyword() {
         String keyword = "";
         if (mHistory != null && mHistory.getVodName() != null) keyword = mHistory.getVodName();
         if (getEpisode() != null && getEpisode().getName() != null && !getEpisode().getName().isEmpty()) {
             if (!keyword.isEmpty()) keyword = keyword + " " + getEpisode().getName();
             else keyword = getEpisode().getName();
         }
-        AssrtSubtitleSearchDialog.show(this, player(), keyword);
+        return keyword;
     }
 """
 
 
-def insert_show_after_on_subtitle_click(t: str) -> str:
-    if "void showSubtitleSearch()" in t:
+def insert_after_on_subtitle_click(t: str) -> str:
+    if "void showSubtitleSearch()" in t and "getSubtitleSearchKeyword()" in t:
         return t
-    m = re.search(r"[ \t]*(?:@Override[ \t]*\n[ \t]*)?(?:public|private) void onSubtitleClick\(\)[ \t]*\{", t)
+    # remove old incomplete showSubtitleSearch only blocks
+    t = re.sub(
+        r"\n[ \t]*private void showSubtitleSearch\(\) \{[\s\S]*?\n[ \t]*\}\n",
+        "\n",
+        t,
+        count=1,
+    )
+    m = re.search(
+        r"[ \t]*(?:@Override[ \t]*\n[ \t]*)?(?:public|private) void onSubtitleClick\(\)[ \t]*\{",
+        t,
+    )
     if not m:
         t = t.rstrip()
         if t.endswith("}"):
@@ -100,39 +114,38 @@ for rel in [
     if "AssrtSubtitleMatch.cancel()" not in t and "protected void onDestroy()" in t:
         t = t.replace("protected void onDestroy() {", "protected void onDestroy() {\n        AssrtSubtitleMatch.cancel();", 1)
 
+    # Wire .search on every TrackDialog chain (with or without existing search)
     t = re.sub(
-        r"TrackDialog\.create\(\)\.type\(([^)]+)\)\.player\(player\(\)\)\.show\(this\);",
+        r"TrackDialog\.create\(\)\.type\(([^)]+)\)\.player\(player\(\)\)(?:\.search\([^;]*\))?\.show\(this\);",
         r"TrackDialog.create().type(\1).player(player()).search(this::showSubtitleSearch).show(this);",
         t,
     )
 
-    t = insert_show_after_on_subtitle_click(t)
+    t = insert_after_on_subtitle_click(t)
 
-    # remove invalid @Override stuck above showSubtitleSearch
     t = re.sub(
         r"[ \t]*@Override[ \t]*\n[ \t]*\n?[ \t]*private void showSubtitleSearch\(\)",
         "    private void showSubtitleSearch()",
         t,
     )
-
-    # remove leftover onSubtitleSearchClick
     t = re.sub(
         r"\n[ \t]*@Override[ \t]*\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n",
         "\n",
         t,
     )
     t = re.sub(
-        r"\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n",
-        "\n",
-        t,
-    )
-
-    # one @Override before onSubtitleClick
-    t = re.sub(
         r"(?:[ \t]*@Override[ \t]*\n)+[ \t]*public void onSubtitleClick\(\)",
         "    @Override\n    public void onSubtitleClick()",
         t,
     )
+
+    # implement host interface on class declaration if possible
+    if "TrackDialog.SubtitleSearchHost" not in t:
+        t = t.replace(
+            "implements TrackDialog.Listener",
+            "implements TrackDialog.Listener, TrackDialog.SubtitleSearchHost",
+            1,
+        )
 
     p.write_text(t, encoding="utf-8")
     print("[mod] done", rel)

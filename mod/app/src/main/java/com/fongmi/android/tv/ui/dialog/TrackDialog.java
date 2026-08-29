@@ -82,11 +82,12 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
     }
 
     private boolean hasSearch() {
-        return !secondarySubtitle && type == C.TRACK_TYPE_TEXT && searchAction != null;
+        // 与 Silent 一致：字幕轨对话框显示搜索入口（由 searchAction 或默认 Assrt 搜索承接）
+        return !secondarySubtitle && type == C.TRACK_TYPE_TEXT;
     }
 
     private boolean hasText() {
-        return !secondarySubtitle && type == C.TRACK_TYPE_TEXT && player.haveTrack(type);
+        return !secondarySubtitle && type == C.TRACK_TYPE_TEXT && (player.haveTrack(type) || player.isVod());
     }
 
     private boolean hasAudio() {
@@ -154,9 +155,22 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
     }
 
     private void onSearch(View view) {
-        if (searchAction == null) return;
-        App.post(searchAction::run, 100);
+        if (searchAction != null) {
+            App.post(searchAction::run, 100);
+            dismiss();
+            return;
+        }
+        // 兜底：未注入 searchAction 时仍可搜（预填空，用户可改关键词）
+        FragmentActivity activity = requireActivity();
+        String keyword = "";
+        if (activity instanceof SubtitleSearchHost host) keyword = host.getSubtitleSearchKeyword();
+        AssrtSubtitleSearchDialog.show(activity, player, keyword);
         dismiss();
+    }
+
+    /** 播放页可实现以提供默认搜索词（片名+集名） */
+    public interface SubtitleSearchHost {
+        String getSubtitleSearchKeyword();
     }
 
     private void onSubtitle(View view) {
