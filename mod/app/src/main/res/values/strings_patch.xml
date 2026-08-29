@@ -40,3 +40,15 @@
         <item>cht</item>
         <item>en</item>
     </string-array>
+
+    <string name="subtitle_manual_search">Search subtitle</string>
+    <string name="subtitle_manual_searching">Searching subtitles…</string>
+    <string name="subtitle_manual_select_title">Select subtitle (%1$d)</string>
+    <string name="subtitle_manual_search_empty">No subtitles found</string>
+    <string name="subtitle_manual_search_failed">Subtitle search failed</string>
+    <string name="subtitle_manual_resolving">Loading subtitle…</string>
+    <string name="subtitle_manual_applied">Subtitle applied: %1$s</string>
+    <string name="subtitle_manual_apply_failed">Found subtitle but failed to apply</string>
+    <string name="subtitle_manual_inactive">Start playback before searching subtitles</string>
+    <string name="subtitle_auto_match_provider_unavailable">Configure Assrt token first</string>
+    <string name="search_keyword">Keyword</string>

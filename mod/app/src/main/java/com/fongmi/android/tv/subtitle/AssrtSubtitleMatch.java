@@ -67,7 +67,7 @@ public final class AssrtSubtitleMatch {
         final String query = buildQuery(title, ep);
         Task.execute(() -> {
             try {
-                Candidate hit = searchBest(query);
+                Item hit = searchBest(query);
                 if (hit == null) {
                     Log.i(TAG, "no candidate q=" + query);
                     return;
@@ -102,23 +102,24 @@ public final class AssrtSubtitleMatch {
         GEN.incrementAndGet();
     }
 
-    private static String buildQuery(String title, String episode) {
-        String q = title == null ? "" : title.trim();
-        if (!TextUtils.isEmpty(episode)) q = q + " " + episode.trim();
-        return q.trim();
+    public static List<Item> searchList(String query) throws Exception {
+        if (TextUtils.isEmpty(Setting.getSubtitleAssrtToken()) || TextUtils.isEmpty(query)) return new ArrayList<>();
+        return searchAll(query);
     }
 
-    private static Candidate searchBest(String query) throws Exception {
+    public static File downloadItem(Item item) throws Exception {
+        return resolve(item);
+    }
+
+    private static List<Item> searchAll(String query) throws Exception {
         String token = Setting.getSubtitleAssrtToken();
-        String url = API + "/sub/search?token=" + enc(token) + "&q=" + enc(query) + "&is_file=1&cnt=15";
+        String url = API + "/sub/search?token=" + enc(token) + "&q=" + enc(query) + "&is_file=1&cnt=20";
+        List<Item> all = new ArrayList<>();
         try (Response response = OkHttp.client().newCall(new Request.Builder().url(url).get().build()).execute()) {
-            if (!response.isSuccessful() || response.body() == null) return null;
+            if (!response.isSuccessful() || response.body() == null) return all;
             JsonObject root = JsonParser.parseString(response.body().string()).getAsJsonObject();
-            if (safeInt(root, "status") != 0) return null;
-            JsonObject sub = safeObject(root, "sub");
-            JsonArray subs = safeArray(sub, "subs");
-            String prefer = Setting.getSubtitlePreferredLanguage();
-            List<Candidate> all = new ArrayList<>();
+            if (safeInt(root, "status") != 0) return all;
+            JsonArray subs = safeArray(safeObject(root, "sub"), "subs");
             for (JsonElement el : subs) {
                 if (!el.isJsonObject()) continue;
                 JsonObject item = el.getAsJsonObject();
@@ -129,12 +130,48 @@ public final class AssrtSubtitleMatch {
                 JsonObject langObj = safeObject(item, "lang");
                 if (langObj.size() > 0) lang = first(langObj, "desc");
                 if (TextUtils.isEmpty(lang)) lang = first(item, "m_lang");
-                all.add(new Candidate(id, name, lang));
+                all.add(new Item(id, name, lang));
+            }
+        }
+        String prefer = Setting.getSubtitlePreferredLanguage();
+        all.sort((a, b) -> Integer.compare(score(b, prefer), score(a, prefer)));
+        return all;
+    }
+
+
+    private static String buildQuery(String title, String episode) {
+        String q = title == null ? "" : title.trim();
+        if (!TextUtils.isEmpty(episode)) q = q + " " + episode.trim();
+        return q.trim();
+    }
+
+    private static Item searchBest(String query) throws Exception {
+        String token = Setting.getSubtitleAssrtToken();
+        String url = API + "/sub/search?token=" + enc(token) + "&q=" + enc(query) + "&is_file=1&cnt=15";
+        try (Response response = OkHttp.client().newCall(new Request.Builder().url(url).get().build()).execute()) {
+            if (!response.isSuccessful() || response.body() == null) return null;
+            JsonObject root = JsonParser.parseString(response.body().string()).getAsJsonObject();
+            if (safeInt(root, "status") != 0) return null;
+            JsonObject sub = safeObject(root, "sub");
+            JsonArray subs = safeArray(sub, "subs");
+            String prefer = Setting.getSubtitlePreferredLanguage();
+            List<Item> all = new ArrayList<>();
+            for (JsonElement el : subs) {
+                if (!el.isJsonObject()) continue;
+                JsonObject item = el.getAsJsonObject();
+                String id = first(item, "id", "fileid");
+                if (TextUtils.isEmpty(id)) continue;
+                String name = first(item, "name", "sub_name", "m_version", "m_title");
+                String lang = "";
+                JsonObject langObj = safeObject(item, "lang");
+                if (langObj.size() > 0) lang = first(langObj, "desc");
+                if (TextUtils.isEmpty(lang)) lang = first(item, "m_lang");
+                all.add(new Item(id, name, lang));
             }
             if (all.isEmpty()) return null;
-            Candidate best = null;
+            Item best = null;
             int bestScore = Integer.MIN_VALUE;
-            for (Candidate c : all) {
+            for (Item c : all) {
                 int score = score(c, prefer);
                 if (score > bestScore) {
                     bestScore = score;
@@ -145,7 +182,7 @@ public final class AssrtSubtitleMatch {
         }
     }
 
-    private static int score(Candidate c, String prefer) {
+    private static int score(Item c, String prefer) {
         int s = 0;
         String blob = ((c.name == null ? "" : c.name) + " " + (c.lang == null ? "" : c.lang)).toLowerCase(Locale.ROOT);
         if ("zh".equals(prefer) || "chs".equals(prefer) || "cht".equals(prefer)) {
@@ -160,7 +197,7 @@ public final class AssrtSubtitleMatch {
         return s;
     }
 
-    private static File resolve(Candidate candidate) throws Exception {
+    private static File resolve(Item candidate) throws Exception {
         String token = Setting.getSubtitleAssrtToken();
         String url = API + "/sub/detail?token=" + enc(token) + "&id=" + enc(candidate.id);
         try (Response response = OkHttp.client().newCall(new Request.Builder().url(url).get().build()).execute()) {
@@ -306,12 +343,17 @@ public final class AssrtSubtitleMatch {
         return o != null && o.has(key) && o.get(key).isJsonArray() ? o.getAsJsonArray(key) : new JsonArray();
     }
 
-    private static final class Candidate {
-        final String id, name, lang;
-        Candidate(String id, String name, String lang) {
+    public static final class Item {
+        public final String id, name, lang;
+        Item(String id, String name, String lang) {
             this.id = id;
             this.name = name;
             this.lang = lang;
+        }
+
+        public String label() {
+            if (!android.text.TextUtils.isEmpty(lang)) return name + "  [" + lang + "]";
+            return name == null ? id : name;
         }
     }
 }

@@ -40,3 +40,15 @@
         <item>cht</item>
         <item>en</item>
     </string-array>
+
+    <string name="subtitle_manual_search">搜索字幕</string>
+    <string name="subtitle_manual_searching">正在搜索字幕…</string>
+    <string name="subtitle_manual_select_title">选择字幕（%1$d）</string>
+    <string name="subtitle_manual_search_empty">未搜索到字幕</string>
+    <string name="subtitle_manual_search_failed">字幕搜索失败</string>
+    <string name="subtitle_manual_resolving">正在加载字幕…</string>
+    <string name="subtitle_manual_applied">已应用字幕：%1$s</string>
+    <string name="subtitle_manual_apply_failed">已找到字幕但无法应用</string>
+    <string name="subtitle_manual_inactive">请先开始播放再搜索字幕</string>
+    <string name="subtitle_auto_match_provider_unavailable">请先配置射手网 Token</string>
+    <string name="search_keyword">关键词</string>
