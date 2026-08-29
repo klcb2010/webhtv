@@ -5,6 +5,7 @@
 <string name="setting_home_site_lock">首页源锁定</string>
 <string name="setting_search_thread">搜索线程</string>
 <string name="setting_global_history">全局历史</string>
+<string name="select_subtitle_language">选择字幕语言</string>
 <string name="select_global_history_mode">选择全局历史模式</string>
 <string name="dialog_delete_record">删除全部记录？</string>
 <string name="dialog_delete_history">将删除全部历史记录。</string>
