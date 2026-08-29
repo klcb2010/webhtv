@@ -53,6 +53,8 @@ public final class AssrtSubtitleMatch {
     private static final String XUNLEI_API = "https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     private static final AtomicInteger GEN = new AtomicInteger();
+    /** 最近一次片名+集数，供手动搜索预填（不依赖对话框入参是否传到） */
+    private static volatile String sLastKeyword = "";
 
     private AssrtSubtitleMatch() {
     }
@@ -97,6 +99,7 @@ public final class AssrtSubtitleMatch {
         String ep = episode != null && episode.getName() != null ? episode.getName().trim() : "";
         if (TextUtils.isEmpty(title) && TextUtils.isEmpty(ep)) return;
         final String keyword = formatKeyword(title, ep);
+        updateKeyword(keyword);
         final int gen = GEN.incrementAndGet();
         // 等播放真正开始后再匹配（避免起播前 player 仍为空）
         waitPlayingThenMatch(activity, playerProvider, keyword, gen, 0);
@@ -112,6 +115,19 @@ public final class AssrtSubtitleMatch {
         }
         if (!TextUtils.isEmpty(t)) return t;
         return e;
+    }
+
+    public static void updateKeyword(String title, String episode) {
+        String k = formatKeyword(title, episode);
+        if (!TextUtils.isEmpty(k)) sLastKeyword = k;
+    }
+
+    public static void updateKeyword(String keyword) {
+        if (!TextUtils.isEmpty(keyword)) sLastKeyword = keyword.trim();
+    }
+
+    public static String lastKeyword() {
+        return sLastKeyword == null ? "" : sLastKeyword;
     }
 
     private static void waitPlayingThenMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen, int attempt) {

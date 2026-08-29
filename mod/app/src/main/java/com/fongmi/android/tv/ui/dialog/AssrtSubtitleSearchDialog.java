@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.dialog;
 import android.text.TextUtils;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
@@ -27,42 +28,53 @@ public final class AssrtSubtitleSearchDialog {
 
     public static void show(FragmentActivity activity, PlayerManager player, String defaultKeyword) {
         if (activity == null || player == null) return;
-        String keyword = defaultKeyword == null ? "" : defaultKeyword.trim();
-        // 优先用播放页 Host 提供的 片名+集数（即使传入为空也再取一次）
-        if (activity instanceof TrackDialog.SubtitleSearchHost host) {
-            try {
-                String fromHost = host.getSubtitleSearchKeyword();
-                if (!TextUtils.isEmpty(fromHost)) keyword = fromHost.trim();
-            } catch (Throwable ignored) {
-            }
-        }
+
+        String keyword = resolveKeyword(activity, defaultKeyword);
+        // 写回缓存，避免下次再空
+        AssrtSubtitleMatch.updateKeyword(keyword);
 
         final EditText input = new EditText(activity);
         input.setSingleLine(true);
         input.setHint(R.string.search_keyword);
         input.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        final String prefill = keyword == null ? "" : keyword;
+        // 给一点 padding，避免贴边
+        int pad = (int) (16 * activity.getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad, pad, pad);
+
+        FrameLayout container = new FrameLayout(activity);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = pad;
+        lp.rightMargin = pad;
+        lp.topMargin = pad / 2;
+        container.addView(input, lp);
+
+        final String prefill = keyword == null ? "" : keyword.trim();
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.subtitle_manual_search)
-                .setView(input)
+                .setView(container)
                 .setNegativeButton(R.string.dialog_negative, null)
                 .setPositiveButton(R.string.dialog_positive, null)
                 .create();
+
         dialog.setOnShowListener(d -> {
-            // 必须在 show 之后 setText，否则部分机型/主题会空白
+            // 关键后强制写入预填（解决空白）
+            input.setText(prefill);
             if (!TextUtils.isEmpty(prefill)) {
-                input.setText(prefill);
                 input.setSelection(prefill.length());
             }
+            input.requestFocus();
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 String q = input.getText() == null ? "" : input.getText().toString().trim();
                 if (TextUtils.isEmpty(q)) {
                     Notify.show(R.string.search_keyword);
                     return;
                 }
+                AssrtSubtitleMatch.updateKeyword(q);
                 dialog.dismiss();
-                search(activity, player, q); // q 即预填/用户输入的 片名+集数
+                search(activity, player, q);
             });
             input.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -73,6 +85,20 @@ public final class AssrtSubtitleSearchDialog {
             });
         });
         dialog.show();
+    }
+
+    private static String resolveKeyword(FragmentActivity activity, String defaultKeyword) {
+        if (!TextUtils.isEmpty(defaultKeyword)) return defaultKeyword.trim();
+        if (activity instanceof TrackDialog.SubtitleSearchHost host) {
+            try {
+                String fromHost = host.getSubtitleSearchKeyword();
+                if (!TextUtils.isEmpty(fromHost)) return fromHost.trim();
+            } catch (Throwable ignored) {
+            }
+        }
+        String cached = AssrtSubtitleMatch.lastKeyword();
+        if (!TextUtils.isEmpty(cached)) return cached.trim();
+        return "";
     }
 
     private static void search(FragmentActivity activity, PlayerManager player, String query) {
@@ -119,7 +145,6 @@ public final class AssrtSubtitleSearchDialog {
                         Notify.show(R.string.subtitle_manual_inactive);
                         return;
                     }
-                    // 显示名与预填一致： [来源] 片名 集数
                     String display = AssrtSubtitleMatch.displayNameForKeyword(item, query);
                     String format = PlayerHelper.getSubtitleMimeType(item.name);
                     if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());

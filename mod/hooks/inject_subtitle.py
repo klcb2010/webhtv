@@ -2,33 +2,47 @@
 import pathlib
 import re
 
-SHOW = """
+SHOW = r"""
     private void showSubtitleSearch() {
-        AssrtSubtitleSearchDialog.show(this, player(), getSubtitleSearchKeyword());
+        String keyword = getSubtitleSearchKeyword();
+        com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.updateKeyword(keyword);
+        AssrtSubtitleSearchDialog.show(this, player(), keyword);
     }
 
     public String getSubtitleSearchKeyword() {
         String title = "";
+        String ep = "";
         try {
-            if (mHistory != null && !android.text.TextUtils.isEmpty(mHistory.getVodName())) title = mHistory.getVodName().trim();
+            if (mHistory != null && mHistory.getVodName() != null) title = mHistory.getVodName().trim();
         } catch (Throwable ignored) {
         }
         try {
-            if (android.text.TextUtils.isEmpty(title)) {
+            if (title.isEmpty()) {
                 String n = getName();
-                if (!android.text.TextUtils.isEmpty(n)) title = n.trim();
+                if (n != null && !n.isEmpty()) title = n.trim();
             }
         } catch (Throwable ignored) {
         }
         try {
-            if (android.text.TextUtils.isEmpty(title) && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
+            if (title.isEmpty() && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
                 title = mBinding.name.getText().toString().trim();
             }
         } catch (Throwable ignored) {
         }
-        String ep = "";
         try {
-            if (getEpisode() != null && !android.text.TextUtils.isEmpty(getEpisode().getName())) ep = getEpisode().getName().trim();
+            if (getEpisode() != null && getEpisode().getName() != null) ep = getEpisode().getName().trim();
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (ep.isEmpty() && mHistory != null && mHistory.getEpisode() != null && !mHistory.getEpisode().isEmpty()) {
+                ep = mHistory.getEpisode().trim();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (ep.isEmpty() && mHistory != null && mHistory.getVodRemarks() != null) {
+                ep = mHistory.getVodRemarks().trim();
+            }
         } catch (Throwable ignored) {
         }
         return com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.formatKeyword(title, ep);
@@ -38,14 +52,19 @@ SHOW = """
 
 def insert_after_on_subtitle_click(t: str) -> str:
     if "void showSubtitleSearch()" in t and "getSubtitleSearchKeyword()" in t:
-        return t
-    # remove old incomplete showSubtitleSearch only blocks
-    t = re.sub(
-        r"\n[ \t]*private void showSubtitleSearch\(\) \{[\s\S]*?\n[ \t]*\}\n",
-        "\n",
-        t,
-        count=1,
-    )
+        # refresh method bodies if old version
+        t = re.sub(
+            r"\n[ \t]*private void showSubtitleSearch\(\) \{[\s\S]*?\n[ \t]*\}\n",
+            "\n",
+            t,
+            count=1,
+        )
+        t = re.sub(
+            r"\n[ \t]*public String getSubtitleSearchKeyword\(\) \{[\s\S]*?\n[ \t]*\}\n",
+            "\n",
+            t,
+            count=1,
+        )
     m = re.search(
         r"[ \t]*(?:@Override[ \t]*\n[ \t]*)?(?:public|private) void onSubtitleClick\(\)[ \t]*\{",
         t,
@@ -109,9 +128,13 @@ for rel in [
 
     def add_ready(match):
         s = match.group(0)
+        extra = (
+            "\n        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : \"\", getEpisode() != null ? getEpisode().getName() : \"\"); } catch (Throwable ignored) {}"
+            "\n        AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player());"
+        )
         if "AssrtSubtitleMatch.onPlayerReady" in s:
             return s
-        return s + "\n        AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player());"
+        return s + extra
 
     t = re.sub(
         r"startPlayer\(getHistoryKey\(\), result, isUseParse\(\), getSite\(\)\.getTimeout\(\), buildMetadata\(\), mInitialPlaybackPosition\);",
@@ -131,7 +154,6 @@ for rel in [
     if "AssrtSubtitleMatch.cancel()" not in t and "protected void onDestroy()" in t:
         t = t.replace("protected void onDestroy() {", "protected void onDestroy() {\n        AssrtSubtitleMatch.cancel();", 1)
 
-    # Wire .search on every TrackDialog chain (with or without existing search)
     t = re.sub(
         r"TrackDialog\.create\(\)\.type\(([^)]+)\)\.player\(player\(\)\)(?:\.search\([^;]*\))?\.show\(this\);",
         r"TrackDialog.create().type(\1).player(player()).search(this::showSubtitleSearch).show(this);",
@@ -146,22 +168,20 @@ for rel in [
         t,
     )
     t = re.sub(
-        r"\n[ \t]*@Override[ \t]*\n[ \t]*public void onSubtitleSearchClick\(\) \{[\s\S]*?\n[ \t]*\}\n",
-        "\n",
-        t,
-    )
-    t = re.sub(
         r"(?:[ \t]*@Override[ \t]*\n)+[ \t]*public void onSubtitleClick\(\)",
         "    @Override\n    public void onSubtitleClick()",
         t,
     )
 
-    # implement host interface on class declaration if possible
+    # implements Host
     if "TrackDialog.SubtitleSearchHost" not in t:
-        t = t.replace(
-            "implements TrackDialog.Listener",
-            "implements TrackDialog.Listener, TrackDialog.SubtitleSearchHost",
-            1,
+        t = re.sub(
+            r"implements ([^{\n]+)",
+            lambda m: m.group(0)
+            if "SubtitleSearchHost" in m.group(0)
+            else "implements " + m.group(1).rstrip() + ", TrackDialog.SubtitleSearchHost",
+            t,
+            count=1,
         )
 
     p.write_text(t, encoding="utf-8")

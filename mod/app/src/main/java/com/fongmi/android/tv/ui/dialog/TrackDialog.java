@@ -155,16 +155,27 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
     }
 
     private void onSearch(View view) {
+        FragmentActivity activity = requireActivity();
+        String keyword = "";
+        if (activity instanceof SubtitleSearchHost host) {
+            try {
+                keyword = host.getSubtitleSearchKeyword();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (keyword == null) keyword = "";
+        // 写入缓存，供对话框预填
+        try {
+            com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.updateKeyword(keyword);
+        } catch (Throwable ignored) {
+        }
+        final String kw = keyword;
         if (searchAction != null) {
             App.post(searchAction::run, 100);
             dismiss();
             return;
         }
-        // 兜底：未注入 searchAction 时仍可搜（预填空，用户可改关键词）
-        FragmentActivity activity = requireActivity();
-        String keyword = "";
-        if (activity instanceof SubtitleSearchHost host) keyword = host.getSubtitleSearchKeyword();
-        AssrtSubtitleSearchDialog.show(activity, player, keyword);
+        App.post(() -> AssrtSubtitleSearchDialog.show(activity, player, kw), 100);
         dismiss();
     }
 
