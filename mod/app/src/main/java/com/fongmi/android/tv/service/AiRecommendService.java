@@ -96,7 +96,6 @@ public final class AiRecommendService {
             appendIf(sb, "year", current.getYear());
             appendIf(sb, "type", current.getTypeName());
             appendIf(sb, "area", current.getArea());
-            appendIf(sb, "lang", current.getLang());
             appendIf(sb, "director", current.getDirector());
             appendIf(sb, "actor", current.getActor());
             appendIf(sb, "remarks", current.getRemarks());
