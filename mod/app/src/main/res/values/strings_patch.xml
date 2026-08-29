@@ -5,6 +5,7 @@
 <string name="setting_home_site_lock">Home source lock</string>
 <string name="setting_search_thread">Search threads</string>
 <string name="setting_global_history">Global history</string>
+<string name="select_global_history_mode">select_global_history_mode</string>
 <string name="dialog_delete_record">Delete all records?</string>
 <string name="dialog_delete_history">All history records will be removed.</string>
 <string name="dialog_negative">Cancel</string>
