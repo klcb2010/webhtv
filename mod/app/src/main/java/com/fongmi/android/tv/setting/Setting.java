@@ -738,6 +738,48 @@ public class Setting {
 
 
 
+
+    public static boolean isAiRecommendation() {
+        return Prefers.getBoolean("ai_recommendation", false);
+    }
+
+    public static void putAiRecommendation(boolean enabled) {
+        Prefers.put("ai_recommendation", enabled);
+    }
+
+    public static String getAiEndpoint() {
+        String v = Prefers.getString("ai_endpoint");
+        return v == null || v.isEmpty() ? "https://api.openai.com/v1/chat/completions" : v.trim();
+    }
+
+    public static void putAiEndpoint(String value) {
+        Prefers.put("ai_endpoint", value == null ? "" : value.trim());
+    }
+
+    public static String getAiApiKey() {
+        return Prefers.getString("ai_api_key");
+    }
+
+    public static void putAiApiKey(String value) {
+        Prefers.put("ai_api_key", value == null ? "" : value.trim());
+    }
+
+    public static String getAiModel() {
+        String v = Prefers.getString("ai_model");
+        return v == null || v.isEmpty() ? "gpt-4o-mini" : v.trim();
+    }
+
+    public static void putAiModel(String value) {
+        Prefers.put("ai_model", value == null ? "" : value.trim());
+    }
+
+    public static boolean isAiRecommendReady() {
+        return isAiRecommendation()
+                && !getAiEndpoint().isEmpty()
+                && !getAiApiKey().isEmpty()
+                && !getAiModel().isEmpty();
+    }
+
     public static boolean isSubtitleAutoMatchEnabled() {
         return Prefers.getBoolean("subtitle_auto_match", false);
     }

@@ -52,3 +52,15 @@
     <string name="subtitle_manual_inactive">Start playback before searching subtitles</string>
     <string name="subtitle_auto_match_provider_unavailable">Configure Assrt token first</string>
     <string name="search_keyword">Keyword</string>
+
+    <string name="setting_ai_recommendation">AI recommendation</string>
+    <string name="setting_ai_endpoint">AI endpoint</string>
+    <string name="setting_ai_api_key">AI API key</string>
+    <string name="setting_ai_model">AI model</string>
+    <string name="setting_ai_fetch">Get AI recommendations</string>
+    <string name="ai_recommend_loading">Loading AI recommendations…</string>
+    <string name="ai_recommend_empty">No recommendations</string>
+    <string name="ai_recommend_failed">AI recommendation failed</string>
+    <string name="ai_recommend_not_ready">Enable AI recommendation and set endpoint, API key and model first</string>
+    <string name="ai_recommend_title">AI recommendations (%1$d)</string>
+    <string name="ai_config_saved">Saved</string>

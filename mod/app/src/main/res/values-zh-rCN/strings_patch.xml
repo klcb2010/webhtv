@@ -52,3 +52,15 @@
     <string name="subtitle_manual_inactive">请先开始播放再搜索字幕</string>
     <string name="subtitle_auto_match_provider_unavailable">请先配置射手网 Token</string>
     <string name="search_keyword">关键词</string>
+
+    <string name="setting_ai_recommendation">AI 推荐</string>
+    <string name="setting_ai_endpoint">AI 接口地址</string>
+    <string name="setting_ai_api_key">AI API Key</string>
+    <string name="setting_ai_model">AI 模型</string>
+    <string name="setting_ai_fetch">获取 AI 推荐</string>
+    <string name="ai_recommend_loading">正在获取 AI 推荐…</string>
+    <string name="ai_recommend_empty">暂无推荐结果</string>
+    <string name="ai_recommend_failed">AI 推荐失败</string>
+    <string name="ai_recommend_not_ready">请先开启 AI 推荐并填写接口、Key 和模型</string>
+    <string name="ai_recommend_title">AI 推荐（%1$d）</string>
+    <string name="ai_config_saved">已保存</string>
