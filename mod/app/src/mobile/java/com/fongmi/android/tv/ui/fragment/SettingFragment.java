@@ -143,10 +143,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         mBinding.subtitleAutoMatch.setOnClickListener(this::setSubtitleAutoMatch);
         mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
         mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
-        mBinding.aiRecommendation.setOnClickListener(this::setAiRecommendation);
-        mBinding.aiEndpoint.setOnClickListener(this::setAiEndpoint);
-        mBinding.aiApiKey.setOnClickListener(this::setAiApiKey);
-        mBinding.aiModel.setOnClickListener(this::setAiModel);
+        mBinding.aiConfig.setOnClickListener(this::openAiConfig);
         mBinding.aiFetch.setOnClickListener(this::fetchAiRecommend);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -502,67 +499,30 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     }
 
 
-    private String maskKey(String key) {
-        if (key == null || key.isEmpty()) return getString(R.string.setting_unconfigured);
-        if (key.length() <= 8) return getString(R.string.setting_configured);
-        return key.substring(0, 4) + "****" + key.substring(key.length() - 4);
-    }
+
+
+
+
+
+
+
+
+
 
     private void refreshAiTexts() {
-        mBinding.aiRecommendationText.setText(getSwitch(Setting.isAiRecommendation()));
-        mBinding.aiEndpointText.setText(Setting.getAiEndpoint());
-        mBinding.aiApiKeyText.setText(maskKey(Setting.getAiApiKey()));
-        mBinding.aiModelText.setText(Setting.getAiModel());
+        try {
+            boolean ready = Setting.isAiRecommendReady();
+            mBinding.aiConfigText.setText(ready ? R.string.setting_ai_status_on : R.string.setting_ai_status_off);
+        } catch (Throwable ignored) {
+        }
     }
 
-    private void setAiRecommendation(View view) {
-        Setting.putAiRecommendation(!Setting.isAiRecommendation());
-        mBinding.aiRecommendationText.setText(getSwitch(Setting.isAiRecommendation()));
-    }
-
-    private void setAiEndpoint(View view) {
-        final android.widget.EditText input = new android.widget.EditText(view.getContext());
-        input.setText(Setting.getAiEndpoint());
-        input.setSingleLine(true);
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(view.getContext())
-                .setTitle(R.string.setting_ai_endpoint)
-                .setView(input)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (d, w) -> {
-                    Setting.putAiEndpoint(input.getText() == null ? "" : input.getText().toString());
-                    mBinding.aiEndpointText.setText(Setting.getAiEndpoint());
-                })
-                .show();
-    }
-
-    private void setAiApiKey(View view) {
-        final android.widget.EditText input = new android.widget.EditText(view.getContext());
-        input.setText(Setting.getAiApiKey());
-        input.setSingleLine(true);
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(view.getContext())
-                .setTitle(R.string.setting_ai_api_key)
-                .setView(input)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (d, w) -> {
-                    Setting.putAiApiKey(input.getText() == null ? "" : input.getText().toString());
-                    mBinding.aiApiKeyText.setText(maskKey(Setting.getAiApiKey()));
-                })
-                .show();
-    }
-
-    private void setAiModel(View view) {
-        final android.widget.EditText input = new android.widget.EditText(view.getContext());
-        input.setText(Setting.getAiModel());
-        input.setSingleLine(true);
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(view.getContext())
-                .setTitle(R.string.setting_ai_model)
-                .setView(input)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (d, w) -> {
-                    Setting.putAiModel(input.getText() == null ? "" : input.getText().toString());
-                    mBinding.aiModelText.setText(Setting.getAiModel());
-                })
-                .show();
+    private void openAiConfig(View view) {
+        android.app.Activity activity = getActivitySafe();
+        if (!(activity instanceof androidx.fragment.app.FragmentActivity)) return;
+        com.fongmi.android.tv.ui.dialog.AiConfigDialog.show(
+                (androidx.fragment.app.FragmentActivity) activity,
+                config -> refreshAiTexts());
     }
 
     private void fetchAiRecommend(View view) {
