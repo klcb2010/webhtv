@@ -10,8 +10,8 @@ import androidx.fragment.app.FragmentActivity;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Sub;
+import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
-import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Task;
@@ -27,17 +27,23 @@ public final class AssrtSubtitleSearchDialog {
 
     public static void show(FragmentActivity activity, PlayerManager player, String defaultKeyword) {
         if (activity == null || player == null) return;
-        if (TextUtils.isEmpty(Setting.getSubtitleAssrtToken())) {
-            Notify.show(R.string.subtitle_auto_match_provider_unavailable);
-            return;
+        // 迅雷不需要 Token；有 Token 时一并搜射手
+        String keyword = defaultKeyword == null ? "" : defaultKeyword.trim();
+        if (TextUtils.isEmpty(keyword) && activity instanceof TrackDialog.SubtitleSearchHost host) {
+            keyword = host.getSubtitleSearchKeyword();
+            if (keyword == null) keyword = "";
         }
+
         EditText input = new EditText(activity);
         input.setSingleLine(true);
         input.setHint(R.string.search_keyword);
         input.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        if (!TextUtils.isEmpty(defaultKeyword)) input.setText(defaultKeyword);
-        if (input.getText() != null) input.setSelection(input.getText().length());
+        if (!TextUtils.isEmpty(keyword)) {
+            input.setText(keyword);
+            input.setSelection(keyword.length());
+        }
 
+        final String prefill = keyword;
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.subtitle_manual_search)
                 .setView(input)
@@ -45,6 +51,11 @@ public final class AssrtSubtitleSearchDialog {
                 .setPositiveButton(R.string.dialog_positive, null)
                 .create();
         dialog.setOnShowListener(d -> {
+            // 再保险填一次（部分机型 setText 在 show 前会被清）
+            if (TextUtils.isEmpty(input.getText()) && !TextUtils.isEmpty(prefill)) {
+                input.setText(prefill);
+                input.setSelection(prefill.length());
+            }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 String q = input.getText() == null ? "" : input.getText().toString().trim();
                 if (TextUtils.isEmpty(q)) {
@@ -109,8 +120,14 @@ public final class AssrtSubtitleSearchDialog {
                         Notify.show(R.string.subtitle_manual_inactive);
                         return;
                     }
-                    player.setSub(Sub.from(file.getAbsolutePath()));
-                    Notify.show(activity.getString(R.string.subtitle_manual_applied, item.name));
+                    String display = item.name;
+                    if (TextUtils.isEmpty(display)) display = file.getName();
+                    String format = PlayerHelper.getSubtitleMimeType(display);
+                    if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());
+                    Sub sub = Sub.create(display, file.getAbsolutePath(), item.lang, format);
+                    sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
+                    player.setSub(sub);
+                    Notify.show(activity.getString(R.string.subtitle_manual_applied, display));
                 });
             } catch (Exception e) {
                 App.post(() -> Notify.show(R.string.subtitle_manual_apply_failed));

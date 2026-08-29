@@ -9,12 +9,32 @@ SHOW = """
 
     public String getSubtitleSearchKeyword() {
         String keyword = "";
-        if (mHistory != null && mHistory.getVodName() != null) keyword = mHistory.getVodName();
-        if (getEpisode() != null && getEpisode().getName() != null && !getEpisode().getName().isEmpty()) {
-            if (!keyword.isEmpty()) keyword = keyword + " " + getEpisode().getName();
-            else keyword = getEpisode().getName();
+        try {
+            if (mHistory != null && mHistory.getVodName() != null) keyword = mHistory.getVodName();
+        } catch (Throwable ignored) {
         }
-        return keyword;
+        try {
+            if ((keyword == null || keyword.isEmpty()) && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
+                keyword = mBinding.name.getText().toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if ((keyword == null || keyword.isEmpty()) && mBinding != null && mBinding.widget != null && mBinding.widget.title != null && mBinding.widget.title.getText() != null) {
+                keyword = mBinding.widget.title.getText().toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        if (keyword == null) keyword = "";
+        try {
+            if (getEpisode() != null && getEpisode().getName() != null && !getEpisode().getName().isEmpty()) {
+                String ep = getEpisode().getName();
+                if (!keyword.isEmpty() && !keyword.contains(ep)) keyword = keyword + " " + ep;
+                else if (keyword.isEmpty()) keyword = ep;
+            }
+        } catch (Throwable ignored) {
+        }
+        return keyword.trim();
     }
 """
 

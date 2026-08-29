@@ -114,14 +114,21 @@ public final class AssrtSubtitleMatch {
                     return;
                 }
                 if (gen != GEN.get()) return;
-                Sub sub = Sub.from(file.getAbsolutePath());
+                final File subFile = file;
+                final Item applied = hit;
                 App.post(() -> {
                     if (gen != GEN.get() || activity.isFinishing()) return;
                     PlayerManager player = playerProvider.get();
                     if (player == null || player.isEmpty()) return;
+                    String display = applied.name;
+                    if (TextUtils.isEmpty(display)) display = subFile.getName();
+                    String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(display);
+                    if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
+                    Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
+                    sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
                     player.setSub(sub);
-                    Notify.show(activity.getString(R.string.subtitle_auto_match_hit, hit.name));
-                    Log.i(TAG, "auto applied " + hit.label());
+                    Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
+                    Log.i(TAG, "auto applied " + applied.label());
                 });
             } catch (Exception e) {
                 Log.w(TAG, "auto match failed: " + e.getMessage());
@@ -199,9 +206,22 @@ public final class AssrtSubtitleMatch {
             Log.i(TAG, "assrt skip empty token");
             return items;
         }
-        String url = ASSRT_API + "/sub/search?token=" + enc(token) + "&q=" + enc(query) + "&is_file=1&cnt=20";
-        Log.i(TAG, "assrt search q=" + query);
-        try (Response response = OkHttp.client().newCall(new Request.Builder().url(url).header("User-Agent", UA).get().build()).execute()) {
+        // 先 is_file=1（与 Silent 一致），空结果再放宽一次
+        items.addAll(searchAssrtOnce(query, token, true));
+        if (items.isEmpty()) items.addAll(searchAssrtOnce(query, token, false));
+        Log.i(TAG, "assrt total candidates=" + items.size() + " q=" + query);
+        return items;
+    }
+
+    private static List<Item> searchAssrtOnce(String query, String token, boolean isFile) throws Exception {
+        List<Item> items = new ArrayList<>();
+        String url = ASSRT_API + "/sub/search?token=" + enc(token) + "&q=" + enc(query) + "&cnt=20";
+        if (isFile) url += "&is_file=1";
+        Log.i(TAG, "assrt search q=" + query + " is_file=" + isFile);
+        try (Response response = OkHttp.client().newCall(new Request.Builder().url(url)
+                .header("User-Agent", UA)
+                .header("Referer", "https://assrt.net/")
+                .get().build()).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
                 Log.w(TAG, "assrt http " + response.code());
                 return items;
@@ -210,7 +230,7 @@ public final class AssrtSubtitleMatch {
             JsonObject root = JsonParser.parseString(body).getAsJsonObject();
             int status = asInt(root, "status", Integer.MIN_VALUE);
             if (status != Integer.MIN_VALUE && status != 0) {
-                Log.w(TAG, "assrt status=" + status + " body=" + body.substring(0, Math.min(180, body.length())));
+                Log.w(TAG, "assrt status=" + status + " body=" + body.substring(0, Math.min(200, body.length())));
                 return items;
             }
             JsonArray subs = asArray(asObject(root, "sub"), "subs");
@@ -222,11 +242,11 @@ public final class AssrtSubtitleMatch {
                 if (TextUtils.isEmpty(id)) continue;
                 String name = first(item, "native_name", "name", "sub_name", "m_version", "m_title");
                 if (TextUtils.isEmpty(name)) name = first(item, "videoname", "m_videoname");
+                if (TextUtils.isEmpty(name)) name = "assrt-" + id;
                 String lang = first(asObject(item, "lang"), "desc");
                 if (TextUtils.isEmpty(lang)) lang = first(item, "m_lang", "lang");
                 items.add(new Item("assrt", id, name, lang, ""));
             }
-            Log.i(TAG, "assrt candidates=" + items.size());
         }
         return items;
     }
