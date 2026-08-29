@@ -63,7 +63,7 @@ public final class AssrtSubtitleSearchDialog {
                     return;
                 }
                 dialog.dismiss();
-                search(activity, player, q);
+                search(activity, player, q); // q 即预填/用户输入的 片名+集数
             });
             input.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -87,7 +87,7 @@ public final class AssrtSubtitleSearchDialog {
                         Notify.show(R.string.subtitle_manual_search_empty);
                         return;
                     }
-                    showCandidates(activity, player, items);
+                    showCandidates(activity, player, items, query);
                 });
             } catch (Exception e) {
                 App.post(() -> Notify.show(R.string.subtitle_manual_search_failed));
@@ -95,17 +95,17 @@ public final class AssrtSubtitleSearchDialog {
         });
     }
 
-    private static void showCandidates(FragmentActivity activity, PlayerManager player, List<AssrtSubtitleMatch.Item> items) {
+    private static void showCandidates(FragmentActivity activity, PlayerManager player, List<AssrtSubtitleMatch.Item> items, String query) {
         String[] labels = new String[items.size()];
         for (int i = 0; i < items.size(); i++) labels[i] = items.get(i).label();
         new MaterialAlertDialogBuilder(activity)
                 .setTitle(activity.getString(R.string.subtitle_manual_select_title, items.size()))
-                .setItems(labels, (d, which) -> resolve(activity, player, items.get(which)))
+                .setItems(labels, (d, which) -> resolve(activity, player, items.get(which), query))
                 .setNegativeButton(R.string.dialog_negative, null)
                 .show();
     }
 
-    private static void resolve(FragmentActivity activity, PlayerManager player, AssrtSubtitleMatch.Item item) {
+    private static void resolve(FragmentActivity activity, PlayerManager player, AssrtSubtitleMatch.Item item, String query) {
         Notify.show(R.string.subtitle_manual_resolving);
         Task.execute(() -> {
             try {
@@ -120,7 +120,8 @@ public final class AssrtSubtitleSearchDialog {
                         Notify.show(R.string.subtitle_manual_inactive);
                         return;
                     }
-                    String display = AssrtSubtitleMatch.displayName(item);
+                    // 显示名与预填一致： [来源] 片名 集数
+                    String display = AssrtSubtitleMatch.displayNameForKeyword(item, query);
                     String format = PlayerHelper.getSubtitleMimeType(item.name);
                     if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());
                     Sub sub = Sub.create(display, file.getAbsolutePath(), item.lang, format);

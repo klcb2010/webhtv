@@ -87,64 +87,113 @@ public final class AssrtSubtitleMatch {
         }
     }
 
-    /** 应用到播放器时的显示名：带来源备注 */
+    /** 无关键词时的回退显示名 */
     public static String displayName(Item item) {
-        if (item == null) return "";
-        String n = item.name;
-        if (TextUtils.isEmpty(n)) n = item.id;
-        return "[" + item.sourceTag() + "] " + n;
+        return displayNameForKeyword(item, item == null ? "" : item.name);
     }
 
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         if (activity == null || playerProvider == null) return;
         if (!Setting.isSubtitleAutoMatchEnabled()) return;
-        String title = history != null ? history.getVodName() : "";
-        String ep = episode != null ? episode.getName() : "";
-        if (TextUtils.isEmpty(title)) return;
+        String title = history != null && history.getVodName() != null ? history.getVodName().trim() : "";
+        String ep = episode != null && episode.getName() != null ? episode.getName().trim() : "";
+        if (TextUtils.isEmpty(title) && TextUtils.isEmpty(ep)) return;
+        final String keyword = formatKeyword(title, ep);
         final int gen = GEN.incrementAndGet();
-        Task.execute(() -> {
-            try {
-                List<Item> items = searchList(buildQueries(title, ep).get(0));
-                // try all queries, merge
-                Map<String, Item> map = new LinkedHashMap<>();
-                for (String q : buildQueries(title, ep)) {
-                    for (Item it : searchAllSources(q)) {
-                        String key = it.provider + ":" + it.id;
-                        if (!map.containsKey(key)) map.put(key, it);
-                    }
-                }
-                items = new ArrayList<>(map.values());
-                if (items.isEmpty()) {
-                    Log.i(TAG, "auto match empty title=" + title + " ep=" + ep);
+        // 等播放真正开始后再匹配（避免起播前 player 仍为空）
+        waitPlayingThenMatch(activity, playerProvider, keyword, gen, 0);
+    }
+
+    /** 片名 + 集数，例如：金色年代 第一集 */
+    public static String formatKeyword(String title, String episode) {
+        String t = title == null ? "" : title.trim();
+        String e = episode == null ? "" : episode.trim();
+        if (!TextUtils.isEmpty(t) && !TextUtils.isEmpty(e)) {
+            if (t.contains(e)) return t;
+            return t + " " + e;
+        }
+        if (!TextUtils.isEmpty(t)) return t;
+        return e;
+    }
+
+    private static void waitPlayingThenMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen, int attempt) {
+        if (gen != GEN.get()) return;
+        long delayMs = attempt == 0 ? 2000L : 1000L;
+        Task.schedule(() -> {
+            if (gen != GEN.get()) return;
+            App.post(() -> {
+                if (gen != GEN.get() || activity.isFinishing()) return;
+                PlayerManager player = playerProvider.get();
+                boolean ready = player != null && !player.isEmpty();
+                if (!ready) {
+                    if (attempt < 20) waitPlayingThenMatch(activity, playerProvider, keyword, gen, attempt + 1);
+                    else Log.i(TAG, "auto match give up, player not ready keyword=" + keyword);
                     return;
                 }
-                if (gen != GEN.get()) return;
-                Item hit = pickBest(items);
-                File file = downloadItem(hit);
-                if (file == null || !file.isFile()) {
-                    Log.w(TAG, "auto resolve failed " + hit.label());
-                    return;
+                Task.execute(() -> doAutoMatch(activity, playerProvider, keyword, gen));
+            });
+        }, delayMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
+    private static void doAutoMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen) {
+        try {
+            Map<String, Item> map = new LinkedHashMap<>();
+            for (String q : buildQueriesFromKeyword(keyword)) {
+                for (Item it : searchAllSources(q)) {
+                    String key = it.provider + ":" + it.id;
+                    if (!map.containsKey(key)) map.put(key, it);
                 }
-                if (gen != GEN.get()) return;
-                final File subFile = file;
-                final Item applied = hit;
-                App.post(() -> {
-                    if (gen != GEN.get() || activity.isFinishing()) return;
-                    PlayerManager player = playerProvider.get();
-                    if (player == null || player.isEmpty()) return;
-                    String display = displayName(applied);
-                    String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
-                    if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
-                    Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
-                    sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
-                    player.setSub(sub);
-                    Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
-                    Log.i(TAG, "auto applied " + applied.label());
-                });
-            } catch (Exception e) {
-                Log.w(TAG, "auto match failed: " + e.getMessage());
             }
-        });
+            List<Item> items = new ArrayList<>(map.values());
+            if (items.isEmpty()) {
+                Log.i(TAG, "auto match empty keyword=" + keyword);
+                return;
+            }
+            if (gen != GEN.get()) return;
+            Item hit = pickBest(items);
+            File file = downloadItem(hit);
+            if (file == null || !file.isFile()) {
+                Log.w(TAG, "auto resolve failed " + hit.label());
+                return;
+            }
+            if (gen != GEN.get()) return;
+            final File subFile = file;
+            final Item applied = hit;
+            final String display = displayNameForKeyword(applied, keyword);
+            App.post(() -> {
+                if (gen != GEN.get() || activity.isFinishing()) return;
+                PlayerManager player = playerProvider.get();
+                if (player == null || player.isEmpty()) return;
+                String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
+                if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
+                Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
+                sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
+                player.setSub(sub);
+                Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
+                Log.i(TAG, "auto applied " + display + " src=" + applied.label());
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "auto match failed: " + e.getMessage());
+        }
+    }
+
+    private static List<String> buildQueriesFromKeyword(String keyword) {
+        List<String> qs = new ArrayList<>();
+        if (!TextUtils.isEmpty(keyword)) qs.add(keyword.trim());
+        // 去掉集数再搜一次（扩大命中）
+        String cleaned = keyword == null ? "" : keyword.trim();
+        cleaned = cleaned.replaceAll("(?i)[\s\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
+        cleaned = cleaned.replaceAll("(?i)[\s\-_]*S\d{1,2}E\d{1,3}.*$", "").trim();
+        if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword)) qs.add(cleaned);
+        return qs;
+    }
+
+    /** 显示名 = [来源] 片名 集数（与预填一致），不用远程乱文件名 */
+    public static String displayNameForKeyword(Item item, String keyword) {
+        String base = !TextUtils.isEmpty(keyword) ? keyword.trim() : (item == null ? "" : item.name);
+        if (TextUtils.isEmpty(base) && item != null) base = item.id;
+        String tag = item == null ? "?" : item.sourceTag();
+        return "[" + tag + "] " + base;
     }
 
     public static void cancel() {

@@ -8,27 +8,30 @@ SHOW = """
     }
 
     public String getSubtitleSearchKeyword() {
-        String keyword = "";
+        String title = "";
         try {
-            if (mHistory != null && mHistory.getVodName() != null) keyword = mHistory.getVodName();
+            if (mHistory != null && !android.text.TextUtils.isEmpty(mHistory.getVodName())) title = mHistory.getVodName().trim();
         } catch (Throwable ignored) {
         }
         try {
-            if ((keyword == null || keyword.isEmpty()) && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
-                keyword = mBinding.name.getText().toString();
+            if (android.text.TextUtils.isEmpty(title)) {
+                String n = getName();
+                if (!android.text.TextUtils.isEmpty(n)) title = n.trim();
             }
         } catch (Throwable ignored) {
         }
-        if (keyword == null) keyword = "";
         try {
-            if (getEpisode() != null && getEpisode().getName() != null && !getEpisode().getName().isEmpty()) {
-                String ep = getEpisode().getName();
-                if (!keyword.isEmpty() && !keyword.contains(ep)) keyword = keyword + " " + ep;
-                else if (keyword.isEmpty()) keyword = ep;
+            if (android.text.TextUtils.isEmpty(title) && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
+                title = mBinding.name.getText().toString().trim();
             }
         } catch (Throwable ignored) {
         }
-        return keyword.trim();
+        String ep = "";
+        try {
+            if (getEpisode() != null && !android.text.TextUtils.isEmpty(getEpisode().getName())) ep = getEpisode().getName().trim();
+        } catch (Throwable ignored) {
+        }
+        return com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.formatKeyword(title, ep);
     }
 """
 
