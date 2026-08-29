@@ -19,12 +19,6 @@ SHOW = """
             }
         } catch (Throwable ignored) {
         }
-        try {
-            if ((keyword == null || keyword.isEmpty()) && mBinding != null && mBinding.widget != null && mBinding.widget.title != null && mBinding.widget.title.getText() != null) {
-                keyword = mBinding.widget.title.getText().toString();
-            }
-        } catch (Throwable ignored) {
-        }
         if (keyword == null) keyword = "";
         try {
             if (getEpisode() != null && getEpisode().getName() != null && !getEpisode().getName().isEmpty()) {

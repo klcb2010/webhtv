@@ -77,10 +77,22 @@ public final class AssrtSubtitleMatch {
         }
 
         public String label() {
-            String p = "xunlei".equals(provider) ? "迅雷" : "射手";
+            String p = sourceTag();
             if (!TextUtils.isEmpty(lang)) return "[" + p + "] " + name + "  (" + lang + ")";
             return "[" + p + "] " + (name == null ? id : name);
         }
+
+        public String sourceTag() {
+            return "xunlei".equals(provider) ? "迅雷" : "射手";
+        }
+    }
+
+    /** 应用到播放器时的显示名：带来源备注 */
+    public static String displayName(Item item) {
+        if (item == null) return "";
+        String n = item.name;
+        if (TextUtils.isEmpty(n)) n = item.id;
+        return "[" + item.sourceTag() + "] " + n;
     }
 
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
@@ -120,9 +132,8 @@ public final class AssrtSubtitleMatch {
                     if (gen != GEN.get() || activity.isFinishing()) return;
                     PlayerManager player = playerProvider.get();
                     if (player == null || player.isEmpty()) return;
-                    String display = applied.name;
-                    if (TextUtils.isEmpty(display)) display = subFile.getName();
-                    String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(display);
+                    String display = displayName(applied);
+                    String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
                     if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
                     Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
                     sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);

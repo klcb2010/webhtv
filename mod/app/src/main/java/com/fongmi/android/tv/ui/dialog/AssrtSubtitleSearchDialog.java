@@ -120,9 +120,8 @@ public final class AssrtSubtitleSearchDialog {
                         Notify.show(R.string.subtitle_manual_inactive);
                         return;
                     }
-                    String display = item.name;
-                    if (TextUtils.isEmpty(display)) display = file.getName();
-                    String format = PlayerHelper.getSubtitleMimeType(display);
+                    String display = AssrtSubtitleMatch.displayName(item);
+                    String format = PlayerHelper.getSubtitleMimeType(item.name);
                     if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());
                     Sub sub = Sub.create(display, file.getAbsolutePath(), item.lang, format);
                     sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
