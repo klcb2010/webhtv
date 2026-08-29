@@ -314,4 +314,143 @@ public final class AiCompletionClient {
         if (s == null) return "";
         return s.length() <= 160 ? s : s.substring(0, 160);
     }
+
+    public static final class ModelInfo {
+        public final String id;
+        public final String label;
+
+        public ModelInfo(String id, String label) {
+            this.id = id == null ? "" : id;
+            this.label = TextUtils.isEmpty(label) ? this.id : label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public static final class ModelFetchResult {
+        public final boolean ok;
+        public final String message;
+        public final java.util.List<ModelInfo> models;
+
+        private ModelFetchResult(boolean ok, String message, java.util.List<ModelInfo> models) {
+            this.ok = ok;
+            this.message = message == null ? "" : message;
+            this.models = models == null ? new java.util.ArrayList<>() : models;
+        }
+
+        public static ModelFetchResult success(java.util.List<ModelInfo> models) {
+            return new ModelFetchResult(true, "", models);
+        }
+
+        public static ModelFetchResult failed(String message) {
+            return new ModelFetchResult(false, message, new java.util.ArrayList<>());
+        }
+    }
+
+    public static ModelFetchResult fetchModels(AiConfig config) {
+        AiConfig safe = config == null ? new AiConfig().sanitize() : config.sanitize();
+        if (!safe.isModelFetchReady()) return ModelFetchResult.failed("请先填写端点和 API key。");
+        java.util.List<String> urls = buildModelUrlCandidates(safe);
+        if (urls.isEmpty()) return ModelFetchResult.failed("无法从端点推导模型列表地址。");
+        String lastError = "";
+        OkHttpClient client = OkHttp.client().newBuilder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+        for (String url : urls) {
+            try {
+                Request.Builder builder = new Request.Builder().url(url).get();
+                applyModelFetchHeaders(builder, safe);
+                try (Response response = client.newCall(builder.build()).execute()) {
+                    String body = response.body() == null ? "" : response.body().string();
+                    if (response.isSuccessful()) {
+                        java.util.List<ModelInfo> models = parseModelList(body, safe);
+                        if (!models.isEmpty()) return ModelFetchResult.success(models);
+                        lastError = "接口成功但未解析到模型";
+                        continue;
+                    }
+                    lastError = "HTTP " + response.code() + ": " + excerpt(body);
+                    if (response.code() == 404 || response.code() == 405) continue;
+                    return ModelFetchResult.failed(lastError);
+                }
+            } catch (Throwable e) {
+                lastError = e.getMessage() == null ? "请求失败" : e.getMessage();
+            }
+        }
+        return ModelFetchResult.failed(TextUtils.isEmpty(lastError) ? "模型列表获取失败" : lastError);
+    }
+
+    private static void applyModelFetchHeaders(Request.Builder builder, AiConfig config) {
+        if (AiConfig.PROTOCOL_GEMINI_NATIVE.equals(config.getProtocol())) {
+            // key 已在 query
+            return;
+        }
+        if (AiConfig.PROTOCOL_ANTHROPIC_MESSAGES.equals(config.getProtocol())) {
+            builder.header("x-api-key", config.getApiKey());
+            builder.header("anthropic-version", ANTHROPIC_VERSION);
+            return;
+        }
+        builder.header("Authorization", "Bearer " + config.getApiKey());
+    }
+
+    private static java.util.List<String> buildModelUrlCandidates(AiConfig config) {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        String endpoint = cleanBase(config.getEndpoint());
+        if (AiConfig.PROTOCOL_GEMINI_NATIVE.equals(config.getProtocol())) {
+            String base = endpoint;
+            if (base.contains("/models")) base = base.substring(0, base.indexOf("/models"));
+            String u = base + "/models?key=" + config.getApiKey();
+            list.add(u);
+            list.add(base + "/models?pageSize=100&key=" + config.getApiKey());
+            return list;
+        }
+        // OpenAI-compatible /v1/models
+        String root = endpoint;
+        for (String suffix : new String[]{"/chat/completions", "/completions", "/responses", "/messages"}) {
+            if (root.endsWith(suffix)) {
+                root = root.substring(0, root.length() - suffix.length());
+                break;
+            }
+        }
+        while (root.endsWith("/")) root = root.substring(0, root.length() - 1);
+        if (root.endsWith("/v1")) list.add(root + "/models");
+        else list.add(root + "/v1/models");
+        list.add(root + "/models");
+        return list;
+    }
+
+    private static java.util.List<ModelInfo> parseModelList(String body, AiConfig config) {
+        java.util.List<ModelInfo> models = new java.util.ArrayList<>();
+        try {
+            JsonElement el = JsonParser.parseString(body);
+            if (!el.isJsonObject()) return models;
+            JsonObject root = el.getAsJsonObject();
+            JsonArray data = null;
+            if (root.has("data") && root.get("data").isJsonArray()) data = root.getAsJsonArray("data");
+            else if (root.has("models") && root.get("models").isJsonArray()) data = root.getAsJsonArray("models");
+            if (data == null) return models;
+            for (JsonElement item : data) {
+                if (!item.isJsonObject()) continue;
+                JsonObject o = item.getAsJsonObject();
+                String id = string(o, "id");
+                if (TextUtils.isEmpty(id)) id = string(o, "name");
+                if (TextUtils.isEmpty(id)) continue;
+                // Gemini: name like models/gemini-2.0-flash
+                if (id.startsWith("models/")) id = id.substring("models/".length());
+                // filter non-generate models for gemini
+                if (AiConfig.PROTOCOL_GEMINI_NATIVE.equals(config.getProtocol())) {
+                    String lower = id.toLowerCase(java.util.Locale.ROOT);
+                    if (lower.contains("embedding") || lower.contains("aqa") || lower.contains("imagen")) continue;
+                }
+                models.add(new ModelInfo(id, id));
+            }
+        } catch (Exception ignored) {
+        }
+        return models;
+    }
+
+
 }

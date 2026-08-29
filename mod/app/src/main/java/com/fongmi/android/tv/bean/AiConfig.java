@@ -20,6 +20,10 @@ public class AiConfig {
 
     @SerializedName("enabled")
     private boolean enabled;
+    @SerializedName("recommendation")
+    private boolean recommendation;
+    @SerializedName("titleExtraction")
+    private boolean titleExtraction;
     @SerializedName("protocol")
     private String protocol;
     @SerializedName("endpoint")
@@ -54,8 +58,21 @@ public class AiConfig {
         return this;
     }
 
+    /** 服务可用：已启用且端点/Key/模型齐全 */
     public boolean isReady() {
         return enabled && !TextUtils.isEmpty(endpoint) && !TextUtils.isEmpty(apiKey) && !TextUtils.isEmpty(model);
+    }
+
+    public boolean isModelFetchReady() {
+        return !TextUtils.isEmpty(endpoint) && !TextUtils.isEmpty(apiKey);
+    }
+
+    public boolean isRecommendationEnabled() {
+        return isReady() && recommendation;
+    }
+
+    public boolean isTitleExtractionEnabled() {
+        return isReady() && titleExtraction;
     }
 
     public String toJson() {
@@ -64,6 +81,10 @@ public class AiConfig {
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isRecommendation() { return recommendation; }
+    public void setRecommendation(boolean recommendation) { this.recommendation = recommendation; }
+    public boolean isTitleExtraction() { return titleExtraction; }
+    public void setTitleExtraction(boolean titleExtraction) { this.titleExtraction = titleExtraction; }
     public String getProtocol() { return protocol; }
     public void setProtocol(String protocol) { this.protocol = protocol; }
     public String getEndpoint() { return endpoint; }

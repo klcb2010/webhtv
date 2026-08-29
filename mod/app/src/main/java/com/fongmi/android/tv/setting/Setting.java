@@ -769,6 +769,15 @@ public class Setting {
         putAiConfig(config);
     }
 
+
+    public static boolean isAiRecommendationEnabled() {
+        return getAiConfig().isRecommendationEnabled();
+    }
+
+    public static boolean isAiTitleExtractionEnabled() {
+        return getAiConfig().isTitleExtractionEnabled();
+    }
+
     public static boolean isAiRecommendReady() {
         return getAiConfig().isReady();
     }

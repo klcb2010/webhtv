@@ -16,18 +16,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/** 基于「当前影片」的 AI 推荐列表（不依赖 TMDB）。 */
 public final class AiRecommendService {
 
     private static final String TAG = "AiRecommend";
-    private static final int MAX_HISTORY = 20;
-    private static final String SYSTEM_PROMPT =
-            "你是专业的影视推荐助手。根据用户播放历史分析偏好，推荐 12-16 部不同的影视作品。"
-                    + "只返回可解析 JSON，不要 Markdown 或解释。"
-                    + "格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}"
-                    + "mediaType 只能是 movie 或 tv；reason 约 15-40 字；不要推荐历史里已出现的同名作品。";
+    private static final int MAX_HISTORY = 12;
+    private static final AtomicInteger GEN = new AtomicInteger();
 
     private AiRecommendService() {
+    }
+
+    public static int nextGen() {
+        return GEN.incrementAndGet();
+    }
+
+    public static int currentGen() {
+        return GEN.get();
     }
 
     public static final class Item {
@@ -45,43 +51,45 @@ public final class AiRecommendService {
 
         public String label() {
             StringBuilder sb = new StringBuilder(title);
-            List<String> bits = new ArrayList<>();
-            bits.add("tv".equals(mediaType) ? "剧集" : "电影");
-            if (year > 0) bits.add(String.valueOf(year));
-            if (!bits.isEmpty()) sb.append("  (").append(String.join(" · ", bits)).append(")");
-            if (!TextUtils.isEmpty(reason)) sb.append("\n").append(reason);
+            if (year > 0) sb.append(" (").append(year).append(")");
+            if (!TextUtils.isEmpty(reason)) sb.append(" · ").append(reason);
             return sb.toString();
         }
     }
 
-    public static List<Item> load() throws Exception {
+    /** @param currentTitle 当前播放/详情片名，推荐围绕它展开 */
+    public static List<Item> loadForTitle(String currentTitle) throws Exception {
         AiConfig config = Setting.getAiConfig();
-        if (!config.isReady()) throw new IllegalStateException("ai_not_ready");
-        String prompt = SYSTEM_PROMPT + "\n\n" + buildUserPrompt();
+        if (!config.isRecommendationEnabled()) throw new IllegalStateException("ai_recommend_off");
+        String title = currentTitle == null ? "" : currentTitle.trim();
+        String prompt = buildPrompt(title);
         String content = AiCompletionClient.complete(config, prompt);
-        return parseItems(content);
+        return parseItems(content, title);
     }
 
-    private static String buildUserPrompt() {
+    private static String buildPrompt(String currentTitle) {
         StringBuilder sb = new StringBuilder();
-        sb.append("播放历史（越靠前越近）：\n");
-        List<History> histories = History.get();
+        sb.append("你是专业的影视推荐助手。用户正在观看或浏览一部作品，请推荐 8-12 部相似或相关的影视。");
+        sb.append("只返回可解析 JSON，不要 Markdown。");
+        sb.append("格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}。");
+        sb.append("不要推荐与当前片名相同的作品。\n\n");
+        sb.append("当前作品：").append(TextUtils.isEmpty(currentTitle) ? "（未知）" : currentTitle).append("\n");
+        sb.append("近期播放历史：\n");
         int n = 0;
+        List<History> histories = History.get();
         if (histories != null) {
             for (History h : histories) {
                 if (h == null || TextUtils.isEmpty(h.getVodName())) continue;
-                sb.append("- ").append(h.getVodName().trim());
-                if (!TextUtils.isEmpty(h.getVodRemarks())) sb.append(" / ").append(h.getVodRemarks().trim());
-                sb.append("\n");
+                if (!TextUtils.isEmpty(currentTitle) && currentTitle.equals(h.getVodName().trim())) continue;
+                sb.append("- ").append(h.getVodName().trim()).append("\n");
                 if (++n >= MAX_HISTORY) break;
             }
         }
-        if (n == 0) sb.append("- （暂无历史，请推荐近期口碑较好的热门影视）\n");
-        sb.append("\n请按系统要求返回 JSON 推荐列表。");
+        if (n == 0) sb.append("- （无）\n");
         return sb.toString();
     }
 
-    private static List<Item> parseItems(String content) {
+    private static List<Item> parseItems(String content, String excludeTitle) {
         List<Item> items = new ArrayList<>();
         if (TextUtils.isEmpty(content)) return items;
         String json = content.trim();
@@ -96,21 +104,21 @@ public final class AiRecommendService {
             if (el.isJsonObject()) {
                 JsonObject o = el.getAsJsonObject();
                 if (o.has("items") && o.get("items").isJsonArray()) arr = o.getAsJsonArray("items");
-                else if (o.has("recommendations") && o.get("recommendations").isJsonArray()) arr = o.getAsJsonArray("recommendations");
             } else if (el.isJsonArray()) {
                 arr = el.getAsJsonArray();
             }
             if (arr == null) return items;
             Map<String, Item> dedupe = new LinkedHashMap<>();
+            String exclude = excludeTitle == null ? "" : excludeTitle.trim().toLowerCase(Locale.ROOT);
             for (JsonElement e : arr) {
                 if (!e.isJsonObject()) continue;
                 JsonObject o = e.getAsJsonObject();
-                String title = first(o, "title", "name", "vodName");
+                String title = first(o, "title", "name");
                 if (TextUtils.isEmpty(title)) continue;
+                if (!TextUtils.isEmpty(exclude) && title.trim().toLowerCase(Locale.ROOT).equals(exclude)) continue;
                 int year = asInt(o, "year");
-                if (year <= 0) year = asInt(o, "releaseYear");
-                String type = first(o, "mediaType", "type", "category");
-                String reason = first(o, "reason", "desc", "overview");
+                String type = first(o, "mediaType", "type");
+                String reason = first(o, "reason", "desc");
                 String key = title.toLowerCase(Locale.ROOT);
                 if (!dedupe.containsKey(key)) dedupe.put(key, new Item(title, year, type, reason));
             }
@@ -143,11 +151,7 @@ public final class AiRecommendService {
         try {
             return o.get(key).getAsInt();
         } catch (Exception e) {
-            try {
-                return Integer.parseInt(o.get(key).getAsString().replaceAll("[^0-9]", ""));
-            } catch (Exception ignored) {
-                return 0;
-            }
+            return 0;
         }
     }
 }

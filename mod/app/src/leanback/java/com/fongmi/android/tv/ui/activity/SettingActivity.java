@@ -145,7 +145,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
         mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
         mBinding.aiConfig.setOnClickListener(this::openAiConfig);
-        mBinding.aiFetch.setOnClickListener(this::fetchAiRecommend);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
@@ -540,49 +539,10 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
                 config -> refreshAiTexts());
     }
 
-    private void fetchAiRecommend(View view) {
-        if (!Setting.isAiRecommendReady()) {
-            com.fongmi.android.tv.utils.Notify.show(R.string.ai_recommend_not_ready);
-            return;
-        }
-        com.fongmi.android.tv.utils.Notify.show(R.string.ai_recommend_loading);
-        final android.app.Activity activity = getActivitySafe();
-        com.fongmi.android.tv.utils.Task.execute(() -> {
-            try {
-                java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items =
-                        com.fongmi.android.tv.service.AiRecommendService.load();
-                com.fongmi.android.tv.App.post(() -> showAiRecommendList(activity, items));
-            } catch (Exception e) {
-                com.fongmi.android.tv.App.post(() ->
-                        com.fongmi.android.tv.utils.Notify.show(R.string.ai_recommend_failed));
-            }
-        });
-    }
 
     private android.app.Activity getActivitySafe() {
         return this;
     }
 
-    private void showAiRecommendList(android.app.Activity activity, java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items) {
-        if (activity == null || activity.isFinishing()) return;
-        if (items == null || items.isEmpty()) {
-            com.fongmi.android.tv.utils.Notify.show(R.string.ai_recommend_empty);
-            return;
-        }
-        String[] labels = new String[items.size()];
-        for (int i = 0; i < items.size(); i++) labels[i] = items.get(i).label();
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                .setTitle(activity.getString(R.string.ai_recommend_title, items.size()))
-                .setItems(labels, (d, which) -> {
-                    String title = items.get(which).title;
-                    try {
-                        com.fongmi.android.tv.ui.activity.SearchActivity.start(activity, title);
-                    } catch (Throwable e) {
-                        com.fongmi.android.tv.utils.Notify.show(title);
-                    }
-                })
-                .setNegativeButton(R.string.dialog_negative, null)
-                .show();
-    }
 
 }

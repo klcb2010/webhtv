@@ -108,3 +108,7 @@ if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
 fi
 
 echo "[mod] done"
+
+if [[ -f "$MOD/hooks/inject_video_ai.py" ]]; then
+  python3 "$MOD/hooks/inject_video_ai.py" "$ROOT"
+fi
