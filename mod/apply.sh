@@ -15,20 +15,36 @@ merge() {
   local patch="$1" target="$2"
   [[ -f "$patch" && -f "$target" ]] || return 0
   python3 -c '
-import re,sys
-pt=open(sys.argv[1],encoding="utf-8").read(); tg=open(sys.argv[2],encoding="utf-8").read()
-entries=[]
-for m in re.finditer(r"(?:^[ \t]*<string name=\"([^\"]+)\"[\s\S]*?</string>|^[ \t]*<string-array name=\"([^\"]+)\"[\s\S]*?</string-array>)", pt, re.M):
-  block=m.group(0); name=m.group(1) or m.group(2)
-  if not block.startswith(" "): block="    "+block.strip()
-  if not block.endswith("\n"): block+="\n"
-  entries.append((name,block))
-miss=[b for n,b in entries if f"name=\"{n}\"" not in tg]
-if miss:
-  tg=tg.replace("</resources>", "".join(miss)+"</resources>",1)
-  open(sys.argv[2],"w",encoding="utf-8").write(tg)
-  print("[mod] merged",len(miss),sys.argv[2])
-else: print("[mod] ok",sys.argv[2])
+import re, sys
+pt = open(sys.argv[1], encoding="utf-8").read()
+tg = open(sys.argv[2], encoding="utf-8").read()
+by = {}
+for m in re.finditer(
+    r"(?:^[ \t]*<string name=\"([^\"]+)\"[\s\S]*?</string>|^[ \t]*<string-array name=\"([^\"]+)\"[\s\S]*?</string-array>)",
+    pt,
+    re.M,
+):
+    block = m.group(0)
+    name = m.group(1) or m.group(2)
+    if not block.startswith(" "):
+        block = "    " + block.strip()
+    if not block.endswith("\n"):
+        block += "\n"
+    by[name] = block  # last wins
+changed = 0
+for name, block in by.items():
+    pat = re.compile(
+        r"[ \t]*<(string|string-array) name=\"%s\"[\s\S]*?</\1>\n?" % re.escape(name)
+    )
+    if pat.search(tg):
+        tg = pat.sub(block, tg, count=1)
+        changed += 1
+    else:
+        if "</resources>" in tg:
+            tg = tg.replace("</resources>", block + "</resources>", 1)
+            changed += 1
+open(sys.argv[2], "w", encoding="utf-8").write(tg)
+print("[mod] strings upsert", changed, sys.argv[2])
 ' "$patch" "$target"
 }
 merge "$MOD/app/src/main/res/values/strings_patch.xml" "$ROOT/app/src/main/res/values/strings.xml"
