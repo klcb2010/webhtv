@@ -292,7 +292,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
             <com.google.android.material.textview.MaterialTextView
@@ -321,7 +320,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
             <com.google.android.material.textview.MaterialTextView
@@ -349,7 +347,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
             <com.google.android.material.textview.MaterialTextView
@@ -377,7 +374,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
             <com.google.android.material.textview.MaterialTextView
@@ -405,7 +401,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
 
@@ -436,7 +431,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
 
@@ -467,7 +461,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
 
@@ -497,7 +490,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
 
@@ -528,7 +520,6 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/shape_item"
             android:focusable="true"
-            android:focusableInTouchMode="true"
             android:orientation="horizontal"
             android:padding="8dp">
 

@@ -105,7 +105,12 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
-        mBinding.globalHistoryText.setText((globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode))[Setting.getGlobalHistoryMode()]);
+        globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
+        int _gh = Setting.getGlobalHistoryMode();
+        if (globalHistoryMode != null && globalHistoryMode.length > 0) {
+            if (_gh < 0 || _gh >= globalHistoryMode.length) _gh = 0;
+            mBinding.globalHistoryText.setText(globalHistoryMode[_gh]);
+        }
         mBinding.languageText.setText((language = ResUtil.getStringArray(R.array.select_language))[Setting.getLanguageIndex()]);
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
     }
@@ -373,9 +378,13 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
 }
 
     private void setGlobalHistory(View view) {
-        Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % 3);
-        mBinding.globalHistoryText.setText((globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode))[Setting.getGlobalHistoryMode()]);
-        RefreshEvent.history();
+        globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
+        int size = globalHistoryMode == null || globalHistoryMode.length == 0 ? 1 : globalHistoryMode.length;
+        int next = (Setting.getGlobalHistoryMode() + 1) % size;
+        Setting.putGlobalHistoryMode(next);
+        int idx = Setting.getGlobalHistoryMode();
+        if (idx < 0 || idx >= size) idx = 0;
+        mBinding.globalHistoryText.setText(globalHistoryMode[idx]);
     }
 
     private void setSize(View view) {

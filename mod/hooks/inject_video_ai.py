@@ -21,15 +21,15 @@ HOOK = r"""
                     if (title != null && !title.isEmpty() && !title.equals(rawName)) {
                         try { mBinding.name.setText(title); } catch (Throwable ignored) {}
                     }
-                    loadAiRecommendations(gen, title == null || title.isEmpty() ? rawName : title);
+                    loadAiRecommendations(gen, item, title == null || title.isEmpty() ? rawName : title);
                 });
             });
         } else {
-            loadAiRecommendations(gen, rawName);
+            loadAiRecommendations(gen, item, rawName);
         }
     }
 
-    private void loadAiRecommendations(int gen, String title) {
+    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title) {
         if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()) {
             hideAiRecommendPanel();
             return;
@@ -45,7 +45,7 @@ HOOK = r"""
         com.fongmi.android.tv.utils.Task.execute(() -> {
             try {
                 java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items =
-                        com.fongmi.android.tv.service.AiRecommendService.loadForTitle(title);
+                        com.fongmi.android.tv.service.AiRecommendService.load(vod, title);
                 com.fongmi.android.tv.App.post(() -> bindAiRecommendList(gen, items));
             } catch (Exception e) {
                 com.fongmi.android.tv.App.post(() -> {

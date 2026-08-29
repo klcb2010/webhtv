@@ -9,8 +9,9 @@
 
     <!-- 修正为字符串数组 -->
     <string-array name="select_global_history_mode">
-        <item>Default</item>
-        <item>Global</item>
+        <item>Off</item>
+        <item>Auto</item>
+        <item>Search</item>
     </string-array>
 
     <string-array name="select_subtitle_language">
