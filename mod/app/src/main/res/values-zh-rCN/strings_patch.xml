@@ -1,68 +1,86 @@
-<string name="setting_home_history">首页最近观看</string>
-<string name="setting_home_vod_auto_load">默认加载点播</string>
-<string name="setting_episode_history">集数历史</string>
-<string name="setting_play_back_to_detail">返回详情页</string>
-<string name="select_subtitle_language">选择字幕语言</string>
-<string name="setting_home_site_lock">首页源锁定</string>
-<string name="setting_search_thread">搜索线程</string>
-<string name="setting_global_history">全局历史</string>
-<string name="select_subtitle_language_value">字幕语言设置值</string>
-<string name="select_global_history_mode">选择全局历史模式</string>
-<string name="dialog_delete_record">删除全部记录？</string>
-<string name="dialog_delete_history">将删除全部历史记录。</string>
-<string name="dialog_negative">取消</string>
-<string name="dialog_positive">确定</string>
-<string name="setting_auto_backup">自动备份</string>
-<string name="backup_permission_denied">未授予存储权限</string>
-<string name="exit_confirm_title">退出应用？</string>
-<string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
-<string name="exit_confirm_positive">退出</string>
-<string name="setting_subtitle">字幕设置</string>
-<string name="player_subtitle_auto_match">自动匹配字幕</string>
-<string name="player_subtitle_language">字幕偏好语言</string>
-<string name="player_subtitle_assrt_token">射手网 Token</string>
-<string name="subtitle_auto_match_hit">已自动匹配字幕：%1$s</string>
-<string name="subtitle_token_hint">粘贴射手网 API Token</string>
-<string name="setting_configured">已配置</string>
-<string name="setting_unconfigured">未配置</string>
-<string name="subtitle_manual_search">搜索字幕</string>
-<string name="subtitle_manual_searching">正在搜索字幕…</string>
-<string name="subtitle_manual_select_title">选择字幕（%1$d）</string>
-<string name="subtitle_manual_search_empty">未搜索到字幕</string>
-<string name="subtitle_manual_search_failed">字幕搜索失败</string>
-<string name="subtitle_manual_resolving">正在加载字幕…</string>
-<string name="subtitle_manual_applied">已应用字幕：%1$s</string>
-<string name="subtitle_manual_apply_failed">已找到字幕但无法应用</string>
-<string name="subtitle_manual_inactive">请先开始播放再搜索字幕</string>
-<string name="subtitle_auto_match_provider_unavailable">请先配置射手网 Token</string>
-<string name="search_keyword">关键词</string>
-<string name="setting_ai_recommendation">AI 推荐</string>
-<string name="setting_ai_endpoint">API 服务端点 / 基地址</string>
-<string name="setting_ai_api_key">API key</string>
-<string name="setting_ai_model">模型</string>
-<string name="setting_ai_fetch">获取 AI 推荐</string>
-<string name="ai_recommend_loading">正在获取 AI 推荐…</string>
-<string name="ai_recommend_empty">暂无推荐结果</string>
-<string name="ai_recommend_failed">AI 推荐失败</string>
-<string name="ai_recommend_not_ready">请先完成 AI 通用配置并启用服务</string>
-<string name="ai_recommend_title">AI 推荐（%1$d）</string>
-<string name="ai_config_saved">已保存</string>
-<string name="setting_ai_config">AI 通用配置</string>
-<string name="setting_ai_enable">启用 AI 服务</string>
-<string name="setting_ai_protocol">协议类型</string>
-<string name="setting_ai_user_agent">自定义 User-Agent</string>
-<string name="setting_ai_user_agent_hint">可选，用于有 UA 限制的供应商</string>
-<string name="setting_ai_test">测试</string>
-<string name="setting_ai_testing">正在测试 AI 连通性…</string>
-<string name="setting_ai_test_ok">测试成功：%1$s</string>
-<string name="setting_ai_test_fail">测试失败：%1$s</string>
-<string name="setting_ai_status_on">已配置</string>
-<string name="setting_ai_status_off">未配置</string>
-<string name="setting_ai_recommendation_switch">AI 推荐</string>
-<string name="setting_ai_title_extraction">AI 真实剧名识别</string>
-<string name="setting_ai_fetch_models">获取模型</string>
-<string name="setting_ai_fetching_models">正在获取模型列表…</string>
-<string name="setting_ai_fetch_models_fail">获取模型失败：%1$s</string>
-<string name="setting_ai_need_key">请先填写端点和 API key</string>
-<string name="ai_recommend_section">AI 推荐</string>
-<string name="ai_recommend_loading_short">加载中…</string>
+<resources>
+    <string name="setting_home_history">首页最近观看</string>
+    <string name="setting_home_vod_auto_load">默认加载点播</string>
+    <string name="setting_episode_history">集数历史</string>
+    <string name="setting_play_back_to_detail">返回详情页</string>
+    <string name="setting_home_site_lock">首页源锁定</string>
+    <string name="setting_search_thread">搜索线程</string>
+    <string name="setting_global_history">全局历史</string>
+    
+    <!-- 修正为字符串数组 -->
+    <string-array name="select_global_history_mode">
+        <item>默认</item>
+        <item>全局</item>
+    </string-array>
+    
+    <string-array name="select_subtitle_language">
+        <item>自动</item>
+        <item>中文</item>
+        <item>英文</item>
+    </string-array>
+    
+    <string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
+
+    <string name="dialog_delete_record">删除全部记录？</string>
+    <string name="dialog_delete_history">将删除全部历史记录。</string>
+    <string name="dialog_negative">取消</string>
+    <string name="dialog_positive">确定</string>
+    <string name="setting_auto_backup">自动备份</string>
+    <string name="backup_permission_denied">未授予存储权限</string>
+    <string name="exit_confirm_title">退出应用？</string>
+    <string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
+    <string name="exit_confirm_positive">退出</string>
+    <string name="setting_subtitle">字幕设置</string>
+    <string name="player_subtitle_auto_match">自动匹配字幕</string>
+    <string name="player_subtitle_language">字幕偏好语言</string>
+    <string name="player_subtitle_assrt_token">射手网 Token</string>
+    <string name="subtitle_auto_match_hit">已自动匹配字幕：%1$s</string>
+    <string name="subtitle_token_hint">粘贴射手网 API Token</string>
+    <string name="setting_configured">已配置</string>
+    <string name="setting_unconfigured">未配置</string>
+    <string name="subtitle_manual_search">搜索字幕</string>
+    <string name="subtitle_manual_searching">正在搜索字幕…</string>
+    <string name="subtitle_manual_select_title">选择字幕（%1$d）</string>
+    <string name="subtitle_manual_search_empty">未搜索到字幕</string>
+    <string name="subtitle_manual_search_failed">字幕搜索失败</string>
+    <string name="subtitle_manual_resolving">正在加载字幕…</string>
+    <string name="subtitle_manual_applied">已应用字幕：%1$s</string>
+    <string name="subtitle_manual_apply_failed">已找到字幕但无法应用</string>
+    <string name="subtitle_manual_inactive">请先开始播放再搜索字幕</string>
+    <string name="subtitle_auto_match_provider_unavailable">请先配置射手网 Token</string>
+    <string name="search_keyword">关键词</string>
+    <string name="setting_ai_recommendation">AI 推荐</string>
+    <string name="setting_ai_endpoint">API 服务端点 / 基地址</string>
+    <string name="setting_ai_api_key">API key</string>
+    <string name="setting_ai_model">模型</string>
+    <string name="setting_ai_fetch">获取 AI 推荐</string>
+    <string name="ai_recommend_loading">正在获取 AI 推荐…</string>
+    <string name="ai_recommend_empty">暂无推荐结果</string>
+    <string name="ai_recommend_failed">AI 推荐失败</string>
+    <string name="ai_recommend_not_ready">请先完成 AI 通用配置并启用服务</string>
+    <string name="ai_recommend_title">AI 推荐（%1$d）</string>
+    <string name="ai_config_saved">已保存</string>
+    <string name="setting_ai_config">AI 通用配置</string>
+    <string name="setting_ai_enable">启用 AI 服务</string>
+    <string name="setting_ai_protocol">协议类型</string>
+    <string name="setting_ai_user_agent">自定义 User-Agent</string>
+    <string name="setting_ai_user_agent_hint">可选，用于有 UA 限制的供应商</string>
+    <string name="setting_ai_test">测试</string>
+    <string name="setting_ai_testing">正在测试 AI 连通性…</string>
+    <string name="setting_ai_test_ok">测试成功：%1$s</string>
+    <string name="setting_ai_test_fail">测试失败：%1$s</string>
+    <string name="setting_ai_status_on">已配置</string>
+    <string name="setting_ai_status_off">未配置</string>
+    <string name="setting_ai_recommendation_switch">AI 推荐</string>
+    <string name="setting_ai_title_extraction">AI 真实剧名识别</string>
+    <string name="setting_ai_fetch_models">获取模型</string>
+    <string name="setting_ai_fetching_models">正在获取模型列表…</string>
+    <string name="setting_ai_fetch_models_fail">获取模型失败：%1$s</string>
+    <string name="setting_ai_need_key">请先填写端点和 API key</string>
+    <string name="ai_recommend_section">AI 推荐</string>
+    <string name="ai_recommend_loading_short">加载中…</string>
+</resources>
