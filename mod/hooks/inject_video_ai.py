@@ -145,9 +145,10 @@ HOOK = r"""
                 tv.setFocusable(true);
                 tv.setClickable(true);
                 tv.setFocusableInTouchMode(false);
+                try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { tv.setBackgroundColor(0x33FFFFFF); }
                 tv.setOnFocusChangeListener((v, hasFocus) -> {
-                    v.setBackgroundColor(hasFocus ? 0x88FFFFFF : 0x33FFFFFF);
                     if (hasFocus) {
+                        try { v.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { v.setBackgroundColor(0x88FFFFFF); }
                         android.view.ViewParent parent = v.getParent();
                         while (parent != null) {
                             if (parent instanceof android.widget.HorizontalScrollView) {
@@ -158,6 +159,8 @@ HOOK = r"""
                             }
                             parent = parent.getParent();
                         }
+                    } else {
+                        try { v.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { v.setBackgroundColor(0x33FFFFFF); }
                     }
                 });
                 tv.setOnKeyListener((v, keyCode, event) -> {
@@ -188,11 +191,38 @@ HOOK = r"""
                 mBinding.aiRecommendList.addView(tv);
             }
         
+                
                 try {
+                    mBinding.aiRecommendPanel.setFocusable(false);
+                    mBinding.aiRecommendScroll.setFocusable(true);
+                    mBinding.aiRecommendScroll.setFocusableInTouchMode(false);
+                    mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
                     mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
-                    mBinding.aiRecommendList.setFocusable(true);
+                    mBinding.aiRecommendList.setFocusable(false);
+                    // 下键从选集进入推荐：把 episode / flag 的 nextFocusDown 指到推荐滚动条
+                    if (mBinding.episode != null) {
+                        mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
+                    }
+                    try {
+                        if (mBinding.flag != null) {
+                            // 无选集时从线路也能下到推荐
+                            java.lang.reflect.Field f = mBinding.getClass().getDeclaredField("flag");
+                            // ViewBinding field access already via mBinding.flag if present
+                        }
+                    } catch (Throwable ignored) {}
+                    try {
+                        android.view.View flag = mBinding.getRoot().findViewById(R.id.flag);
+                        if (flag != null && (mBinding.episode == null || mBinding.episode.getVisibility() != android.view.View.VISIBLE)) {
+                            flag.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
+                        }
+                    } catch (Throwable ignored) {}
+                    // 推荐左上回到选集
                     if (mBinding.aiRecommendList.getChildCount() > 0) {
-                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                        android.view.View first = mBinding.aiRecommendList.getChildAt(0);
+                        if (mBinding.episode != null) {
+                            first.setNextFocusUpId(mBinding.episode.getId());
+                            mBinding.aiRecommendScroll.setNextFocusUpId(mBinding.episode.getId());
+                        }
                     }
                 } catch (Throwable ignored) {}
 } catch (Throwable ignored) {

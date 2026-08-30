@@ -720,43 +720,8 @@
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/episodeGroup"
-                        android:layout_width="match_parent"
-                        android:layout_height="40dp"
-                        android:layout_marginTop="8dp"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        android:orientation="horizontal"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:visibility="gone"
-                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-                        tools:itemCount="4"
-                        tools:listitem="@layout/adapter_episode_group"
-                        tools:visibility="visible" />
-
-                    <com.fongmi.android.tv.ui.custom.CustomRecyclerView
-                        android:id="@+id/episode"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:layout_marginBottom="8dp"
-                        android:clipChildren="true"
-                        android:clipToPadding="true"
-                        android:nestedScrollingEnabled="false"
-                        android:overScrollMode="never"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-                        app:maxHeight="280dp"
-                        app:spanCount="4"
-                        tools:itemCount="28"
-                        tools:listitem="@layout/adapter_episode_grid" />
-
                     
-
-                    <androidx.appcompat.widget.LinearLayoutCompat
+<androidx.appcompat.widget.LinearLayoutCompat
                         android:id="@+id/aiRecommendPanel"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -791,6 +756,40 @@
                                 android:orientation="horizontal" />
                         </HorizontalScrollView>
                     </androidx.appcompat.widget.LinearLayoutCompat>
+
+<androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/episodeGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:layout_marginTop="8dp"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:visibility="gone"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        tools:itemCount="4"
+                        tools:listitem="@layout/adapter_episode_group"
+                        tools:visibility="visible" />
+
+                    <com.fongmi.android.tv.ui.custom.CustomRecyclerView
+                        android:id="@+id/episode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp"
+                        android:clipChildren="true"
+                        android:clipToPadding="true"
+                        android:nestedScrollingEnabled="false"
+                        android:overScrollMode="never"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                        app:maxHeight="280dp"
+                        app:spanCount="4"
+                        tools:itemCount="28"
+                        tools:listitem="@layout/adapter_episode_grid" />
 
 <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/quick"
