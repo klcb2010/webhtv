@@ -120,3 +120,7 @@ fi
 if [[ -f "$MOD/hooks/fix_exo_dv5.py" ]]; then
   python3 "$MOD/hooks/fix_exo_dv5.py" "$ROOT"
 fi
+
+if [[ -f "$MOD/hooks/fix_migrations_keep.py" ]]; then
+  python3 "$MOD/hooks/fix_migrations_keep.py" "$ROOT"
+fi
