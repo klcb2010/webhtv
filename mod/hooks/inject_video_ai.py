@@ -141,7 +141,7 @@ HOOK = r"""
                 tv.setTextColor(0xFFFFFFFF);
                 tv.setTextSize(12);
                 tv.setPadding(pad, pad, pad, pad);
-                try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { tv.setBackgroundColor(0x33FFFFFF); }
+                tv.setBackgroundColor(0x33FFFFFF);
                 tv.setFocusable(true);
                 tv.setFocusableInTouchMode(true);
                 tv.setClickable(true);

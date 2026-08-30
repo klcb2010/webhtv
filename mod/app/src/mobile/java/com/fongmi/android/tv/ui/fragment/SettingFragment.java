@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.fragment;
 
+import com.fongmi.android.tv.ui.activity.SettingPersonalActivity;
+
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -456,7 +458,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void openPersonal(View view) {
         android.app.Activity activity = getActivitySafe();
-        if (activity != null) SettingPersonalActivity.start(activity);
+        if (activity != null) com.fongmi.android.tv.ui.activity.SettingPersonalActivity.start(activity);
     }
 
 }

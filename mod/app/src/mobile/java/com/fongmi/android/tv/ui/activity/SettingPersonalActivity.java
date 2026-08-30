@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
+import android.os.Bundle;
 import android.content.Intent;
 import android.view.View;
 
@@ -32,7 +33,7 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     @Override
-    protected void initView() {
+    protected void initView(Bundle savedInstanceState) {
         globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
         try {
             subtitleLabels = getResources().getStringArray(R.array.select_subtitle_language);
