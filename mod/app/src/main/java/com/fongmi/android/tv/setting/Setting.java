@@ -867,4 +867,23 @@ public class Setting {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
         return new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + App.get().getPackageName())).resolveActivity(App.get().getPackageManager()) != null || new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).resolveActivity(App.get().getPackageManager()) != null;
     }
+
+    public static final String DEFAULT_GITHUB_PROXY = "https://ghfast.top/";
+
+    public static boolean getGithubProxyEnabled() {
+        return Prefers.getBoolean("github_proxy_enabled", false);
+    }
+
+    public static void putGithubProxyEnabled(boolean enabled) {
+        Prefers.put("github_proxy_enabled", enabled);
+    }
+
+    public static String getGithubProxyUrl() {
+        String url = Prefers.getString("github_proxy_url", DEFAULT_GITHUB_PROXY);
+        return url == null || url.isEmpty() ? DEFAULT_GITHUB_PROXY : url;
+    }
+
+    public static void putGithubProxyUrl(String url) {
+        Prefers.put("github_proxy_url", url == null ? "" : url.trim());
+    }
 }

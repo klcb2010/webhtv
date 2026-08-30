@@ -1,8 +1,15 @@
 package com.fongmi.android.tv.utils;
 
+import android.text.TextUtils;
+
+import com.fongmi.android.tv.setting.Setting;
+
 /**
  * 全部更新/下载资源走 GitHub Releases：
  * https://github.com/klcb2010/webhtv/releases
+ *
+ * 加速源开关开启时，下载类 URL 自动套上加速前缀；
+ * API 类 URL（api.github.com）保持直连（多数加速代理不支持）。
  */
 public class Github {
 
@@ -13,17 +20,26 @@ public class Github {
     private static final String GITHUB_RELEASES_API = "https://api.github.com/repos/" + OWNER_REPO + "/releases";
     private static final String GITHUB_RELEASE_ASSETS_API = "https://api.github.com/repos/" + OWNER_REPO + "/releases/assets";
 
+    /** 下载类 URL：加速源开启时套前缀 */
+    private static String accelerate(String url) {
+        if (!Setting.getGithubProxyEnabled()) return url;
+        String proxy = Setting.getGithubProxyUrl();
+        if (TextUtils.isEmpty(proxy)) return url;
+        if (!proxy.endsWith("/")) proxy += "/";
+        return proxy + url;
+    }
+
     /** 兼容旧调用名：实际也指向 GitHub latest/download */
     public static String getCnbAsset(String name) {
         return getGithubLatestAsset(name);
     }
 
     public static String getGithubLatestAsset(String name) {
-        return GITHUB_LATEST + "/" + name;
+        return accelerate(GITHUB_LATEST + "/" + name);
     }
 
     public static String getGithubReleaseAsset(String tag, String name) {
-        return GITHUB_RELEASE + "/" + tag + "/" + name;
+        return accelerate(GITHUB_RELEASE + "/" + tag + "/" + name);
     }
 
     public static String getJson(String name) {
