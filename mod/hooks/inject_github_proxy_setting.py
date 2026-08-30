@@ -10,18 +10,25 @@ ROOT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 setting = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
 if setting.exists():
     t = setting.read_text(encoding="utf-8")
+    
+    # 清理之前可能注入错误的 getPreferences() 方法片段
+    t = re.sub(r"\s*private static final String GITHUB_PROXY_ENABLED = \"github_proxy_enabled\";", "", t)
+    t = re.sub(r"\s*public static boolean getGithubProxyEnabled\(\)[\s\S]*?\}\n", "", t)
+    t = re.sub(r"\s*public static void putGithubProxyEnabled\(boolean value\)[\s\S]*?\}\n", "", t)
+
+    # 重新判断并注入标准的 Prefers 方法
     if "getGithubProxy" not in t:
         block = '''
     public static String getGithubProxy() {
-        return Prefers.getString("github_proxy", com.fongmi.android.tv.utils.GithubProxy.defaultSources());
+        return com.fongmi.android.tv.utils.Prefers.getString("github_proxy", com.fongmi.android.tv.utils.GithubProxy.defaultSources());
     }
 
     public static void putGithubProxy(String value) {
-        Prefers.put("github_proxy", com.fongmi.android.tv.utils.GithubProxy.normalizeConfig(value));
+        com.fongmi.android.tv.utils.Prefers.put("github_proxy", com.fongmi.android.tv.utils.GithubProxy.normalizeConfig(value));
     }
 
     public static boolean isGithubProxyEnabled() {
-        return Prefers.getBoolean("github_proxy_enabled", true);
+        return com.fongmi.android.tv.utils.Prefers.getBoolean("github_proxy_enabled", true);
     }
 
     public static boolean getGithubProxyEnabled() {
@@ -29,7 +36,7 @@ if setting.exists():
     }
 
     public static void putGithubProxyEnabled(boolean enabled) {
-        Prefers.put("github_proxy_enabled", enabled);
+        com.fongmi.android.tv.utils.Prefers.put("github_proxy_enabled", enabled);
     }
 '''
         t = t.rstrip()
@@ -79,13 +86,11 @@ if updater.exists():
     else:
         print("[mod] Updater already has GithubProxy")
 
-# --- AboutDialog: 第一行 检查更新+我已悉知；第二行 加速源全宽；不抢焦点 ---
+# --- AboutDialog ---
 about = ROOT / "app/src/main/java/com/fongmi/android/tv/ui/dialog/AboutDialog.java"
 if about.exists():
     t = about.read_text(encoding="utf-8")
-    # Remove previous broken inject if present
     if "SettingGithubProxyActivity" in t or "proxyBtn" in t:
-        # strip previous long-click / proxyBtn blocks - re-apply clean version
         t = re.sub(
             r"\s*binding\.checkUpdate\.setOnLongClickListener\([\s\S]*?return true;\s*\}\);",
             "",
@@ -102,7 +107,6 @@ if about.exists():
     if "SettingGithubProxyActivity" not in t:
         marker = "binding.checkUpdate.setOnClickListener(v -> {\n            dialog.dismiss();\n            if (updateAction != null) updateAction.run();\n        });"
         if marker not in t:
-            # looser match
             marker = None
             m = re.search(
                 r"binding\.checkUpdate\.setOnClickListener\(v -> \{[\s\S]*?\}\);",
@@ -113,7 +117,6 @@ if about.exists():
 
         if marker:
             insert = marker + '''
-        // MOD: 加速源独立第二行全宽，不抢默认焦点
         try {
             android.view.ViewGroup parent = (android.view.ViewGroup) binding.checkUpdate.getParent();
             if (parent != null) {
@@ -123,7 +126,6 @@ if about.exists():
                         new com.google.android.material.button.MaterialButton(activity);
                 proxyBtn.setText(com.fongmi.android.tv.R.string.setting_github_proxy_short);
                 try {
-                    // 与「检查更新」「我已悉知」同风格，不默认 selected/focus
                     proxyBtn.setFocusable(true);
                     proxyBtn.setFocusableInTouchMode(false);
                     proxyBtn.setSelected(false);
@@ -138,7 +140,6 @@ if about.exists():
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
                 lp.topMargin = (int) (10 * activity.getResources().getDisplayMetrics().density);
                 proxyBtn.setLayoutParams(lp);
-                // 插到 checkUpdate 所在行的下一行（grand 为纵向容器时）
                 if (grand != null && grand.indexOfChild(parent) >= 0) {
                     grand.addView(proxyBtn, grand.indexOfChild(parent) + 1);
                 } else {
@@ -153,8 +154,5 @@ if about.exists():
         else:
             print("[mod] WARN AboutDialog checkUpdate pattern not found")
     else:
-        # already has activity ref - ensure we still rewrote
         about.write_text(t, encoding="utf-8")
         print("[mod] AboutDialog cleaned previous inject")
-else:
-    print("[mod] AboutDialog missing")
