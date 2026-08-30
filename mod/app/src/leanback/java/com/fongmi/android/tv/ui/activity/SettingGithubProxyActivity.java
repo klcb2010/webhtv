@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.LinearLayout;
 
 import androidx.viewbinding.ViewBinding;
 
@@ -69,7 +68,7 @@ public class SettingGithubProxyActivity extends BaseActivity {
     private void refresh() {
         mBinding.enabledText.setText(onOff(Setting.isGithubProxyEnabled()));
         mBinding.activeText.setText(GithubProxy.getActive());
-        LinearLayout list = mBinding.sourceList;
+        androidx.appcompat.widget.LinearLayoutCompat list = mBinding.sourceList;
         list.removeAllViews();
         List<String> sources = GithubProxy.getSources();
         String active = GithubProxy.getActive();
@@ -99,9 +98,9 @@ public class SettingGithubProxyActivity extends BaseActivity {
                 refresh();
                 return true;
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            androidx.appcompat.widget.LinearLayoutCompat.LayoutParams lp = new androidx.appcompat.widget.LinearLayoutCompat.LayoutParams(
+                    androidx.appcompat.widget.LinearLayoutCompat.LayoutParams.MATCH_PARENT,
+                    androidx.appcompat.widget.LinearLayoutCompat.LayoutParams.WRAP_CONTENT);
             lp.topMargin = (int) (6 * density);
             tv.setLayoutParams(lp);
             list.addView(tv);
