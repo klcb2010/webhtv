@@ -34,20 +34,4 @@ public class MpvOsdSurfacePolicyTest {
         assertFalse(MpvOsdSurfacePolicy.requiresSurface(
                 false, "2", "2", "4", "4"));
     }
-
-    @Test
-    public void disabledSubtitleSelectionsDoNotQueryCurrentTracks() {
-        assertFalse(MpvOsdSurfacePolicy.needsCurrentTrackQuery(
-                true, "no", "no"));
-        assertFalse(MpvOsdSurfacePolicy.needsCurrentTrackQuery(
-                false, "auto", "auto"));
-    }
-
-    @Test
-    public void automaticOrUnknownSelectionStillQueriesCurrentTracks() {
-        assertTrue(MpvOsdSurfacePolicy.needsCurrentTrackQuery(
-                true, "auto", "no"));
-        assertTrue(MpvOsdSurfacePolicy.needsCurrentTrackQuery(
-                true, "", "no"));
-    }
 }

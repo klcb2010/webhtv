@@ -13,7 +13,6 @@ import androidx.media3.extractor.iso.udf.UdfFileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -124,28 +123,17 @@ final class IsoTrackMetadataResolver {
         return 0;
     }
 
-    static byte[] readEntry(CacheDataReader reader, IsoFileEntry entry) throws IOException {
+    private static byte[] readEntry(CacheDataReader reader, IsoFileEntry entry) throws IOException {
         if (entry.length < 0 || entry.length > MAX_METADATA_FILE_BYTES) {
             throw new IOException("Blu-ray metadata file is too large: " + entry.name + " size=" + entry.length);
         }
         byte[] data = new byte[(int) entry.length];
-        int position = 0;
-        for (int i = 0; i < entry.extentOffsets.length && position < data.length; i++) {
-            int extentLength = (int) Math.min(entry.extentLengths[i], data.length - position);
-            if (entry.extentOffsets[i] == IsoFileEntry.UNRECORDED_EXTENT_OFFSET) {
-                Arrays.fill(data, position, position + extentLength, (byte) 0);
-                position += extentLength;
-                continue;
-            }
-            int extentRead = 0;
-            while (extentRead < extentLength) {
-                int count = reader.read(entry.extentOffsets[i] + extentRead, data, position, extentLength - extentRead);
-                if (count <= 0) throw new IOException("Unexpected EOF reading " + entry.name);
-                position += count;
-                extentRead += count;
-            }
+        int read = 0;
+        while (read < data.length) {
+            int count = reader.read(entry.byteOffset + read, data, read, data.length - read);
+            if (count <= 0) throw new IOException("Unexpected EOF reading " + entry.name);
+            read += count;
         }
-        if (position != data.length) throw new IOException("Unexpected EOF reading " + entry.name);
         return data;
     }
 

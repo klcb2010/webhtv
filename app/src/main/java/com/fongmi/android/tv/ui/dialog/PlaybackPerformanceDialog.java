@@ -546,7 +546,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             case PlaybackPerformanceCatalog.DECODER_FALLBACK -> onOff(PlaybackPerformanceSetting.isDecoderFallbackEnabled());
             case PlaybackPerformanceCatalog.DV7_HDR10_FALLBACK ->
                     PlayerSetting.getPlayer() == PlayerSetting.MPV
-                            ? PlaybackPerformanceSetting.getMpvDv7HandlingText()
+                            ? onOff(PlaybackPerformanceSetting.isDv7Hdr10FallbackEnabled())
                             : PlaybackPerformanceSetting.getDv7HandlingText();
             case PlaybackPerformanceCatalog.SOFT_VIDEO_TUNE -> onOff(PlaybackPerformanceSetting.isSoftVideoTuneEnabled());
             case PlaybackPerformanceCatalog.AUDIO_PASSTHROUGH -> onOff(PlayerSetting.isAudioPassThrough());
@@ -627,12 +627,8 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             case PlaybackPerformanceCatalog.DECODER_FALLBACK -> () -> toggle(PlaybackPerformanceSetting::isDecoderFallbackEnabled, PlaybackPerformanceSetting::putDecoderFallbackEnabled);
             case PlaybackPerformanceCatalog.DV7_HDR10_FALLBACK -> () -> {
                 if (PlayerSetting.getPlayer() == PlayerSetting.MPV) {
-                    int mode = PlaybackPerformanceSetting.getMpvDv7HandlingMode();
-                    PlaybackPerformanceSetting.putMpvDv7HandlingMode(
-                            mode == PlaybackPerformanceSetting.DV7_HANDLING_P81
-                                    ? PlaybackPerformanceSetting.DV7_HANDLING_HDR10
-                                    : PlaybackPerformanceSetting.DV7_HANDLING_P81);
-                    refresh();
+                    toggle(PlaybackPerformanceSetting::isDv7Hdr10FallbackEnabled,
+                            PlaybackPerformanceSetting::putDv7Hdr10FallbackEnabled);
                     return;
                 }
                 int mode = PlaybackPerformanceSetting.getDv7HandlingMode();

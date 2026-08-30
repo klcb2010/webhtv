@@ -81,7 +81,6 @@ import com.fongmi.android.tv.player.lut.MpvLutShaderFactory;
 import com.fongmi.android.tv.player.mpv.MpvAutoController;
 import com.fongmi.android.tv.player.mpv.MpvAutoControlPolicy;
 import com.fongmi.android.tv.player.mpv.MpvAutoOutputPolicy;
-import com.fongmi.android.tv.player.mpv.MpvAutoRenderPolicy;
 import com.fongmi.android.tv.player.mpv.MpvBackCacheController;
 import com.fongmi.android.tv.player.mpv.MpvBackCachePolicy;
 import com.fongmi.android.tv.player.mpv.MpvCacheTargetCoordinator;
@@ -114,8 +113,6 @@ import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.google.common.net.HttpHeaders;
 
-import is.xyz.mpv.MPVLib;
-
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -139,7 +136,6 @@ public class PlayerManager implements ParseCallback {
     private static final long EXO_TUNNELING_RETRY_DELAY_MS = 250;
     private static final long EXO_DECODER_RUNTIME_RETRY_DELAY_MS = 1200;
     private static final long EXO_DECODER_RESOURCE_RECOVERY_DELAY_MS = 500;
-    private static final long EXO_DV7_FIRST_FRAME_FALLBACK_DELAY_MS = 1200;
     private static final long MPV_AUTO_OUTPUT_PROBE_INTERVAL_MS = 250;
     private static final int LOCAL_PROXY_MAX_RETRY = 2;
     private static final int MPV_AUTO_OUTPUT_PROBE_MAX_ATTEMPTS = 20;
@@ -242,12 +238,9 @@ public class PlayerManager implements ParseCallback {
     private boolean hardDecodeSwitchRetryArmed;
     private boolean lutAllowed = true;
     private boolean mpvAutoOutputEvaluated;
-    private boolean mpvAutoOutputFrameReady;
     private boolean mpvAutoOutputEvaluationScheduled;
     private boolean mpvExplicitSubtitlePreference;
     private boolean mpvAutoGpuPinnedForSession;
-    private boolean mpvAutoVulkanPinnedForItem;
-    private boolean mpvAutoVulkanDisabledForItem;
     private boolean mpvSurfaceFallbackTried;
     private boolean mpvVulkanFallbackTried;
     private boolean mpvHlsManagedReload;
@@ -340,7 +333,6 @@ public class PlayerManager implements ParseCallback {
     public void release() {
         prepareSeq++;
         lutApplySeq++;
-        prepareTerminalRelease();
         resetNetworkProtectionSession("release");
         clearExoDecoderResourceRecovery(true);
         player.removeListener(listener);
@@ -364,8 +356,6 @@ public class PlayerManager implements ParseCallback {
         ijkRuntimeManualOverride = false;
         pendingIjkRuntimeFallbackReparse = false;
         mpvAutoGpuPinnedForSession = false;
-        mpvAutoVulkanPinnedForItem = false;
-        mpvAutoVulkanDisabledForItem = false;
         if (engine == null) return;
         engine.release();
         engine = null;
@@ -383,10 +373,6 @@ public class PlayerManager implements ParseCallback {
         playbackBufferingTracker.reset();
         playbackTrace.clear();
         lastLoggedRouteTraceId = PlaybackTrace.NONE;
-    }
-
-    public void prepareTerminalRelease() {
-        if (engine instanceof MpvPlayerEngine mpv) mpv.prepareTerminalRelease();
     }
 
     private boolean experimentAllowed(PlaybackExperimentPolicy.Action action) {
@@ -418,10 +404,7 @@ public class PlayerManager implements ParseCallback {
         completeIjkBufferManagedReload(
                 false, "timeout", SystemClock.elapsedRealtime(), true);
         if (retryLutWarmupByRefresh("timeout")) return;
-        if (retryMpvDv7P81FirstFrameTimeout()) return;
         if (retryMpvVulkanBackendTimeout()) return;
-        if (retryMpvAutoVulkanToOpenGl("auto-vulkan-first-frame-timeout")) return;
-        if (retryExoDv7FirstFrameTimeout()) return;
         callback.onError(ResUtil.getString(R.string.error_play_timeout));
     }
 
@@ -811,8 +794,7 @@ public class PlayerManager implements ParseCallback {
     public boolean shouldKeepVideoShutterClosed() {
         return isMpv()
                 && MpvPerformanceSetting.getOutputMode() == MpvPerformanceSetting.OUTPUT_AUTO
-                && !mpvAutoOutputEvaluated
-                && !mpvAutoOutputFrameReady;
+                && !mpvAutoOutputEvaluated;
     }
 
     public boolean isExo() {
@@ -1230,16 +1212,6 @@ public class PlayerManager implements ParseCallback {
         ijkRealtimeRecoveryController.onUserSeek(playbackAutoSession, now);
         ijkDecodePressureController.onUserSeek(playbackAutoSession, now);
         resetNetworkProtectionSession("user-seek");
-        if (isExo()) {
-            PlaybackAnalyticsListener.onUserSeekRequested(
-                    player.getCurrentPosition(),
-                    time,
-                    player.getPlaybackState(),
-                    player.getBufferedPosition(),
-                    player.getTotalBufferedDuration(),
-                    player.isLoading(),
-                    player.isPlaying());
-        }
         player.seekTo(time);
     }
 
@@ -4579,11 +4551,7 @@ public class PlayerManager implements ParseCallback {
         }
         if (!isMpv() || spec == null || TextUtils.isEmpty(spec.getUrl()) || !(engine instanceof MpvPlayerEngine mpv)) return;
         resetMpvOutputEvaluationState();
-        mpvAutoVulkanPinnedForItem = false;
-        mpvAutoVulkanDisabledForItem = false;
         mpv.setSurfaceDirectOverride(null);
-        mpv.setVulkanRenderOverride(null);
-        mpv.resetDv7HandlingForNewItem();
         rebuildAndRestartMpv(null, "performance-settings-changed");
     }
 
@@ -4650,11 +4618,6 @@ public class PlayerManager implements ParseCallback {
         resetMpvOutputEvaluationState();
         mpvExplicitSubtitlePreference = hasRequestedSubtitle(Track.find(getKey()));
         if (!(engine instanceof MpvPlayerEngine mpv)) return;
-        boolean dv7HandlingChanged = mpv.resetDv7HandlingForNewItem();
-        boolean clearAutoVulkanRenderer = mpvAutoVulkanPinnedForItem;
-        mpvAutoVulkanPinnedForItem = false;
-        mpvAutoVulkanDisabledForItem = false;
-        mpv.setVulkanRenderOverride(null);
         if (MpvPerformanceSetting.getOutputMode()
                 == MpvPerformanceSetting.OUTPUT_AUTO) {
             callback.onPlayerOutputPending();
@@ -4672,9 +4635,8 @@ public class PlayerManager implements ParseCallback {
         }
         boolean shouldStartDirect = MpvPerformanceSetting.shouldUseSurfaceDirect(
                 autoDirectEligible, Util.isLeanback(), engine.isHard());
-        if (mpv.isSurfaceDirect() == shouldStartDirect
-                && !clearAutoVulkanRenderer && !dv7HandlingChanged) return;
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "prepare new item rebuild currentDirect=%s desiredDirect=%s clearAutoVulkan=%s mode=%s", mpv.isSurfaceDirect(), shouldStartDirect, clearAutoVulkanRenderer, MpvPerformanceSetting.getOutputModeText());
+        if (mpv.isSurfaceDirect() == shouldStartDirect) return;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "prepare new item rebuild currentDirect=%s desiredDirect=%s mode=%s", mpv.isSurfaceDirect(), shouldStartDirect, MpvPerformanceSetting.getOutputModeText());
         mpv.setSurfaceDirectOverride(shouldStartDirect);
         rebuildPlayer();
     }
@@ -4682,18 +4644,12 @@ public class PlayerManager implements ParseCallback {
     private void resetMpvOutputRuntime() {
         resetMpvOutputEvaluationState();
         mpvAutoGpuPinnedForSession = false;
-        mpvAutoVulkanPinnedForItem = false;
-        mpvAutoVulkanDisabledForItem = false;
         lastMpvFrameTimingLogMs = 0;
-        if (engine instanceof MpvPlayerEngine mpv) {
-            mpv.setSurfaceDirectOverride(null);
-            mpv.setVulkanRenderOverride(null);
-        }
+        if (engine instanceof MpvPlayerEngine mpv) mpv.setSurfaceDirectOverride(null);
     }
 
     private void resetMpvOutputEvaluationState() {
         mpvAutoOutputEvaluated = false;
-        mpvAutoOutputFrameReady = false;
         mpvAutoOutputEvaluationScheduled = false;
         mpvAutoOutputProbeAttempts = 0;
         mpvSurfaceFallbackTried = false;
@@ -4726,8 +4682,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private boolean evaluateMpvAutoOutput() {
-        if (!isMpv() || mpvAutoOutputEvaluated
-                || !(engine instanceof MpvPlayerEngine mpv)) return true;
+        if (!isMpv() || mpvAutoOutputEvaluated || engine == null) return true;
         if (mpvHlsManagedReload) return false;
         Tracks tracks = engine.getCurrentTracks();
         boolean tracksReady = tracks != null && !tracks.isEmpty();
@@ -4739,7 +4694,7 @@ public class PlayerManager implements ParseCallback {
         if (!dolbyVision && (format == null || !tracks.containsType(C.TRACK_TYPE_VIDEO))) {
             return false;
         }
-        VideoSize probedSize = mpv.getVideoSizeSnapshot();
+        VideoSize probedSize = engine instanceof MpvPlayerEngine mpv ? mpv.getVideoSizeSnapshot() : VideoSize.UNKNOWN;
         int width = format != null && format.width > 0 ? format.width : probedSize.width > 0 ? probedSize.width : getVideoWidth();
         int height = format != null && format.height > 0 ? format.height : probedSize.height > 0 ? probedSize.height : getVideoHeight();
         if (width <= 0 || height <= 0) return false;
@@ -4748,80 +4703,35 @@ public class PlayerManager implements ParseCallback {
         boolean subtitleActive = externalSubtitleActive || mpvExplicitSubtitlePreference;
         boolean lutOrFilterActive = videoEffectsActive || videoEffectsDirty || lutAllowed && LutSetting.isEnabled() || MpvPerformanceSetting.isInterpolation();
         boolean customGpuProcessing = MpvConfigStore.hasGpuVideoProcessing();
-        boolean dv7Hdr10FallbackEnabled = dolbyVision
-                && videoDetails.dolbyVisionProfile() == 7
-                && mpv.isDv7Hdr10Active();
+        boolean forceNativeDv7 = isDv7NativeAttemptRequested();
         MpvAutoOutputPolicy.DolbyVisionSupport dolbyVisionSupport = dolbyVision
                 ? CodecCapabilityInspector.dolbyVisionSupport(
                 App.get(), videoDetails, format, width, height)
                 : MpvAutoOutputPolicy.DolbyVisionSupport.UNKNOWN;
-        MpvAutoOutputPolicy.DolbyVisionSupport profile81Support =
-                dolbyVision && videoDetails.dolbyVisionProfile() == 7
-                        && PlaybackPerformanceSetting.getMpvDv7HandlingMode()
-                        == PlaybackPerformanceSetting.DV7_HANDLING_P81
-                        ? CodecCapabilityInspector.dolbyVisionProfileSupport(
-                        App.get(), 8, videoDetails.dolbyVisionLevel(),
-                        videoDetails.sourceCodecs(), format, width, height)
-                        : MpvAutoOutputPolicy.DolbyVisionSupport.UNKNOWN;
-        boolean dv7HandlingChanged = dolbyVision
-                && videoDetails.dolbyVisionProfile() == 7
-                && mpv.updateDv7Handling(dolbyVisionSupport, profile81Support);
-        dv7Hdr10FallbackEnabled = dolbyVision
-                && videoDetails.dolbyVisionProfile() == 7
-                && mpv.isDv7Hdr10Active();
-        MpvAutoOutputPolicy.Decision decision = MpvAutoOutputPolicy.evaluate(
-                width, height, engine.isHard(),
+        MpvAutoOutputPolicy.Decision decision = forceNativeDv7
+                ? new MpvAutoOutputPolicy.Decision(true,
+                "dv7-native-attempt")
+                : MpvAutoOutputPolicy.evaluate(width, height, engine.isHard(),
                 Util.isLeanback(), lutOrFilterActive, customGpuProcessing,
                 dolbyVisionSupport,
-                dolbyVision ? videoDetails.dolbyVisionProfile() : C.INDEX_UNSET,
-                dv7Hdr10FallbackEnabled);
-        int dolbyVisionProfile = dolbyVision
-                ? videoDetails.dolbyVisionProfile() : C.INDEX_UNSET;
-        boolean currentlyVulkan = mpv.isVulkanRenderer();
-        MpvAutoRenderPolicy.Decision renderDecision = MpvAutoRenderPolicy.evaluate(
-                PlaybackPerformanceSetting.isAuto(
-                        PlayerSetting.MPV, PlaybackPerformanceCatalog.MPV_RENDER),
-                engine.isHard(), dolbyVisionProfile, dolbyVisionSupport,
-                MPVLib.isBundledVulkanEnabled(App.get()),
-                MPVLib.isDeviceVulkan13Capable(App.get()),
-                currentlyVulkan, mpvAutoVulkanDisabledForItem);
-        boolean enableAutoVulkan = renderDecision.action()
-                == MpvAutoRenderPolicy.Action.ENABLE_VULKAN;
-        if (enableAutoVulkan) {
-            mpvAutoVulkanPinnedForItem = true;
-            mpv.setVulkanRenderOverride(true);
-        }
+                dolbyVision ? videoDetails.dolbyVisionProfile() : C.INDEX_UNSET);
         if (dolbyVision && decision.reason().startsWith("dolby-vision-hw-")) {
             mpvAutoGpuPinnedForSession = true;
         }
         mpvAutoOutputEvaluated = true;
         boolean currentlyDirect = isMpvSurfaceDirect();
         MpvAutoOutputPolicy.Transition transition = MpvAutoOutputPolicy.transition(decision.eligible(), currentlyDirect);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "auto decision eligible=%s transition=%s reason=%s renderAction=%s renderReason=%s size=%dx%d tracksReady=%s early=%s subtitle=%s lutOrFilter=%s customGpu=%s dvProfile=%d dvSupport=%s direct=%s gpuPinned=%s autoVulkan=%s attempts=%d", decision.eligible(), transition, decision.reason(), renderDecision.action(), renderDecision.reason(), width, height, tracksReady, earlyEvaluation, subtitleActive, lutOrFilterActive, customGpuProcessing, dolbyVisionProfile, dolbyVisionSupport, currentlyDirect, mpvAutoGpuPinnedForSession, mpvAutoVulkanPinnedForItem, mpvAutoOutputProbeAttempts);
-        boolean transitionRequested = dv7HandlingChanged || enableAutoVulkan
-                || transition == MpvAutoOutputPolicy.Transition.ENTER_SURFACE_DIRECT
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "auto decision eligible=%s transition=%s reason=%s size=%dx%d tracksReady=%s early=%s subtitle=%s lutOrFilter=%s customGpu=%s dvProfile=%d dvSupport=%s direct=%s gpuPinned=%s attempts=%d", decision.eligible(), transition, decision.reason(), width, height, tracksReady, earlyEvaluation, subtitleActive, lutOrFilterActive, customGpuProcessing, dolbyVision ? videoDetails.dolbyVisionProfile() : C.INDEX_UNSET, dolbyVisionSupport, currentlyDirect, mpvAutoGpuPinnedForSession, mpvAutoOutputProbeAttempts);
+        boolean transitionRequested = transition == MpvAutoOutputPolicy.Transition.ENTER_SURFACE_DIRECT
                 || transition == MpvAutoOutputPolicy.Transition.LEAVE_SURFACE_DIRECT;
         boolean requestAccepted = true;
-        if (dv7HandlingChanged) {
-            Boolean outputOverride = enableAutoVulkan
-                    || transition == MpvAutoOutputPolicy.Transition.LEAVE_SURFACE_DIRECT
-                    ? false
-                    : transition == MpvAutoOutputPolicy.Transition.ENTER_SURFACE_DIRECT
-                    ? true : null;
-            requestAccepted = rebuildAndRestartMpv(outputOverride,
-                    "auto-dv7-" + mpv.getDv7HandlingOption());
-        } else if (enableAutoVulkan) {
-            requestAccepted = rebuildAndRestartMpv(false,
-                    "auto-" + renderDecision.reason());
-        } else if (transition == MpvAutoOutputPolicy.Transition.ENTER_SURFACE_DIRECT) {
+        if (transition == MpvAutoOutputPolicy.Transition.ENTER_SURFACE_DIRECT) {
             requestAccepted = rebuildAndRestartMpv(true, "auto-" + decision.reason());
         } else if (transition == MpvAutoOutputPolicy.Transition.LEAVE_SURFACE_DIRECT) {
             requestAccepted = rebuildAndRestartMpv(false, "auto-" + decision.reason());
         }
-        String oldOutput = currentlyDirect ? "surface-direct"
-                : currentlyVulkan ? "gpu-vulkan" : "gpu-opengl";
-        String targetOutput = enableAutoVulkan ? "gpu-vulkan"
-                : decision.eligible() ? "surface-direct" : "gpu";
+        String oldOutput = currentlyDirect ? "surface-direct" : "gpu";
+        String targetOutput = decision.eligible() ? "surface-direct" : "gpu";
         PlaybackTelemetry.DecisionOutcome telemetryOutcome = transitionRequested
                 ? requestAccepted ? PlaybackTelemetry.DecisionOutcome.REQUESTED : PlaybackTelemetry.DecisionOutcome.FAILED
                 : PlaybackTelemetry.DecisionOutcome.HELD;
@@ -4832,7 +4742,7 @@ public class PlayerManager implements ParseCallback {
                         oldOutput,
                         targetOutput,
                         transitionRequested && requestAccepted ? targetOutput : oldOutput,
-                        enableAutoVulkan ? renderDecision.reason() : decision.reason(),
+                        decision.reason(),
                         transitionRequested ? requestAccepted ? "none" : "rebuild-rejected" : "no-transition",
                         List.of(
                                 PlaybackTelemetry.DecisionInput.number("width", width, PlaybackAutoContext.ValueSource.PLAYER_CALLBACK, PlaybackAutoContext.Confidence.HIGH),
@@ -4876,38 +4786,6 @@ public class PlayerManager implements ParseCallback {
         mpvAutoOutputEvaluationScheduled = false;
         mpvOutputEvaluationSeq++;
         if (!evaluateMpvAutoOutput()) scheduleMpvAutoOutputEvaluation();
-    }
-
-    private boolean retryMpvDv7P81Failure(PlaybackException error) {
-        if (error == null || !(engine instanceof MpvPlayerEngine mpv)
-                || !mpv.isDv7P81Active()) return false;
-        String message = error.getMessage();
-        boolean conversionOrDecodeFailure = error.errorCode
-                == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED
-                || error.errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED
-                || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
-                || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
-                || message != null && (message.startsWith(MpvPlayer.ERROR_DECODE_FAILED)
-                || message.startsWith(MpvPlayer.ERROR_INVALID_MEDIA_DATA));
-        if (!conversionOrDecodeFailure || !mpv.prepareDv7P81Hdr10Fallback()) {
-            return false;
-        }
-        return rebuildAndRestartMpv(null, "dv7-p81-hdr10-fallback");
-    }
-
-    private boolean retryMpvDv7P81FirstFrameTimeout() {
-        if (!(engine instanceof MpvPlayerEngine mpv)
-                || player == null
-                || !mpv.isDv7P81Active()
-                || playbackTrace.hasStage(PlaybackTrace.Stage.FIRST_FRAME)
-                || !mpv.prepareDv7P81Hdr10Fallback()) {
-            return false;
-        }
-        long position = Math.max(0, player.getCurrentPosition());
-        PlaybackTrace.log("mpv-dv", playbackTrace.current(),
-                "P8.1 produced no first frame before startup timeout; retry HDR10 position=%d",
-                position);
-        return rebuildAndRestartMpv(null, "dv7-p81-first-frame-timeout");
     }
 
     private boolean retryMpvSurfaceDirectFailure(PlaybackException error) {
@@ -4958,36 +4836,10 @@ public class PlayerManager implements ParseCallback {
         return rebuildAndRestartMpv(false, reason);
     }
 
-    private boolean retryMpvAutoVulkanFailure(PlaybackException error) {
-        if (error == null || !mpvAutoVulkanPinnedForItem
-                || !(engine instanceof MpvPlayerEngine mpv)
-                || !mpv.isVulkanRenderer()) return false;
-        String message = error.getMessage();
-        boolean outputFailure = error.errorCode
-                == PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED
-                || message != null
-                && message.startsWith(MpvPlayer.ERROR_VIDEO_OUTPUT_FAILED);
-        return outputFailure
-                && retryMpvAutoVulkanToOpenGl("auto-vulkan-output-failure");
-    }
-
-    private boolean retryMpvAutoVulkanToOpenGl(String reason) {
-        if (!mpvAutoVulkanPinnedForItem
-                || !(engine instanceof MpvPlayerEngine mpv)
-                || !mpv.isVulkanRenderer()) return false;
-        mpvAutoVulkanPinnedForItem = false;
-        mpvAutoVulkanDisabledForItem = true;
-        mpv.setVulkanRenderOverride(false);
-        mpv.setVulkanBackendOverride(null);
-        PlaybackTrace.log("mpv-vulkan", playbackTrace.current(),
-                "automatic DV5 Vulkan failed; fallback OpenGL once reason=%s",
-                reason);
-        return rebuildAndRestartMpv(false, reason);
-    }
-
     private boolean isDv7NativeAttemptRequested() {
-        if (!isMpv() || !(engine instanceof MpvPlayerEngine mpv)
-                || !engine.isHard() || !mpv.isDv7NativeActive()) return false;
+        if (!isMpv() || engine == null || !engine.isHard()
+                || PlaybackPerformanceSetting
+                .isDv7Hdr10FallbackEnabled()) return false;
         PlayerEngine.VideoPlaybackDetails details =
                 engine.getVideoPlaybackDetails();
         return details != null && details.dolbyVisionProfile() == 7;
@@ -7072,7 +6924,6 @@ public class PlayerManager implements ParseCallback {
         boolean hasAudio = tracks.containsType(C.TRACK_TYPE_AUDIO);
         PlaybackStartupPolicy.Completion completion = PlaybackStartupPolicy.resolve(ready, playerType == PlayerSetting.MPV, hasVideo, hasAudio);
         if (completion == PlaybackStartupPolicy.Completion.FIRST_FRAME) {
-            if (playbackTrace.hasStage(PlaybackTrace.Stage.FIRST_FRAME)) return;
             playbackTrace.mark(PlaybackTrace.Stage.FIRST_FRAME, "source=mpv-playback-restart player=" + playerType);
             onIjkRuntimeFirstFrame(SystemClock.elapsedRealtime());
         } else if (completion == PlaybackStartupPolicy.Completion.AUDIO_PLAYABLE) {
@@ -7080,36 +6931,8 @@ public class PlayerManager implements ParseCallback {
         }
     }
 
-    private void completeMpvDirectFirstFrame(int state) {
-        if (!MpvAutoOutputPolicy.canRevealDirectFrame(
-                MpvPerformanceSetting.getOutputMode() == MpvPerformanceSetting.OUTPUT_AUTO,
-                mpvAutoOutputEvaluated,
-                state == Player.STATE_READY,
-                isMpvSurfaceDirect(),
-                getVideoWidth(),
-                getVideoHeight())) return;
-        mpvAutoOutputFrameReady = true;
-        callback.onPlayerOutputReady();
-        if (!playbackTrace.hasStage(PlaybackTrace.Stage.FIRST_FRAME)) {
-            playbackTrace.mark(PlaybackTrace.Stage.FIRST_FRAME,
-                    "source=mpv-playback-restart-direct player=" + playerType);
-            onIjkRuntimeFirstFrame(SystemClock.elapsedRealtime());
-        }
-        PlaybackTrace.log("mpv-output", playbackTrace.current(),
-                "auto shutter release reason=direct-playback-restart size=%dx%d evaluated=%s",
-                getVideoWidth(), getVideoHeight(), mpvAutoOutputEvaluated);
-    }
-
     private void recordBufferingState(int state) {
         if (player == null) return;
-        if (isExo()
-                && state == Player.STATE_BUFFERING
-                && !playbackBufferingTracker.isBuffering()
-                && PlaybackAnalyticsListener.isSeekRecoveryActive()) {
-            PlaybackTrace.log("playback-buffer", playbackTrace.current(),
-                    "event=excluded phase=seek outcome=user-action");
-            return;
-        }
         if ((mpvHlsManagedReload || ijkBufferManagedReload)
                 && state == Player.STATE_BUFFERING
                 && !playbackBufferingTracker.isBuffering()) {
@@ -7313,9 +7136,6 @@ public class PlayerManager implements ParseCallback {
         default void onPlayerOutputReady() {
         }
 
-        default void onExoFirstFrame() {
-        }
-
         void onPlayerRebuild(Player newPlayer, boolean resetVideoSurface);
     }
 
@@ -7352,7 +7172,6 @@ public class PlayerManager implements ParseCallback {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "state=%s spec=%s", stateName(state), debugSpec());
             publishPlaybackAutoContext(state != Player.STATE_IDLE);
             if (state == Player.STATE_READY) {
-                completeMpvDirectFirstFrame(state);
                 ijkRuntimeProfileController.onPrepared(playbackAutoSession);
                 onMpvHlsPlaybackReady(SystemClock.elapsedRealtime());
                 if (isIjk()) {
@@ -7459,16 +7278,10 @@ public class PlayerManager implements ParseCallback {
 
         @Override
         public void onRenderedFirstFrame() {
-            // A rendered video frame proves that the media and video decoder are
-            // working even if a slow audio track keeps Exo in BUFFERING briefly.
-            // Do not let the generic startup timer turn that valid playback into
-            // a false connection-timeout error.
-            if (isExo()) App.removeCallbacks(runnable);
             playbackTrace.mark(PlaybackTrace.Stage.FIRST_FRAME, "source=media3 player=" + playerType);
             publishPlaybackAutoContext(true);
             onIjkRuntimeFirstFrame(SystemClock.elapsedRealtime());
             publishPlaybackTelemetry();
-            if (isExo()) callback.onExoFirstFrame();
         }
 
         @Override
@@ -7496,10 +7309,8 @@ public class PlayerManager implements ParseCallback {
             publishPlaybackTelemetry(
                     PlaybackAutoContext.PlaybackPhase.ERROR, false);
             if (recoverMpvHlsVariantError()) return;
-            if (retryMpvDv7P81Failure(e)) return;
             if (retryMpvSurfaceDirectFailure(e)) return;
             if (retryMpvVulkanBackendFailure(e)) return;
-            if (retryMpvAutoVulkanFailure(e)) return;
             PlaybackErrorClassifier.Failure failure = PlaybackErrorClassifier.classify(e, getEffectivePlaybackRoute());
             PlayerEngine.ErrorAction action = engine.handleError(e);
             PlaybackTrace.log("playback-error", playbackTrace.current(), "%s action=%s player=%d decode=%d", failure.logSummary(), action, playerType, engine.getDecode());
@@ -7564,32 +7375,10 @@ public class PlayerManager implements ParseCallback {
                     : ResUtil.getString(R.string.error_play_stage_network);
             case MEDIA_PARSING -> ResUtil.getString(R.string.error_play_stage_media);
             case DECODER -> ResUtil.getString(R.string.error_play_stage_decoder);
-            case OUTPUT -> isAudioOutputFailure(failure)
-                    ? ResUtil.getString(R.string.error_play_stage_audio_output)
-                    : isVideoOutputFailure(failure)
-                    ? ResUtil.getString(R.string.error_play_stage_video_output)
-                    : ResUtil.getString(R.string.error_play_stage_output);
+            case OUTPUT -> ResUtil.getString(R.string.error_play_stage_output);
             case DRM -> ResUtil.getString(R.string.error_play_stage_drm);
             case UNKNOWN -> ResUtil.getString(R.string.error_play_stage_unknown);
         };
-    }
-
-    private boolean isAudioOutputFailure(PlaybackErrorClassifier.Failure failure) {
-        return hasErrorCode(failure, PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED)
-                || hasErrorCode(failure, PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED)
-                || hasErrorCode(failure, PlaybackException.ERROR_CODE_AUDIO_TRACK_OFFLOAD_INIT_FAILED)
-                || hasErrorCode(failure, PlaybackException.ERROR_CODE_AUDIO_TRACK_OFFLOAD_WRITE_FAILED);
-    }
-
-    private boolean isVideoOutputFailure(PlaybackErrorClassifier.Failure failure) {
-        return hasErrorCode(failure, PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSOR_INIT_FAILED)
-                || hasErrorCode(failure, PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED)
-                || "mpv-video-output-marker".equals(failure.evidence());
-    }
-
-    private boolean hasErrorCode(
-            PlaybackErrorClassifier.Failure failure, int errorCode) {
-        return PlaybackException.getErrorCodeName(errorCode).equals(failure.errorCode());
     }
 
     private boolean handleExoDecoderResourcesReclaimed(
@@ -7817,17 +7606,10 @@ public class PlayerManager implements ParseCallback {
     private boolean retryExoDecoderRuntimeFailure(PlaybackException e) {
         if (!(engine instanceof ExoPlayerEngine exo)
                 || player == null
-                || spec == null) {
-            return false;
-        }
-        boolean dolbyVisionFallback =
-                exo.isDolbyVisionP81RuntimeFailurePending();
-        if (!dolbyVisionFallback
-                && !experimentAllowed(
-                PlaybackExperimentPolicy.Action.EXO_DECODER_RUNTIME_REBUILD)) {
-            return false;
-        }
-        if (!exo.prepareDecoderRuntimeFallback()) {
+                || spec == null
+                || !experimentAllowed(
+                PlaybackExperimentPolicy.Action.EXO_DECODER_RUNTIME_REBUILD)
+                || !exo.prepareDecoderRuntimeFallback()) {
             return false;
         }
         hardDecodeSwitchRetryArmed = false;
@@ -7866,50 +7648,6 @@ public class PlayerManager implements ParseCallback {
             App.post(runnable, Constant.TIMEOUT_PLAY);
             callback.onPrepare();
         }, EXO_DECODER_RUNTIME_RETRY_DELAY_MS);
-        return true;
-    }
-
-    private boolean retryExoDv7FirstFrameTimeout() {
-        if (!(engine instanceof ExoPlayerEngine exo)
-                || player == null
-                || spec == null
-                || !exo.prepareDv7Hdr10FallbackForFirstFrameTimeout()) {
-            return false;
-        }
-        int seq = ++prepareSeq;
-        PlaySpec target = spec;
-        long position = Math.max(0, player.getCurrentPosition());
-        float speed = getSpeed();
-        boolean repeat = isRepeatOne();
-        boolean wasPlayWhenReady = player.getPlayWhenReady();
-        App.removeCallbacks(runnable);
-        rebuildPlayer(true);
-        this.playWhenReady = wasPlayWhenReady;
-        initTrack = false;
-        if (SpiderDebug.isEnabled()) {
-            SpiderDebug.log(
-                    "exo-dv",
-                    "action=first-frame-timeout-fallback-scheduled delay=%d position=%d",
-                    EXO_DV7_FIRST_FRAME_FALLBACK_DELAY_MS,
-                    position);
-        }
-        App.post(() -> {
-            if (seq != prepareSeq || spec != target || engine != exo || player == null) return;
-            setDanmakus(target.getDanmakus());
-            waitingLutBeforePlay = false;
-            applySubtitleStyle();
-            engine.start(target.checkUa(), position, wasPlayWhenReady);
-            if (speed != 1f) setSpeed(speed);
-            setRepeatOne(repeat);
-            App.post(runnable, Constant.TIMEOUT_PLAY);
-            callback.onPrepare();
-            if (SpiderDebug.isEnabled()) {
-                SpiderDebug.log(
-                        "exo-dv",
-                        "action=first-frame-timeout-fallback-start position=%d",
-                        position);
-            }
-        }, EXO_DV7_FIRST_FRAME_FALLBACK_DELAY_MS);
         return true;
     }
 

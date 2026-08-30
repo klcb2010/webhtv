@@ -47,58 +47,7 @@ env:
   # 这里只用于检测 / 同步源码
   # 不用于 GitHub Release
   # ============================================================
-  UPSTREAM_REPO: https://github.com/fish2018/webhtv.git
-  UPSTREAM_BRANCH: main
-
-jobs:
-  release:
-    name: Build and publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-
-    steps:
-
-      # ============================================================
-      # Checkout 当前仓库
-      #
-      # origin = 当前仓库
-      # 即：
-      # klcb2010/webhtv
-      #
-      # PAT_TOKEN 用于后续 git push / gh release
-      # ============================================================
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
-          persist-credentials: true
-
-      # ============================================================
-      # 检测并同步上游
-      #
-      # 上游：
-      # fish2018/webhtv
-      #
-      # 保护：
-      # README.md
-      # mod/
-      # .github/workflows/android-release.yml
-      #
-      # 逻辑：
-      #
-      # 1. fetch 上游
-      # 2. 判断上游 HEAD 是否已经包含在当前 HEAD
-      # 3. 没有更新 -> 不提交
-      # 4. 有更新 -> 同步上游源码
-      # 5. 恢复三个受保护项目
-      # 6. 没有实际文件变化 -> 不提交
-      # 7. 有实际变化 -> commit + push
-      #
-      # 注意：
-      # 这里完全不会访问 upstream/releases
-      # ============================================================
-      
+  
       # ============================================================
       # Apply mod patches
       # ============================================================

@@ -19,7 +19,6 @@ enum class RequestType {
     VIDEO_SURFACE,
     OSD_SURFACE,
     COMMAND,
-    SHUTDOWN,
 };
 
 static constexpr uint64_t INTERNAL_REQUEST_ID =
@@ -37,10 +36,6 @@ struct MpvRequest {
     MpvRequest(uint64_t request_id_, std::vector<std::string> command_)
         : type(RequestType::COMMAND), request_id(request_id_),
           command(std::move(command_)), surface(NULL) {}
-
-    MpvRequest()
-        : type(RequestType::SHUTDOWN), request_id(INTERNAL_REQUEST_ID),
-          command(1, "quit"), surface(NULL) {}
 };
 
 struct RequestFailure {
@@ -86,13 +81,9 @@ static const char *get_surface_property(RequestType type) {
     return NULL;
 }
 
-static bool is_command_request(RequestType type) {
-    return type == RequestType::COMMAND || type == RequestType::SHUTDOWN;
-}
-
 static int get_reply_event_id(const MpvRequest *request) {
-    return is_command_request(request->type) ? MPV_EVENT_COMMAND_REPLY
-                                             : MPV_EVENT_SET_PROPERTY_REPLY;
+    return request->type == RequestType::COMMAND ? MPV_EVENT_COMMAND_REPLY
+                                                 : MPV_EVENT_SET_PROPERTY_REPLY;
 }
 
 static int start_next_request_locked(JNIEnv *env,
@@ -101,14 +92,14 @@ static int start_next_request_locked(JNIEnv *env,
         return MPV_ERROR_SUCCESS;
 
     mpv_handle *context = g_mpv.load();
-    if (!context || !g_event_thread_started)
+    if (!context || !g_event_thread_started || g_shutdown_requested)
         return MPV_ERROR_UNINITIALIZED;
 
     std::unique_ptr<MpvRequest> request = std::move(pending_requests.front());
     pending_requests.pop_front();
 
     int result;
-    if (is_command_request(request->type)) {
+    if (request->type == RequestType::COMMAND) {
         std::vector<const char *> arguments(request->command.size() + 1, NULL);
         for (size_t i = 0; i < request->command.size(); ++i)
             arguments[i] = request->command[i].c_str();
@@ -121,18 +112,13 @@ static int start_next_request_locked(JNIEnv *env,
             property, MPV_FORMAT_INT64, &wid);
     }
     if (result < 0) {
-        const char *action = is_command_request(request->type)
+        const char *action = request->type == RequestType::COMMAND
             ? "mpv_command_async" : "mpv_set_property_async";
-        const char *target = is_command_request(request->type)
+        const char *target = request->type == RequestType::COMMAND
             ? (request->command.empty() ? "<empty>" : request->command[0].c_str())
             : get_surface_property(request->type);
         ALOGE("%s(%s) returned error %s", action, target,
               mpv_error_string(result));
-        if (request->type == RequestType::SHUTDOWN) {
-            g_force_shutdown = true;
-            mpv_wakeup(context);
-            return MPV_ERROR_SUCCESS;
-        }
         if (failures && request->request_id != INTERNAL_REQUEST_ID)
             failures->push_back({request->request_id, result});
         clear_request_surface(env, request.get());
@@ -158,25 +144,6 @@ int enqueue_command(JNIEnv *env, uint64_t request_id,
     std::unique_ptr<MpvRequest> request(
         new MpvRequest(request_id, std::move(command)));
     return enqueue_request(env, std::move(request));
-}
-
-int enqueue_shutdown(JNIEnv *env) {
-    std::lock_guard<std::mutex> lock(request_mutex);
-    if (!g_mpv || !g_event_thread_started)
-        return MPV_ERROR_UNINITIALIZED;
-    if (g_shutdown_requested.exchange(true))
-        return MPV_ERROR_SUCCESS;
-
-    pending_requests.push_back(std::unique_ptr<MpvRequest>(new MpvRequest()));
-    const int result = start_next_request_locked(env, NULL);
-    if (result < 0) {
-        mpv_handle *context = g_mpv.load();
-        if (context) {
-            g_force_shutdown = true;
-            mpv_wakeup(context);
-        }
-    }
-    return MPV_ERROR_SUCCESS;
 }
 
 static int enqueue_surface_request(JNIEnv *env, uint64_t request_id,
@@ -249,27 +216,12 @@ void handle_request_reply(JNIEnv *env, mpv_event *event) {
 }
 
 void release_requests(JNIEnv *env) {
-    std::vector<uint64_t> canceled_request_ids;
-    {
-        std::lock_guard<std::mutex> lock(request_mutex);
-        if (request_in_flight &&
-                request_in_flight->request_id != INTERNAL_REQUEST_ID) {
-            canceled_request_ids.push_back(request_in_flight->request_id);
-        }
-        for (const std::unique_ptr<MpvRequest> &request : pending_requests) {
-            if (request->request_id != INTERNAL_REQUEST_ID)
-                canceled_request_ids.push_back(request->request_id);
-        }
-
-        clear_surface(env, &video_surface);
-        clear_surface(env, &osd_surface);
-        clear_request_surface(env, request_in_flight.get());
-        request_in_flight.reset();
-        for (const std::unique_ptr<MpvRequest> &request : pending_requests)
-            clear_request_surface(env, request.get());
-        pending_requests.clear();
-    }
-
-    for (uint64_t request_id : canceled_request_ids)
-        send_command_reply_to_java(env, request_id, MPV_ERROR_UNINITIALIZED);
+    std::lock_guard<std::mutex> lock(request_mutex);
+    clear_surface(env, &video_surface);
+    clear_surface(env, &osd_surface);
+    clear_request_surface(env, request_in_flight.get());
+    request_in_flight.reset();
+    for (const std::unique_ptr<MpvRequest> &request : pending_requests)
+        clear_request_surface(env, request.get());
+    pending_requests.clear();
 }
