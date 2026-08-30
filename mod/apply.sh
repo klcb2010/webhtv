@@ -7,10 +7,12 @@ echo "[mod] root=$ROOT"
 
 while IFS= read -r -d '' src; do
   rel="${src#"$MOD/"}"
+
   case "$rel" in
     apply.sh|README.md|*.md) continue ;;
     */strings_patch.xml) continue ;;
   esac
+
   dest="$ROOT/$rel"
   mkdir -p "$(dirname "$dest")"
   cp -f "$src" "$dest"
@@ -18,10 +20,12 @@ while IFS= read -r -d '' src; do
 done < <(find "$MOD" -type f -print0)
 
 merge() {
-  local patch="$1" target="$2"
+  local patch="$1"
+  local target="$2"
+
   [[ -f "$patch" ]] || return 0
 
-python3 - "$patch" "$target" <<'PY'
+  python3 - "$patch" "$target" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -36,10 +40,13 @@ node_pattern = re.compile(
 
 entries = {}
 order = []
+
 for m in node_pattern.finditer(patch):
     name = m.group("name")
+
     if name not in entries:
         order.append(name)
+
     entries[name] = m.group(0).strip()
 
 if not entries:
@@ -51,7 +58,7 @@ else:
     target_file.parent.mkdir(parents=True, exist_ok=True)
     target = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n'
 
-# Remove existing nodes with same names, then append all patch entries (full replace-by-name)
+# Remove existing nodes with same names, then append all patch entries.
 for name in order:
     target = re.sub(
         r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="'
@@ -62,27 +69,39 @@ for name in order:
     )
 
 insert = "\n".join(entries[name] for name in order) + "\n"
+
 if "</resources>" in target:
     target = target.replace("</resources>", insert + "</resources>", 1)
 else:
     target = target.rstrip() + "\n" + insert
 
 target_file.write_text(target, encoding="utf-8")
+
 print(f"[mod] merged {len(order)} resources -> {target_file}")
 PY
-
 }
 
-merge "$MOD/app/src/main/res/values/strings_patch.xml" "$ROOT/app/src/main/res/values/strings.xml"
-merge "$MOD/app/src/main/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
-merge "$MOD/app/src/leanback/res/values/strings_patch.xml" "$ROOT/app/src/leanback/res/values/strings.xml"
+merge "$MOD/app/src/main/res/values/strings_patch.xml" \
+      "$ROOT/app/src/main/res/values/strings.xml"
+
+merge "$MOD/app/src/main/res/values-zh-rCN/strings_patch.xml" \
+      "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
+
+merge "$MOD/app/src/leanback/res/values/strings_patch.xml" \
+      "$ROOT/app/src/leanback/res/values/strings.xml"
+
 if [[ -f "$ROOT/app/src/leanback/res/values-zh-rCN/strings.xml" ]]; then
-  merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/leanback/res/values-zh-rCN/strings.xml"
+  merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" \
+        "$ROOT/app/src/leanback/res/values-zh-rCN/strings.xml"
 else
-  merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
+  merge "$MOD/app/src/leanback/res/values-zh-rCN/strings_patch.xml" \
+        "$ROOT/app/src/main/res/values-zh-rCN/strings.xml"
 fi
 
-# 资源合并后立即验证 SettingFragment.java 依赖的数组。
+# ============================================================
+# Verify required Android resources
+# ============================================================
+
 required=(
   select_global_history_mode
   select_subtitle_language
@@ -101,7 +120,40 @@ done
 
 echo "[mod] required resources verified"
 
+# ============================================================
+# Verify TV-only selector_item does not leak into Mobile
+# ============================================================
+
+if grep -Rqs --include='*.java' 'R\.drawable\.selector_item' \
+    "$ROOT/app/src/mobile/java" 2>/dev/null; then
+
+  echo "[mod] ERROR: selector_item leaked into mobile source"
+  echo "[mod] TV-only resource R.drawable.selector_item must not be referenced by Mobile."
+
+  grep -Rni --include='*.java' 'R\.drawable\.selector_item' \
+      "$ROOT/app/src/mobile/java" 2>/dev/null || true
+
+  exit 1
+fi
+
+echo "[mod] mobile selector_item check passed"
+
+# ============================================================
+# Verify TV selector resource exists
+# ============================================================
+
+TV_SELECTOR="$ROOT/app/src/leanback/res/drawable/selector_item.xml"
+
+if [[ -f "$TV_SELECTOR" ]]; then
+  echo "[mod] TV selector_item.xml verified"
+else
+  echo "[mod] WARNING: TV selector_item.xml not found"
+fi
+
+# ============================================================
 # Assrt subtitle auto-match hooks
+# ============================================================
+
 if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
   python3 "$MOD/hooks/inject_subtitle.py"
 fi
@@ -127,7 +179,6 @@ fi
 if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
   python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"
 fi
-
 
 if [[ -f "$MOD/hooks/inject_github_proxy_setting.py" ]]; then
   python3 "$MOD/hooks/inject_github_proxy_setting.py" "$ROOT"
