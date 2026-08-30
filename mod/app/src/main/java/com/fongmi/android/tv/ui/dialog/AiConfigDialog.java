@@ -94,7 +94,7 @@ public final class AiConfigDialog {
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(root);
 
-        AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
+        AlertDialog dialog = SettingStyleDialog.builder(activity)
                 .setTitle(R.string.setting_ai_config)
                 .setView(scroll)
                 .setNegativeButton(R.string.dialog_negative, null)
@@ -139,12 +139,14 @@ public final class AiConfigDialog {
             });
         });
         dialog.show();
+        SettingStyleDialog.apply(dialog);
+        SettingStyleDialog.tintContent(root);
     }
 
     private static void showModelPicker(FragmentActivity activity, List<AiCompletionClient.ModelInfo> models, EditText modelField) {
         String[] labels = new String[models.size()];
         for (int i = 0; i < models.size(); i++) labels[i] = models.get(i).label;
-        new MaterialAlertDialogBuilder(activity)
+        SettingStyleDialog.builder(activity)
                 .setTitle(R.string.setting_ai_model)
                 .setItems(labels, (d, which) -> {
                     modelField.setText(models.get(which).id);

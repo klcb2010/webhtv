@@ -70,7 +70,6 @@
 <string name="setting_off">Off</string>
 <string name="setting_subtitle_auto_match">Auto match subtitles</string>
 <string name="setting_subtitle_language">Subtitle language</string>
-<string name="setting_appearance_summary"></string>
 <string-array name="select_global_history_mode">
         <item>Off</item>
         <item>Auto</item>
@@ -86,3 +85,5 @@
         <item>zh</item>
         <item>en</item>
     </string-array>
+
+    <string name="setting_appearance_summary"></string>

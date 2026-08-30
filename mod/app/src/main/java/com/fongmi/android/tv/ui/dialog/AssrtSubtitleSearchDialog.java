@@ -52,7 +52,7 @@ public final class AssrtSubtitleSearchDialog {
 
         final String prefill = keyword == null ? "" : keyword.trim();
 
-        AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
+        AlertDialog dialog = SettingStyleDialog.builder(activity)
                 .setTitle(R.string.subtitle_manual_search)
                 .setView(container)
                 .setNegativeButton(R.string.dialog_negative, null)
@@ -85,6 +85,8 @@ public final class AssrtSubtitleSearchDialog {
             });
         });
         dialog.show();
+        SettingStyleDialog.apply(dialog);
+        // styled below
     }
 
     private static String resolveKeyword(FragmentActivity activity, String defaultKeyword) {
@@ -123,7 +125,7 @@ public final class AssrtSubtitleSearchDialog {
     private static void showCandidates(FragmentActivity activity, PlayerManager player, List<AssrtSubtitleMatch.Item> items, String query) {
         String[] labels = new String[items.size()];
         for (int i = 0; i < items.size(); i++) labels[i] = items.get(i).label();
-        new MaterialAlertDialogBuilder(activity)
+        SettingStyleDialog.builder(activity)
                 .setTitle(activity.getString(R.string.subtitle_manual_select_title, items.size()))
                 .setItems(labels, (d, which) -> resolve(activity, player, items.get(which), query))
                 .setNegativeButton(R.string.dialog_negative, null)

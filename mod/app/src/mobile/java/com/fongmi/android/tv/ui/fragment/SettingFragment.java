@@ -400,19 +400,21 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void setSubtitleAssrtToken(View view) {
         final android.widget.EditText input = new android.widget.EditText(view.getContext());
-        input.setHint(R.string.subtitle_token_hint);
-        input.setText(Setting.getSubtitleAssrtToken());
         input.setSingleLine(true);
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(view.getContext())
+        input.setText(Setting.getSubtitleAssrtToken());
+        androidx.appcompat.app.AlertDialog dialog = com.fongmi.android.tv.ui.dialog.SettingStyleDialog.builder(view.getContext())
                 .setTitle(R.string.player_subtitle_assrt_token)
                 .setView(input)
                 .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (d, w) -> {
-                    Setting.putSubtitleAssrtToken(input.getText() == null ? "" : input.getText().toString());
+                .setPositiveButton(R.string.dialog_positive, (d, which) -> {
+                    Setting.putSubtitleAssrtToken(input.getText() == null ? "" : input.getText().toString().trim());
                     mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
                 })
-                .show();
+                .create();
+        dialog.show();
+        com.fongmi.android.tv.ui.dialog.SettingStyleDialog.apply(dialog);
     }
+
 
 
 

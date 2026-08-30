@@ -21,7 +21,7 @@ merge() {
   local patch="$1" target="$2"
   [[ -f "$patch" ]] || return 0
 
-  python3 - "$patch" "$target" <<'PY'
+python3 - "$patch" "$target" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -30,7 +30,6 @@ patch_file = Path(sys.argv[1])
 target_file = Path(sys.argv[2])
 patch = patch_file.read_text(encoding="utf-8")
 
-# 精确提取 Android 资源节点，兼容 string-array 内的 item。
 node_pattern = re.compile(
     r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="(?P<name>[^"]+)"[^>]*>.*?</(?P=tag)>[ \t]*$'
 )
@@ -52,26 +51,26 @@ else:
     target_file.parent.mkdir(parents=True, exist_ok=True)
     target = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n'
 
-existing = set(re.findall(
-    r'<(?:string|string-array|integer-array|plurals|bool|color|dimen|integer)\b[^>]*\bname="([^"]+)"',
-    target,
-))
+# Remove existing nodes with same names, then append all patch entries (full replace-by-name)
+for name in order:
+    target = re.sub(
+        r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="'
+        + re.escape(name)
+        + r'"[^>]*>.*?</(?P=tag)>[ \t]*\n?',
+        '',
+        target,
+    )
 
-missing = [entries[name] for name in order if name not in existing]
-
-if missing:
-    marker = "</resources>"
-    if marker not in target:
-        raise SystemExit(f"[mod] ERROR: </resources> not found in {target_file}")
-    insert = "\n" + "\n\n".join(
-        "    " + line for block in missing for line in block.splitlines()
-    ) + "\n"
-    target = target.replace(marker, insert + marker, 1)
-    target_file.write_text(target, encoding="utf-8")
-    print(f"[mod] merged {len(missing)} resources -> {target_file}")
+insert = "\n".join(entries[name] for name in order) + "\n"
+if "</resources>" in target:
+    target = target.replace("</resources>", insert + "</resources>", 1)
 else:
-    print(f"[mod] ok {target_file}")
+    target = target.rstrip() + "\n" + insert
+
+target_file.write_text(target, encoding="utf-8")
+print(f"[mod] merged {len(order)} resources -> {target_file}")
 PY
+
 }
 
 merge "$MOD/app/src/main/res/values/strings_patch.xml" "$ROOT/app/src/main/res/values/strings.xml"
