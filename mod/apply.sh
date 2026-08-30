@@ -108,14 +108,50 @@ if [[ -f "$MOD/hooks/fix_migrations_keep.py" ]]; then python3 "$MOD/hooks/fix_mi
 if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"; fi
 if [[ -f "$MOD/hooks/inject_github_proxy_setting.py" ]]; then python3 "$MOD/hooks/inject_github_proxy_setting.py" "$ROOT"; fi
 
-# ==================== 全量要求补丁清洗 (一站式覆盖) ====================
+# ==================== 核心需求自动化注入 ====================
 python3 - "$ROOT" <<'PY'
 import sys, re
 from pathlib import Path
 
 root = Path(sys.argv[1])
 
-# 1. 手机端：清理加速源默认高亮 & requestFocus
+
+for xml_path in root.rglob("*.xml"):
+    if "setting_personal" in xml_path.name or "dialog_about" in xml_path.name:
+        try:
+            content = xml_path.read_text(encoding="utf-8")
+            if "accelerate" in content.lower() or "check_update" in content.lower():
+                # 重构 XML：用一个 Vertical 的 Parent 包裹两个 Horizontal 行
+                new_layout = '''
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+                        <Button android:id="@+id/check_update" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="检查更新"/>
+                        <Button android:id="@+id/know" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="我已悉知"/>
+                    </LinearLayout>
+
+                    <Button
+                        android:id="@+id/accelerate_source"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:selected="false"
+                        android:text="加速源"/>
+                </LinearLayout>
+                '''
+              
+                content = re.sub(r'<LinearLayout[^>]*>(?:(?!</LinearLayout>).)*?id="[^"]*accelerate[^"]*".*?</LinearLayout>', new_layout, content, flags=re.DOTALL)
+                xml_path.write_text(content, encoding="utf-8")
+                print(f"[mod] Fixed layout structure for vertical line break in {xml_path.name}")
+        except Exception:
+            pass
+
+
 for path in root.rglob("*.java"):
     try:
         content = path.read_text(encoding="utf-8")
@@ -124,17 +160,28 @@ for path in root.rglob("*.java"):
             new_content = re.sub(r'(\b\w*accelerate\w*\b)\.requestFocus\(\);', '', new_content, flags=re.I)
             if new_content != content:
                 path.write_text(new_content, encoding="utf-8")
-                print(f"[mod] Cleared selection/focus in {path.name}")
+                print(f"[mod] Cleared focus/selection logic in {path.name}")
     except Exception:
         pass
 
-# 2. TV 端 & 双端通用：精简 AI 推荐展示（仅留 片名 + 年代 + 简短简介）
+
+for xml_path in root.rglob("activity_video.xml"):
+    try:
+        content = xml_path.read_text(encoding="utf-8")
+        if 'id="@+id/site"' in content or 'id="@+id/flag"' in content:
+        
+            content = re.sub(r'android:elevation="0dp"', 'android:elevation="4dp"', content)
+       
+            content = re.sub(r'android:id="@+id/site"', 'android:id="@+id/site" android:nextFocusRight="@+id/ai_recommend"', content)
+            xml_path.write_text(content, encoding="utf-8")
+            print(f"[mod] Restored TV elevation and nextFocusRight in {xml_path.name}")
+    except Exception:
+        pass
+
 for path in root.rglob("*AiRecommend*.java"):
     try:
         content = path.read_text(encoding="utf-8")
-        # 匹配拼接描述的逻辑，精简格式
         if "setText" in content or "StringBuilder" in content:
-            # 抹除大段详细描述拼接，只留 (年代) - 一句话简介
             pattern = r'/\*AI_FORMAT_START\*/.*?/\*AI_FORMAT_END\*/'
             replacement = '''
             StringBuilder sb = new StringBuilder();
@@ -146,22 +193,7 @@ for path in root.rglob("*AiRecommend*.java"):
             new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
             if new_content != content:
                 path.write_text(new_content, encoding="utf-8")
-                print(f"[mod] Trimmed AI recommendation text in {path.name}")
-    except Exception:
-        pass
-
-# 3. TV 端：修复布局高亮、焦点 & 恢复阴影层级
-for xml_path in root.rglob("activity_video.xml"):
-    try:
-        content = xml_path.read_text(encoding="utf-8")
-        # 确保加回 elevation 恢复浅色阴影，加回 focusable 保证 TV 高亮
-        if 'id="@+id/site"' in content or 'id="@+id/flag"' in content:
-            # 恢复卡片阴影 elevation
-            content = re.sub(r'android:elevation="0dp"', 'android:elevation="4dp"', content)
-            # 确保线路行到 AI 推荐的右键焦点联动
-            content = re.sub(r'android:id="@+id/site"', 'android:id="@+id/site" android:nextFocusRight="@+id/ai_recommend"', content)
-            xml_path.write_text(content, encoding="utf-8")
-            print(f"[mod] Patched TV UI focus & elevation in {xml_path.name}")
+                print(f"[mod] Simplified AI recommend text in {path.name}")
     except Exception:
         pass
 
