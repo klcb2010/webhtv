@@ -11,14 +11,15 @@ setting = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
 if setting.exists():
     t = setting.read_text(encoding="utf-8")
     
-    # 强制无条件清理所有历史注入（无论新旧版本、无论全路径还是短路径）
-    t = re.sub(r"\s*public static String getGithubProxy\(\)[\s\S]*?\}\n", "", t)
-    t = re.sub(r"\s*public static void putGithubProxy\(String [^\)]+\)[\s\S]*?\}\n", "", t)
-    t = re.sub(r"\s*public static boolean isGithubProxyEnabled\(\)[\s\S]*?\}\n", "", t)
-    t = re.sub(r"\s*public static boolean getGithubProxyEnabled\(\)[\s\S]*?\}\n", "", t)
-    t = re.sub(r"\s*public static void putGithubProxyEnabled\(boolean [^\)]+\)[\s\S]*?\}\n", "", t)
+    # 1. 确保导入 com.github.catvod.utils.Prefers
+    if "import com.github.catvod.utils.Prefers;" not in t:
+        t = re.sub(r"(package com\.fongmi\.android\.tv\.setting;)", r"\1\n\nimport com.github.catvod.utils.Prefers;", t, count=1)
+    
+    # 2. 暴力擦除所有历史注入的相关方法（匹配方法名直到大括号结束）
+    for method in ["getGithubProxy", "putGithubProxy", "isGithubProxyEnabled", "getGithubProxyEnabled", "putGithubProxyEnabled"]:
+        t = re.sub(r"\s*public static [^\n]+" + method + r"\([\s\S]*?\n    \}\n", "", t)
 
-    # 注入符合 Setting.java 现有规则的标准方法
+    # 3. 构造最新且正确的 Java 方法块（直接使用 Prefers 简写）
     block = '''
     public static String getGithubProxy() {
         return Prefers.getString("github_proxy", com.fongmi.android.tv.utils.GithubProxy.defaultSources());
@@ -40,11 +41,12 @@ if setting.exists():
         Prefers.put("github_proxy_enabled", enabled);
     }
 '''
+    # 4. 重新挂载到类末尾
     t = t.rstrip()
     if t.endswith("}"):
         t = t[:-1] + block + "\n}\n"
         setting.write_text(t, encoding="utf-8")
-        print("[mod] Setting github proxy methods injected successfully")
+        print("[mod] Setting github proxy methods force-reinjected successfully")
 
 # --- Updater.java ---
 updater = ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java"
