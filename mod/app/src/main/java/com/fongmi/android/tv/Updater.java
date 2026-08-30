@@ -113,7 +113,7 @@ public class Updater implements Download.Callback, UpdateListener {
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
-        if (!stable.hasUpdate() && !beta.hasUpdate()) {
+        if (!reallyHasUpdate(stable) && !reallyHasUpdate(beta)) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = stable;
                 App.post(() -> show(activity));
@@ -147,6 +147,9 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update getGithubStableUpdate(String channel) {
         try {
+            // 先扫 releases 列表，按 tag 选最新（避免 /latest 指向旧版或预发布）
+            Update best = pickNewestGithubUpdate(channel, false);
+            if (best != null && best.hasManifest()) return best;
             JSONObject release = new JSONObject(OkHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
             return readGithubReleaseUpdate(channel, release);
         } catch (Exception e) {
@@ -155,7 +158,49 @@ public class Updater implements Download.Callback, UpdateListener {
         }
     }
 
+    private Update pickNewestGithubUpdate(String channel, boolean betaOnly) {
+        try {
+            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            Update best = null;
+            String bestTag = "";
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null) continue;
+                boolean beta = isBetaRelease(release);
+                if (betaOnly && !beta) continue;
+                if (!betaOnly && beta) continue;
+                if (findAsset(release.optJSONArray("assets"), getManifestName(channel)) == null) continue;
+                String tag = release.optString("tag_name");
+                if (best == null || AppVersion.compare(tag, bestTag) > 0) {
+                    Update u = readGithubReleaseUpdate(channel, release);
+                    if (u != null && u.hasManifest()) {
+                        best = u;
+                        bestTag = tag;
+                    }
+                }
+            }
+            return best == null ? Update.empty(channel) : best;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Update.empty(channel);
+        }
+    }
+
+    /** 比 Update.hasUpdate 更稳：同 versionCode 时按完整 tag 时间戳比较 */
+    private boolean reallyHasUpdate(Update update) {
+        if (update == null || !update.hasManifest()) return false;
+        try {
+            if (update.code > 0 && update.code > com.fongmi.android.tv.BuildConfig.VERSION_CODE) return true;
+            if (update.code > 0 && update.code < com.fongmi.android.tv.BuildConfig.VERSION_CODE) return false;
+        } catch (Throwable ignored) {
+        }
+        if (AppVersion.isCurrent(update.name)) return false;
+        return AppVersion.isNewerThanCurrent(update.name);
+    }
+
     private Update getGithubBetaUpdate(String channel) {
+        Update picked = pickNewestGithubUpdate(channel, true);
+        if (picked != null && picked.hasManifest()) return picked;
         String manifestName = getManifestName(channel);
         try {
             JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
@@ -314,7 +359,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     @Override
     public void onConfirm(View view) {
-        if (selected == null || !selected.hasUpdate()) {
+        if (selected == null || !reallyHasUpdate(selected)) {
             Notify.show(R.string.update_latest);
             return;
         }

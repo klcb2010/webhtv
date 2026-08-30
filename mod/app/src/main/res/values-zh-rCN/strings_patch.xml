@@ -1,15 +1,10 @@
 <string name="setting_home_history">首页最近观看</string>
 <string name="setting_home_vod_auto_load">默认加载点播</string>
-<string name="setting_episode_history">集数历史</string>
-<string name="setting_play_back_to_detail">返回详情页</string>
 <string name="setting_home_site_lock">首页源锁定</string>
-<string name="setting_search_thread">搜索线程</string>
-<string name="setting_global_history">全局历史</string>
 <string name="dialog_delete_record">删除全部记录？</string>
 <string name="dialog_delete_history">将删除全部历史记录。</string>
 <string name="dialog_negative">取消</string>
 <string name="dialog_positive">确定</string>
-<string name="setting_auto_backup">自动备份</string>
 <string name="backup_permission_denied">未授予存储权限</string>
 <string name="exit_confirm_title">退出应用？</string>
 <string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
@@ -65,17 +60,25 @@
 <string name="ai_recommend_loading_short">加载中…</string>
 <string name="ai_recommend_retry">加载失败</string>
 <string name="ai_recommend_retry_action">点击重试</string>
+<string name="setting_personal">个性设置</string>
+<string name="setting_auto_backup">自动备份</string>
+<string name="setting_episode_history">集数历史</string>
+<string name="setting_global_history">全局历史</string>
+<string name="setting_play_back_to_detail">返回详情</string>
+<string name="setting_search_thread">搜索线程</string>
+<string name="setting_on">开</string>
+<string name="setting_off">关</string>
 <string-array name="select_global_history_mode">
         <item>关闭</item>
         <item>自动</item>
         <item>搜索时</item>
     </string-array>
-    <string-array name="select_subtitle_language">
+<string-array name="select_subtitle_language">
         <item>自动</item>
         <item>中文</item>
         <item>英文</item>
     </string-array>
-    <string-array name="select_subtitle_language_value">
+<string-array name="select_subtitle_language_value">
         <item>auto</item>
         <item>zh</item>
         <item>en</item>

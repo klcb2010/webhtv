@@ -1,15 +1,10 @@
 <string name="setting_home_history">Home recent history</string>
 <string name="setting_home_vod_auto_load">Auto load VOD on home</string>
-<string name="setting_episode_history">Episode history</string>
-<string name="setting_play_back_to_detail">Back to detail</string>
 <string name="setting_home_site_lock">Home source lock</string>
-<string name="setting_search_thread">Search threads</string>
-<string name="setting_global_history">Global history</string>
 <string name="dialog_delete_record">Delete all records?</string>
 <string name="dialog_delete_history">All history records will be removed.</string>
 <string name="dialog_negative">Cancel</string>
 <string name="dialog_positive">OK</string>
-<string name="setting_auto_backup">Auto backup</string>
 <string name="backup_permission_denied">Storage permission denied</string>
 <string name="exit_confirm_title">Exit app?</string>
 <string name="exit_confirm_message">The current page will close. Background playback will continue if it is running.</string>
@@ -65,17 +60,25 @@
 <string name="ai_recommend_loading_short">Loading…</string>
 <string name="ai_recommend_retry">Failed</string>
 <string name="ai_recommend_retry_action">Tap to retry</string>
+<string name="setting_personal">Personal</string>
+<string name="setting_auto_backup">Auto backup</string>
+<string name="setting_episode_history">Episode history</string>
+<string name="setting_global_history">Global history</string>
+<string name="setting_play_back_to_detail">Back to detail</string>
+<string name="setting_search_thread">Search threads</string>
+<string name="setting_on">On</string>
+<string name="setting_off">Off</string>
 <string-array name="select_global_history_mode">
         <item>Off</item>
         <item>Auto</item>
         <item>Search</item>
     </string-array>
-    <string-array name="select_subtitle_language">
+<string-array name="select_subtitle_language">
         <item>Auto</item>
         <item>Chinese</item>
         <item>English</item>
     </string-array>
-    <string-array name="select_subtitle_language_value">
+<string-array name="select_subtitle_language_value">
         <item>auto</item>
         <item>zh</item>
         <item>en</item>

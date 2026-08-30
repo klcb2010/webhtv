@@ -94,22 +94,17 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setOtherText() {
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
-        mBinding.autoBackupText.setText(getSwitch(isAutoBackupEnabled()));
         mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
         mBinding.subtitleLanguageText.setText(getSubtitleLanguageLabel());
         mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
         refreshAiTexts();
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
-        mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
-        mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
-        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
         int _gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && globalHistoryMode.length > 0) {
             if (_gh < 0 || _gh >= globalHistoryMode.length) _gh = 0;
-            mBinding.globalHistoryText.setText(globalHistoryMode[_gh]);
         }
         mBinding.languageText.setText((language = ResUtil.getStringArray(R.array.select_language))[Setting.getLanguageIndex()]);
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
@@ -145,18 +140,14 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
-        mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         mBinding.subtitleAutoMatch.setOnClickListener(this::setSubtitleAutoMatch);
         mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
         mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
         mBinding.aiConfig.setOnClickListener(this::openAiConfig);
+        mBinding.personal.setOnClickListener(this::openPersonal);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
-        mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
-        mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
         mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
-        mBinding.searchThread.setOnClickListener(this::setSearchThread);
-        mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -306,21 +297,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         return AutoBackupPolicy.isEffective(Setting.isAutoBackup(), Setting.hasFileAccess());
     }
 
-    private void setAutoBackup(View view) {
-        if (isAutoBackupEnabled()) {
-            Setting.putAutoBackup(false);
-            mBinding.autoBackupText.setText(getSwitch(false));
-            return;
-        }
-        PermissionUtil.requestFile(this, allGranted -> {
-            if (!allGranted) {
-                Notify.show(R.string.backup_permission_denied);
-                return;
-            }
-            Setting.putAutoBackup(true);
-            mBinding.autoBackupText.setText(getSwitch(true));
-        });
-    }
 
     private void setHomeHistory(View view) {
         Setting.putHomeHistory(!Setting.isHomeHistory());
@@ -335,57 +311,17 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         RefreshEvent.home();
     }
 
-    private void setEpisodeHistory(View view) {
-        Setting.putEpisodeHistory(!Setting.isEpisodeHistory());
-        mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
-    }
 
-    private void setPlayBackToDetail(View view) {
-        Setting.putPlayBackToDetail(!Setting.isPlayBackToDetail());
-        mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
-    }
 
     private void setHomeSiteLock(View view) {
         Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
     }
 
-    private void setSearchThread(View view) {
-    int current = Setting.getSearchThread();
-    int next;
-
-    switch (current) {
-        case 15:
-            next = 20;
-            break;
-        case 20:
-            next = 40;
-            break;
-        case 40:
-            next = 60;
-            break;
-        case 60:
-            next = 80;
-            break;
-        case 80:
-        default:
-            next = 15;
-            break;
-    }
 
     Setting.putSearchThread(next);
-    mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
 }
 
-    private void setGlobalHistory(View view) {
-        globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
-        int size = globalHistoryMode == null || globalHistoryMode.length == 0 ? 1 : globalHistoryMode.length;
-        int next = (Setting.getGlobalHistoryMode() + 1) % size;
-        Setting.putGlobalHistoryMode(next);
-        int idx = Setting.getGlobalHistoryMode();
-        if (idx < 0 || idx >= size) idx = 0;
-        mBinding.globalHistoryText.setText(globalHistoryMode[idx]);
-    }
 
     private void setSize(View view) {
         int index = (PlayerSetting.getSize() + 1) % size.length;
@@ -553,5 +489,10 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         return this;
     }
 
+
+
+    private void openPersonal(View view) {
+        com.fongmi.android.tv.ui.dialog.SettingPersonalDialog.show(this);
+    }
 
 }

@@ -285,7 +285,24 @@
         
 
 
+        
         <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/personal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_item"
+            android:focusable="true"
+            android:orientation="horizontal"
+            android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setting_personal"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+<androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/aiConfig"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -394,154 +411,14 @@
                 tools:text="Not set" />
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-<androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/autoBackup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/shape_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
 
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/setting_auto_backup"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
 
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/autoBackupText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                tools:text="Off" />
 
-        </androidx.appcompat.widget.LinearLayoutCompat>
 
-<androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/episodeHistory"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/shape_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
+        
 
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/setting_episode_history"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
 
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/episodeHistoryText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                tools:text="On" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/playBackToDetail"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/shape_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/setting_play_back_to_detail"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/playBackToDetailText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                tools:text="On" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-<androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/searchThread"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/shape_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/setting_search_thread"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/searchThreadText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                tools:text="On" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/globalHistory"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/shape_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/setting_global_history"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/globalHistoryText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:textColor="@color/white"
-                android:textSize="16sp"
-                tools:text="On" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
+        
 
 <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/incognito"
