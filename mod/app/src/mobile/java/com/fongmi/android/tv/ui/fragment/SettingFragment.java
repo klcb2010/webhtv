@@ -2,6 +2,8 @@ package com.fongmi.android.tv.ui.fragment;
 
 import com.fongmi.android.tv.ui.activity.SettingPersonalActivity;
 
+import com.fongmi.android.tv.ui.activity.SettingAssrtActivity;
+import com.fongmi.android.tv.ui.activity.SettingAiActivity;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
