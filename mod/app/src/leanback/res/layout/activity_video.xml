@@ -766,9 +766,21 @@
         android:orientation="vertical"
         android:paddingBottom="8dp">
 
-        <androidx.leanback.widget.HorizontalGridView
-            android:id="@+id/flag"
+        
+        <androidx.appcompat.widget.LinearLayoutCompat
             android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <androidx.leanback.widget.HorizontalGridView
+            android:id="@+id/flag"
+            android:nextFocusRight="@id/aiRecommendScroll"
+            android:layout_width="0dp"
+            android:layout_weight="2"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
             android:clipChildren="false"
@@ -776,8 +788,47 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:visibility="gone"
-            android:elevation="6dp"
-            tools:visibility="visible"  />
+            tools:visibility="visible" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                        android:id="@+id/aiRecommendPanel"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/aiRecommendLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ai_recommend_section"
+                            android:textColor="@color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <HorizontalScrollView
+                            android:id="@+id/aiRecommendScroll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:scrollbars="none"
+                            android:fillViewport="false">
+
+                            <androidx.appcompat.widget.LinearLayoutCompat
+                                android:id="@+id/aiRecommendList"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal" />
+                        </HorizontalScrollView>
+                    </androidx.appcompat.widget.LinearLayoutCompat>
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
 
         <androidx.leanback.widget.HorizontalGridView
             android:id="@+id/quality"
@@ -789,8 +840,7 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:visibility="gone"
-            android:elevation="6dp"
-            tools:visibility="visible"  />
+            tools:visibility="visible" />
 
         <androidx.leanback.widget.HorizontalGridView
             android:id="@+id/array"
@@ -803,7 +853,7 @@
             android:paddingEnd="24dp"
             android:visibility="gone" />
 
-        <androidx.leanback.widget.VerticalGridView
+<androidx.leanback.widget.VerticalGridView
             android:id="@+id/episode"
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -813,10 +863,9 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:paddingBottom="8dp"
-            android:visibility="gone"
-            android:elevation="6dp"  />
+            android:visibility="gone" />
 
-        <androidx.leanback.widget.HorizontalGridView
+<androidx.leanback.widget.HorizontalGridView
             android:id="@+id/part"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -825,8 +874,7 @@
             android:clipToPadding="false"
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
-            android:visibility="gone"
-            android:elevation="6dp"  />
+            android:visibility="gone" />
 
         <androidx.leanback.widget.HorizontalGridView
             android:id="@+id/quick"
@@ -837,8 +885,7 @@
             android:clipToPadding="false"
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
-            android:visibility="gone"
-            android:elevation="6dp"  />
+            android:visibility="gone" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 </com.fongmi.android.tv.ui.custom.ProgressLayout>

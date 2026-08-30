@@ -55,8 +55,11 @@ public final class AiRecommendService {
 
         public String label() {
             StringBuilder sb = new StringBuilder(title);
-            if (year > 0) sb.append(" (").append(year).append(")");
-            if (!TextUtils.isEmpty(reason)) sb.append(" - ").append(reason);
+            List<String> bits = new ArrayList<>();
+            bits.add("tv".equals(mediaType) ? "剧集" : "电影");
+            if (year > 0) bits.add(String.valueOf(year));
+            if (!bits.isEmpty()) sb.append("  (").append(String.join(" · ", bits)).append(")");
+            if (!TextUtils.isEmpty(reason)) sb.append("\n").append(reason);
             return sb.toString();
         }
     }

@@ -65,6 +65,20 @@ public class SettingGithubProxyActivity extends BaseActivity {
         });
     }
 
+    
+    private void applyRowBg(android.view.View v, boolean emphasized) {
+        int res = getResources().getIdentifier("selector_item", "drawable", getPackageName());
+        if (res == 0) res = getResources().getIdentifier("shape_item", "drawable", getPackageName());
+        if (res != 0) {
+            v.setBackgroundResource(res);
+        } else {
+            v.setBackgroundColor(emphasized ? 0x55FFFFFF : 0x22FFFFFF);
+        }
+        try {
+            v.setElevation(emphasized ? 6f : 3f);
+        } catch (Throwable ignored) {}
+    }
+
     private void refresh() {
         mBinding.enabledText.setText(onOff(Setting.isGithubProxyEnabled()));
         mBinding.activeText.setText(GithubProxy.getActive());
@@ -82,17 +96,18 @@ public class SettingGithubProxyActivity extends BaseActivity {
             tv.setTextColor(0xFFFFFFFF);
             tv.setTextSize(14);
             tv.setPadding(pad, pad, pad, pad);
-            tv.setBackgroundColor(isActive ? 0x55FFFFFF : 0x22FFFFFF);
+            applyRowBg(tv, isActive);
             tv.setFocusable(true);
             tv.setClickable(true);
             tv.setFocusableInTouchMode(false);
             final String srcKey = source;
             tv.setOnFocusChangeListener((v, hasFocus) -> {
                 if (hasFocus) {
-                    v.setBackgroundColor(0xAA4A90E2);
+                    v.setBackgroundColor(0xAA4A90E2); // focus highlight
+                    try { v.setElevation(8f); } catch (Throwable ignored) {}
                 } else {
                     boolean activeNow = srcKey.equals(GithubProxy.getActive());
-                    v.setBackgroundColor(activeNow ? 0x55FFFFFF : 0x22FFFFFF);
+                    applyRowBg(v, activeNow);
                 }
             });
             tv.setOnClickListener(v -> {

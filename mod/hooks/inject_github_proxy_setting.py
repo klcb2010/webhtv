@@ -28,18 +28,15 @@ if setting.exists():
         Prefers.put("github_proxy_enabled", enabled);
     }
 '''
-        # insert before last closing brace of class
         t = t.rstrip()
         if t.endswith("}"):
             t = t[:-1] + block + "\n}\n"
             setting.write_text(t, encoding="utf-8")
             print("[mod] Setting github proxy methods added")
-        else:
-            print("[mod] WARN Setting.java structure unexpected")
     else:
         print("[mod] Setting github proxy already present")
 
-# --- Updater.java: apply GithubProxy on network URLs ---
+# --- Updater.java ---
 updater = ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java"
 if updater.exists():
     t = updater.read_text(encoding="utf-8")
@@ -54,18 +51,13 @@ if updater.exists():
                 "package com.fongmi.android.tv;",
                 "package com.fongmi.android.tv;\n\nimport com.fongmi.android.tv.utils.GithubProxy;",
             )
-        # wrap startDownload url
         t = re.sub(
             r"private void startDownload\(String url\) \{\s*download = Download\.create\(url,",
             "private void startDownload(String url) {\n        url = GithubProxy.apply(url);\n        download = Download.create(url,",
             t,
             count=1,
         )
-        # common OkHttp.string(manifestUrl patterns
-        t = t.replace(
-            "OkHttp.string(manifestUrl,",
-            "OkHttp.string(GithubProxy.apply(manifestUrl),",
-        )
+        t = t.replace("OkHttp.string(manifestUrl,", "OkHttp.string(GithubProxy.apply(manifestUrl),")
         t = t.replace(
             "OkHttp.string(Github.getReleaseApi(tag),",
             "OkHttp.string(GithubProxy.apply(Github.getReleaseApi(tag)),",
@@ -83,49 +75,82 @@ if updater.exists():
     else:
         print("[mod] Updater already has GithubProxy")
 
-# --- AboutDialog: add proxy button programmatically ---
+# --- AboutDialog: 第一行 检查更新+我已悉知；第二行 加速源全宽；不抢焦点 ---
 about = ROOT / "app/src/main/java/com/fongmi/android/tv/ui/dialog/AboutDialog.java"
 if about.exists():
     t = about.read_text(encoding="utf-8")
-    if "SettingGithubProxyActivity" not in t and "githubProxy" not in t:
-        # after checkUpdate setOnClickListener block, add long-click on checkUpdate or version to open proxy
-        # and a visible path: long press checkUpdate opens proxy; also short add if possible
-        if "binding.checkUpdate.setOnClickListener" in t:
-            t = t.replace(
-                "binding.checkUpdate.setOnClickListener(v -> {\n            dialog.dismiss();\n            if (updateAction != null) updateAction.run();\n        });",
-                '''binding.checkUpdate.setOnClickListener(v -> {
-            dialog.dismiss();
-            if (updateAction != null) updateAction.run();
-        });
-        binding.checkUpdate.setOnLongClickListener(v -> {
-            dialog.dismiss();
-            try {
-                com.fongmi.android.tv.ui.activity.SettingGithubProxyActivity.start(activity);
-            } catch (Throwable ignored) {
-            }
-            return true;
-        });
+    # Remove previous broken inject if present
+    if "SettingGithubProxyActivity" in t or "proxyBtn" in t:
+        # strip previous long-click / proxyBtn blocks - re-apply clean version
+        t = re.sub(
+            r"\s*binding\.checkUpdate\.setOnLongClickListener\([\s\S]*?return true;\s*\}\);",
+            "",
+            t,
+            count=1,
+        )
+        t = re.sub(
+            r"\s*try \{\s*android\.view\.ViewGroup parent[\s\S]*?catch \(Throwable ignored\) \{\s*\}\s*",
+            "",
+            t,
+            count=1,
+        )
+
+    if "SettingGithubProxyActivity" not in t:
+        marker = "binding.checkUpdate.setOnClickListener(v -> {\n            dialog.dismiss();\n            if (updateAction != null) updateAction.run();\n        });"
+        if marker not in t:
+            # looser match
+            marker = None
+            m = re.search(
+                r"binding\.checkUpdate\.setOnClickListener\(v -> \{[\s\S]*?\}\);",
+                t,
+            )
+            if m:
+                marker = m.group(0)
+
+        if marker:
+            insert = marker + '''
+        // MOD: 加速源独立第二行全宽，不抢默认焦点
         try {
             android.view.ViewGroup parent = (android.view.ViewGroup) binding.checkUpdate.getParent();
             if (parent != null) {
+                android.view.ViewGroup grand = parent.getParent() instanceof android.view.ViewGroup
+                        ? (android.view.ViewGroup) parent.getParent() : null;
                 com.google.android.material.button.MaterialButton proxyBtn =
                         new com.google.android.material.button.MaterialButton(activity);
                 proxyBtn.setText(com.fongmi.android.tv.R.string.setting_github_proxy_short);
+                try {
+                    // 与「检查更新」「我已悉知」同风格，不默认 selected/focus
+                    proxyBtn.setFocusable(true);
+                    proxyBtn.setFocusableInTouchMode(false);
+                    proxyBtn.setSelected(false);
+                    proxyBtn.clearFocus();
+                } catch (Throwable ignored) {}
                 proxyBtn.setOnClickListener(v -> {
                     dialog.dismiss();
                     com.fongmi.android.tv.ui.activity.SettingGithubProxyActivity.start(activity);
                 });
-                int idx = parent.indexOfChild(binding.checkUpdate);
-                parent.addView(proxyBtn, idx + 1);
+                android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
+                lp.topMargin = (int) (10 * activity.getResources().getDisplayMetrics().density);
+                proxyBtn.setLayoutParams(lp);
+                // 插到 checkUpdate 所在行的下一行（grand 为纵向容器时）
+                if (grand != null && grand.indexOfChild(parent) >= 0) {
+                    grand.addView(proxyBtn, grand.indexOfChild(parent) + 1);
+                } else {
+                    parent.addView(proxyBtn);
+                }
             }
-        } catch (Throwable ignored) {
-        }''',
-            )
+        } catch (Throwable ignored) {}
+'''
+            t = t.replace(marker, insert, 1)
             about.write_text(t, encoding="utf-8")
-            print("[mod] AboutDialog proxy entry added")
+            print("[mod] AboutDialog proxy second-row button added")
         else:
-            print("[mod] WARN AboutDialog pattern not found")
+            print("[mod] WARN AboutDialog checkUpdate pattern not found")
     else:
-        print("[mod] AboutDialog already patched")
+        # already has activity ref - ensure we still rewrote
+        about.write_text(t, encoding="utf-8")
+        print("[mod] AboutDialog cleaned previous inject")
 else:
     print("[mod] AboutDialog missing")

@@ -927,12 +927,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setRecyclerView() {
-        // mBinding.flag.setHasFixedSize(true);
+        mBinding.flag.setHasFixedSize(true);
         mBinding.flag.setItemAnimator(null);
         mBinding.flag.addItemDecoration(new SpaceItemDecoration(8));
         mBinding.flag.setAdapter(mFlagAdapter = new FlagAdapter(this));
         mBinding.quick.setAdapter(mQuickAdapter = new QuickAdapter(this));
-        // mBinding.episodeGroup.setHasFixedSize(true);
+        mBinding.episodeGroup.setHasFixedSize(true);
         mBinding.episodeGroup.setItemAnimator(null);
         mBinding.episodeGroup.setAdapter(mEpisodeGroupAdapter = new EpisodeGroupAdapter(this));
         mEpisodeSpanCount = getEpisodeSpanCount();
@@ -948,11 +948,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 syncEpisodeGroupByScroll();
             }
         });
-        // mBinding.quality.setHasFixedSize(true);
+        mBinding.quality.setHasFixedSize(true);
         mBinding.quality.setItemAnimator(null);
         mBinding.quality.addItemDecoration(new SpaceItemDecoration(8));
         mBinding.quality.setAdapter(mQualityAdapter = new QualityAdapter(this));
-        // mBinding.control.parse.setHasFixedSize(true);
+        mBinding.control.parse.setHasFixedSize(true);
         mBinding.control.parse.setItemAnimator(null);
         mBinding.control.parse.addItemDecoration(new SpaceItemDecoration(8));
         mBinding.control.parse.setAdapter(mParseAdapter = new ParseAdapter(this, ViewType.DARK));

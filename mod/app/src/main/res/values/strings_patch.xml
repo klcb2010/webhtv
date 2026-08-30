@@ -110,7 +110,3 @@
     <string name="setting_github_proxy_builtin">Built-in source cannot be removed</string>
 
     <string name="setting_github_proxy_invalid">Invalid proxy URL</string>
-
-    <string name="setting_github_proxy_on">On</string>
-
-    <string name="setting_github_proxy_off">Off</string>

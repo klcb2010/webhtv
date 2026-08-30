@@ -131,15 +131,16 @@ HOOK = r"""
             int maxW = (int) (160 * density);
             for (com.fongmi.android.tv.service.AiRecommendService.Item it : items) {
                 com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
-                String text = it.title;
-                if (it.year > 0) text = text + "\n" + it.year;
+                String text = it.title == null ? "" : it.title.trim();
+                if (it.year > 0) text = text + " (" + it.year + ")";
                 if (it.reason != null && !it.reason.isEmpty()) {
-                    String r = it.reason.length() > 28 ? it.reason.substring(0, 28) + "…" : it.reason;
-                    text = text + "\n" + r;
+                    String r = it.reason.trim().replace("\n", " ");
+                    if (r.length() > 24) r = r.substring(0, 24) + "…";
+                    text = text + " - " + r;
                 }
                 tv.setText(text);
                 tv.setTextColor(0xFFFFFFFF);
-                tv.setTextSize(12);
+                tv.setTextSize(11);
                 tv.setPadding(pad, pad, pad, pad);
                 tv.setBackgroundColor(0x33FFFFFF);
                 tv.setFocusable(true);
@@ -174,6 +175,8 @@ HOOK = r"""
                     return false;
                 });
                 tv.setMaxWidth(maxW);
+                tv.setMaxLines(2);
+                tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -201,7 +204,23 @@ HOOK = r"""
                     mBinding.aiRecommendList.setFocusable(false);
                     // 下键从选集进入推荐：把 episode / flag 的 nextFocusDown 指到推荐滚动条
                     if (mBinding.episode != null) {
-                        mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
+                        mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId()); // kept
+
+                try {
+                    android.view.View flag = mBinding.getRoot().findViewById(R.id.flag);
+                    android.view.View scroll = mBinding.aiRecommendScroll;
+                    if (flag != null && scroll != null) {
+                        flag.setNextFocusRightId(scroll.getId());
+                        scroll.setNextFocusLeftId(flag.getId());
+                        mBinding.aiRecommendScroll.setFocusable(true);
+                        mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                    }
+                    if (mBinding.aiRecommendList.getChildCount() > 0) {
+                        android.view.View first = mBinding.aiRecommendList.getChildAt(0);
+                        if (flag != null) first.setNextFocusLeftId(flag.getId());
+                    }
+                } catch (Throwable ignored) {}
+
                     }
                     try {
                         if (mBinding.flag != null) {

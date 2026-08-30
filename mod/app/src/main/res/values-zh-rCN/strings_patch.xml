@@ -110,7 +110,3 @@
     <string name="setting_github_proxy_builtin">内置源不可删除</string>
 
     <string name="setting_github_proxy_invalid">无效的加速源地址</string>
-
-    <string name="setting_github_proxy_on">开</string>
-
-    <string name="setting_github_proxy_off">关</string>
