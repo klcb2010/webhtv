@@ -7,29 +7,43 @@ ROOT = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else pathlib.Path(".")
 
 HOOK = r"""
     private int mAiRecommendGen = 0;
+    private com.fongmi.android.tv.bean.Vod mAiRecommendVod;
+    private String mAiRecommendTitle = "";
 
     private void scheduleAiForDetail(com.fongmi.android.tv.bean.Vod item) {
         if (item == null) return;
         final String rawName = item.getName() == null ? "" : item.getName().trim();
         if (rawName.isEmpty()) return;
         final int gen = ++mAiRecommendGen;
-        if (com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled()) {
-            com.fongmi.android.tv.utils.Task.execute(() -> {
-                String title = com.fongmi.android.tv.service.AiTitleExtractService.extract(rawName);
-                com.fongmi.android.tv.App.post(() -> {
-                    if (gen != mAiRecommendGen || isFinishing()) return;
-                    if (title != null && !title.isEmpty() && !title.equals(rawName)) {
-                        try { mBinding.name.setText(title); } catch (Throwable ignored) {}
-                    }
-                    loadAiRecommendations(gen, item, title == null || title.isEmpty() ? rawName : title);
-                });
-            });
-        } else {
-            loadAiRecommendations(gen, item, rawName);
+        mAiRecommendVod = item;
+        mAiRecommendTitle = rawName;
+        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()
+                && !com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled()) {
+            hideAiRecommendPanel();
+            return;
         }
+        // 稍晚再请求，避免详情 UI 尚未完成导致 panel 绑定失败
+        com.fongmi.android.tv.App.post(() -> {
+            if (gen != mAiRecommendGen || isFinishing()) return;
+            if (com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled()) {
+                com.fongmi.android.tv.utils.Task.execute(() -> {
+                    String title = com.fongmi.android.tv.service.AiTitleExtractService.extract(rawName);
+                    com.fongmi.android.tv.App.post(() -> {
+                        if (gen != mAiRecommendGen || isFinishing()) return;
+                        if (title != null && !title.isEmpty() && !title.equals(rawName)) {
+                            try { mBinding.name.setText(title); } catch (Throwable ignored) {}
+                            mAiRecommendTitle = title;
+                        }
+                        loadAiRecommendations(gen, item, mAiRecommendTitle, 0);
+                    });
+                });
+            } else {
+                loadAiRecommendations(gen, item, rawName, 0);
+            }
+        }, 400);
     }
 
-    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title) {
+    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
         if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()) {
             hideAiRecommendPanel();
             return;
@@ -40,20 +54,65 @@ HOOK = r"""
             mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
             mBinding.aiRecommendList.removeAllViews();
         } catch (Throwable e) {
-            return;
-        }
-        com.fongmi.android.tv.utils.Task.execute(() -> {
-            try {
-                java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items =
-                        com.fongmi.android.tv.service.AiRecommendService.load(vod, title);
-                com.fongmi.android.tv.App.post(() -> bindAiRecommendList(gen, items));
-            } catch (Exception e) {
+            // binding 偶发未就绪，延迟再试一次
+            if (attempt < 2) {
                 com.fongmi.android.tv.App.post(() -> {
                     if (gen != mAiRecommendGen) return;
-                    hideAiRecommendPanel();
-                });
+                    loadAiRecommendations(gen, vod, title, attempt + 1);
+                }, 500);
             }
+            return;
+        }
+        final String reqTitle = title == null ? "" : title;
+        final com.fongmi.android.tv.bean.Vod reqVod = vod;
+        com.fongmi.android.tv.utils.Task.execute(() -> {
+            Exception last = null;
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items = null;
+            for (int i = 0; i < 3; i++) {
+                if (gen != mAiRecommendGen) return;
+                try {
+                    items = com.fongmi.android.tv.service.AiRecommendService.load(reqVod, reqTitle);
+                    if (items != null && !items.isEmpty()) break;
+                } catch (Exception e) {
+                    last = e;
+                    try { Thread.sleep(600L * (i + 1)); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                }
+            }
+            final java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> result = items;
+            final Exception error = last;
+            com.fongmi.android.tv.App.post(() -> {
+                if (gen != mAiRecommendGen || isFinishing()) return;
+                if (result != null && !result.isEmpty()) {
+                    bindAiRecommendList(gen, result);
+                } else {
+                    showAiRecommendRetry(gen, reqVod, reqTitle, error);
+                }
+            });
         });
+    }
+
+    private void showAiRecommendRetry(int gen, com.fongmi.android.tv.bean.Vod vod, String title, Exception error) {
+        try {
+            if (mBinding.aiRecommendPanel == null) return;
+            mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
+            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
+            mBinding.aiRecommendList.removeAllViews();
+            float density = getResources().getDisplayMetrics().density;
+            int pad = (int) (10 * density);
+            com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
+            tv.setText(R.string.ai_recommend_retry_action);
+            tv.setTextColor(0xFFFFFFFF);
+            tv.setTextSize(13);
+            tv.setPadding(pad * 2, pad, pad * 2, pad);
+            tv.setBackgroundColor(0x55FFFFFF);
+            tv.setOnClickListener(v -> {
+                if (gen != mAiRecommendGen) return;
+                loadAiRecommendations(gen, vod, title, 0);
+            });
+            mBinding.aiRecommendList.addView(tv);
+        } catch (Throwable ignored) {
+            hideAiRecommendPanel();
+        }
     }
 
     private void bindAiRecommendList(int gen, java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items) {
@@ -67,18 +126,28 @@ HOOK = r"""
             mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section));
             mBinding.aiRecommendList.removeAllViews();
             float density = getResources().getDisplayMetrics().density;
-            int pad = (int) (8 * density);
+            int pad = (int) (10 * density);
+            int gap = (int) (8 * density);
+            int maxW = (int) (160 * density);
             for (com.fongmi.android.tv.service.AiRecommendService.Item it : items) {
                 com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
-                tv.setText(it.label());
+                String text = it.title;
+                if (it.year > 0) text = text + "\n" + it.year;
+                if (it.reason != null && !it.reason.isEmpty()) {
+                    String r = it.reason.length() > 28 ? it.reason.substring(0, 28) + "…" : it.reason;
+                    text = text + "\n" + r;
+                }
+                tv.setText(text);
                 tv.setTextColor(0xFFFFFFFF);
-                tv.setTextSize(13);
+                tv.setTextSize(12);
                 tv.setPadding(pad, pad, pad, pad);
                 tv.setBackgroundColor(0x33FFFFFF);
+                tv.setMaxWidth(maxW);
+                tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
-                lp.bottomMargin = pad / 2;
+                lp.setMarginEnd(gap);
                 tv.setLayoutParams(lp);
                 final String clickTitle = it.title;
                 tv.setOnClickListener(v -> {

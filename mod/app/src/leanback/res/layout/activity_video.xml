@@ -813,6 +813,7 @@
             android:paddingBottom="8dp"
             android:visibility="gone" />
 
+
                     <androidx.appcompat.widget.LinearLayoutCompat
                         android:id="@+id/aiRecommendPanel"
                         android:layout_width="match_parent"
@@ -833,16 +834,23 @@
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
-                        <androidx.appcompat.widget.LinearLayoutCompat
-                            android:id="@+id/aiRecommendList"
+                        <HorizontalScrollView
+                            android:id="@+id/aiRecommendScroll"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
-                            android:orientation="vertical" />
+                            android:scrollbars="none"
+                            android:fillViewport="false">
+
+                            <androidx.appcompat.widget.LinearLayoutCompat
+                                android:id="@+id/aiRecommendList"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal" />
+                        </HorizontalScrollView>
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
-
-        <androidx.leanback.widget.HorizontalGridView
+<androidx.leanback.widget.HorizontalGridView
             android:id="@+id/part"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
