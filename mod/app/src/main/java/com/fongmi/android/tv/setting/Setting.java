@@ -59,7 +59,10 @@ public class Setting {
     public static final int UI_SCALE_MILD_COMPACT = 4;
     public static final int UI_SCALE_MORE_COMPACT = 5;
     private static final int[] UI_SCALE_OPTIONS = {UI_SCALE_FOLLOW_SYSTEM, UI_SCALE_STANDARD, UI_SCALE_MILD_COMPACT, UI_SCALE_COMPACT, UI_SCALE_MORE_COMPACT, UI_SCALE_SMALLER};
+   private static final String GITHUB_PROXY_ENABLED = "github_proxy_enabled";
 
+
+    
     public static final int WALL_CINEMA = 5;
     public static final int WALL_CINEMA_WARM = 6;
     public static final int WALL_CINEMA_MOSS = 7;
@@ -102,7 +105,13 @@ public class Setting {
             WALL_LIQUID_CHROME, WALL_FOREST_MIST, WALL_EMERALD_AURORA, WALL_WARM_MOON_GLASS, WALL_PEACH_DAWN,
             WALL_CHAMPAGNE_MIST, WALL_SUNSET_PRISM
     };
+public static boolean getGithubProxyEnabled() {
+    return getPreferences().getBoolean(GITHUB_PROXY_ENABLED, false);
+}
 
+public static void putGithubProxyEnabled(boolean value) {
+    getPreferences().edit().putBoolean(GITHUB_PROXY_ENABLED, value).apply();
+}
     public static String getDoh() {
         return Prefers.getString("doh");
     }
