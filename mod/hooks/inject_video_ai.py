@@ -141,7 +141,10 @@ HOOK = r"""
                 tv.setTextColor(0xFFFFFFFF);
                 tv.setTextSize(12);
                 tv.setPadding(pad, pad, pad, pad);
-                tv.setBackgroundColor(0x33FFFFFF);
+                try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { tv.setBackgroundColor(0x33FFFFFF); }
+                tv.setFocusable(true);
+                tv.setFocusableInTouchMode(true);
+                tv.setClickable(true);
                 tv.setMaxWidth(maxW);
                 tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(

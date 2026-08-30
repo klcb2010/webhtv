@@ -449,7 +449,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
 
 
     private void openPersonal(View view) {
-        com.fongmi.android.tv.ui.dialog.SettingPersonalDialog.show(this);
+        SettingPersonalActivity.start(this);
     }
 
 }

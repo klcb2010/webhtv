@@ -456,9 +456,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void openPersonal(View view) {
         android.app.Activity activity = getActivitySafe();
-        if (activity instanceof androidx.fragment.app.FragmentActivity) {
-            com.fongmi.android.tv.ui.dialog.SettingPersonalDialog.show((androidx.fragment.app.FragmentActivity) activity);
-        }
+        if (activity != null) SettingPersonalActivity.start(activity);
     }
 
 }
