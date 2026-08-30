@@ -133,11 +133,6 @@ HOOK = r"""
                 com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
                 String text = it.title == null ? "" : it.title.trim();
                 if (it.year > 0) text = text + " (" + it.year + ")";
-                if (it.reason != null && !it.reason.isEmpty()) {
-                    String r = it.reason.trim().replace("\n", " ");
-                    if (r.length() > 24) r = r.substring(0, 24) + "…";
-                    text = text + " - " + r;
-                }
                 tv.setText(text);
                 tv.setTextColor(0xFFFFFFFF);
                 tv.setTextSize(11);
@@ -206,33 +201,12 @@ HOOK = r"""
                     if (mBinding.episode != null) {
                         mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId()); // kept
 
-                try {
-                    android.view.View flag = mBinding.getRoot().findViewById(R.id.flag);
-                    android.view.View scroll = mBinding.aiRecommendScroll;
-                    if (flag != null && scroll != null) {
-                        flag.setNextFocusRightId(scroll.getId());
-                        scroll.setNextFocusLeftId(flag.getId());
-                        mBinding.aiRecommendScroll.setFocusable(true);
-                        mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
-                    }
-                    if (mBinding.aiRecommendList.getChildCount() > 0) {
-                        android.view.View first = mBinding.aiRecommendList.getChildAt(0);
-                        if (flag != null) first.setNextFocusLeftId(flag.getId());
-                    }
-                } catch (Throwable ignored) {}
-
-                    }
+                }
                     try {
                         if (mBinding.flag != null) {
                             // 无选集时从线路也能下到推荐
                             java.lang.reflect.Field f = mBinding.getClass().getDeclaredField("flag");
                             // ViewBinding field access already via mBinding.flag if present
-                        }
-                    } catch (Throwable ignored) {}
-                    try {
-                        android.view.View flag = mBinding.getRoot().findViewById(R.id.flag);
-                        if (flag != null && (mBinding.episode == null || mBinding.episode.getVisibility() != android.view.View.VISIBLE)) {
-                            flag.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
                         }
                     } catch (Throwable ignored) {}
                     // 推荐左上回到选集
@@ -246,6 +220,58 @@ HOOK = r"""
                 } catch (Throwable ignored) {}
 } catch (Throwable ignored) {
         }
+                try {
+                    android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
+                    if (flagView != null && mBinding.aiRecommendScroll != null) {
+                        flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+                        mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
+                        mBinding.aiRecommendScroll.setFocusable(true);
+                        mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                        mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                        // 最后一条线路再按右键 -> AI 推荐
+                        if (flagView instanceof androidx.leanback.widget.BaseGridView) {
+                            final androidx.leanback.widget.BaseGridView grid = (androidx.leanback.widget.BaseGridView) flagView;
+                            // 选中最后一条线路时，右键交给 AI 推荐
+                            grid.setOnChildViewHolderSelectedListener(new androidx.leanback.widget.OnChildViewHolderSelectedListener() {
+                                @Override
+                                public void onChildViewHolderSelected(androidx.recyclerview.widget.RecyclerView parent,
+                                        androidx.recyclerview.widget.RecyclerView.ViewHolder child, int position, int subposition) {
+                                    try {
+                                        if (child == null || child.itemView == null) return;
+                                        int count = grid.getAdapter() == null ? 0 : grid.getAdapter().getItemCount();
+                                        if (count > 0 && position >= count - 1
+                                                && mBinding.aiRecommendPanel != null
+                                                && mBinding.aiRecommendPanel.getVisibility() == android.view.View.VISIBLE) {
+                                            child.itemView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+                                        } else {
+                                            child.itemView.setNextFocusRightId(android.view.View.NO_ID);
+                                        }
+                                    } catch (Throwable ignored) {}
+                                }
+                            });
+                            grid.setOnKeyInterceptListener(event -> {
+                                if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                                try {
+                                    int selected = grid.getSelectedPosition();
+                                    int count = grid.getAdapter() == null ? 0 : grid.getAdapter().getItemCount();
+                                    if (count > 0 && selected >= count - 1
+                                            && mBinding.aiRecommendPanel != null
+                                            && mBinding.aiRecommendPanel.getVisibility() == android.view.View.VISIBLE
+                                            && mBinding.aiRecommendList.getChildCount() > 0) {
+                                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                                        return true;
+                                    }
+                                } catch (Throwable ignored) {}
+                                return false;
+                            });
+                        }
+                        if (mBinding.aiRecommendList.getChildCount() > 0) {
+                            mBinding.aiRecommendList.getChildAt(0).setNextFocusLeftId(flagView.getId());
+                        }
+                    }
+                } catch (Throwable ignored) {}
+
     }
     private void hideAiRecommendPanel() {
         try {

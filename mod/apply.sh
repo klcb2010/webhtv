@@ -136,3 +136,7 @@ fi
 if [[ -f "$MOD/hooks/fix_recyclerview_fixed_size.py" ]]; then
   python3 "$MOD/hooks/fix_recyclerview_fixed_size.py" "$ROOT"
 fi
+
+if [[ -f "$MOD/hooks/fix_github_proxy_alias.py" ]]; then
+  python3 "$MOD/hooks/fix_github_proxy_alias.py" "$ROOT"
+fi

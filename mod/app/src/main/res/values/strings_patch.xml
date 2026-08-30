@@ -5,8 +5,6 @@
 <string name="dialog_delete_history">All history records will be removed.</string>
 <string name="dialog_negative">Cancel</string>
 <string name="dialog_positive">OK</string>
-<string name="setting_github_proxy_on">On</string>
-<string name="setting_github_proxy_off">Off</string>
 <string name="backup_permission_denied">Storage permission denied</string>
 <string name="exit_confirm_title">Exit app?</string>
 <string name="exit_confirm_message">The current page will close. Background playback will continue if it is running.</string>
@@ -112,3 +110,7 @@
     <string name="setting_github_proxy_builtin">Built-in source cannot be removed</string>
 
     <string name="setting_github_proxy_invalid">Invalid proxy URL</string>
+
+    <string name="setting_github_proxy_on">On</string>
+
+    <string name="setting_github_proxy_off">Off</string>

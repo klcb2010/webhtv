@@ -5,8 +5,6 @@
 <string name="dialog_delete_history">将删除全部历史记录。</string>
 <string name="dialog_negative">取消</string>
 <string name="dialog_positive">确定</string>
-<string name="setting_github_proxy_on">开启</string>
-<string name="setting_github_proxy_off">关闭</string>
 <string name="backup_permission_denied">未授予存储权限</string>
 <string name="exit_confirm_title">退出应用？</string>
 <string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
@@ -112,3 +110,7 @@
     <string name="setting_github_proxy_builtin">内置源不可删除</string>
 
     <string name="setting_github_proxy_invalid">无效的加速源地址</string>
+
+    <string name="setting_github_proxy_on">开</string>
+
+    <string name="setting_github_proxy_off">关</string>
