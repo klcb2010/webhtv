@@ -52,9 +52,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ============================================================
-      # Apply mod patches
-      # ============================================================
       - name: Apply mod patches
         run: |
           if [ -f mod/apply.sh ]; then
@@ -63,21 +60,16 @@ jobs:
             echo "No mod/apply.sh, skip"
           fi
 
-      # ============================================================
-      # Patch detail_title format args (safe sequential replace)
-      # ============================================================
       - name: Patch detail_title format
         run: |
           find . -name "strings.xml" -type f -print0 | while IFS= read -r -d '' f; do
-            # only touch lines with name="detail_title" that still use bare %s
             if grep -q 'name="detail_title"' "$f"; then
-              python3 - <<'PY' "$f"
+              python3 - "$f" <<'PY'
           import re, sys
           path = sys.argv[1]
           text = open(path, encoding="utf-8").read()
           def fix(m):
               body = m.group(0)
-              # replace first two %s with %1$s / %2$s if not already positional
               if "%1$s" in body:
                   return body
               n = 0
@@ -99,9 +91,6 @@ jobs:
             fi
           done
 
-      # ============================================================
-      # JDK 21
-      # ============================================================
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -109,34 +98,15 @@ jobs:
           java-version: "21"
           cache: gradle
 
-      # ============================================================
-      # Python 3.10
-      # ============================================================
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # ============================================================
-      # MPV Native — arm64 only (upstream v7a currently fails string check)
-      # ============================================================
-      - name: Verify bundled MPV native assets (arm64 only)
+      - name: Verify bundled MPV native assets
         run: |
-          # Upstream armeabi-v7a libmpv.so is missing required DV7 P8.1 string.
-          # Temporarily verify arm64 only; restore full script when upstream fixes v7a.
-          set -euo pipefail
-          if [ -f scripts/verify_mpv_native_assets.sh ]; then
-            # Prefer running full script but skip v7a by commenting at runtime
-            cp scripts/verify_mpv_native_assets.sh /tmp/verify_mpv_native_assets.sh
-            sed -i 's/^verify_abi armeabi-v7a/# verify_abi armeabi-v7a/' /tmp/verify_mpv_native_assets.sh
-            bash /tmp/verify_mpv_native_assets.sh --require-elf
-          else
-            echo "No verify script, skip"
-          fi
+          bash scripts/verify_mpv_native_assets.sh --require-elf
 
-      # ============================================================
-      # Android SDK
-      # ============================================================
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -147,9 +117,6 @@ jobs:
             "platforms;android-37.0" \
             "build-tools;37.0.0"
 
-      # ============================================================
-      # WebSocket Danmaku tests
-      # ============================================================
       - name: Run WebSocket danmaku tests
         run: |
           chmod +x ./gradlew
@@ -158,9 +125,6 @@ jobs:
             --tests 'com.fongmi.android.tv.player.danmaku.*' \
             --no-daemon
 
-      # ============================================================
-      # Resolve release tag
-      # ============================================================
       - name: Resolve release tag
         id: meta
         run: |
@@ -217,9 +181,6 @@ jobs:
             echo "apk_suffix=$APK_SUFFIX"
           } >> "$GITHUB_OUTPUT"
 
-      # ============================================================
-      # Configure release signing (single place)
-      # ============================================================
       - name: Configure release signing
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -245,13 +206,13 @@ jobs:
           printf '%s' "$KS_BASE64" | tr -d '\n ' | base64 --decode > app/signing/release.jks
 
           if [ ! -s app/signing/release.jks ]; then
-            echo "❌ decoded JKS is empty"
+            echo "decoded JKS is empty"
             exit 1
           fi
 
           ABS_JKS_PATH="$GITHUB_WORKSPACE/app/signing/release.jks"
           if ! keytool -list -keystore "$ABS_JKS_PATH" -storepass "$STORE_PASSWORD" -alias "$ALIAS" >/dev/null 2>&1; then
-            echo "❌ keystore verification failed for alias: $ALIAS"
+            echo "keystore verification failed for alias: $ALIAS"
             keytool -list -keystore "$ABS_JKS_PATH" -storepass "$STORE_PASSWORD" | grep "PrivateKeyEntry" || true
             exit 1
           fi
@@ -263,11 +224,8 @@ jobs:
             echo "keyPassword=$KEY_PASS"
           } > local.properties
 
-          echo "✅ Release signing configured"
+          echo "Release signing configured"
 
-      # ============================================================
-      # Build four release APKs
-      # ============================================================
       - name: Build four release APKs
         env:
           WEBHTV_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
@@ -282,9 +240,6 @@ jobs:
             :app:assembleLeanbackArmeabi_v7aRelease \
             --no-daemon
 
-      # ============================================================
-      # Collect artifacts
-      # ============================================================
       - name: Collect artifacts
         run: |
           rm -rf dist
@@ -293,9 +248,6 @@ jobs:
           echo "APK:"
           ls -lh dist/
 
-      # ============================================================
-      # Prepare release notes
-      # ============================================================
       - name: Prepare release notes input
         id: release_notes
         env:
@@ -323,9 +275,6 @@ jobs:
               fh.write(f"{delimiter}\n")
           PY
 
-      # ============================================================
-      # Generate update manifests
-      # ============================================================
       - name: Generate update manifests
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
@@ -354,18 +303,11 @@ jobs:
               with open(f"dist/{base}.json", "w", encoding="utf-8") as fh:
                   json.dump(data, fh, ensure_ascii=False, indent=2)
                   fh.write("\n")
-          print("manifests:")
-          for p in sorted(glob.glob("dist/*")):
-              print(p)
           PY
           ls -lh dist/
 
-      # ============================================================
-      # Create GitHub Release on THIS repo only
-      # ============================================================
       - name: Create GitHub Release
         env:
-          # Prefer PAT if you need extra scopes; fall back to GITHUB_TOKEN
           GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
         run: |
@@ -387,9 +329,6 @@ jobs:
             dist/*.apk \
             dist/*.json
 
-      # ============================================================
-      # Sync to CNB (optional)
-      # ============================================================
       - name: Sync to CNB
         if: ${{ inputs.sync_cnb }}
         env:
@@ -406,9 +345,6 @@ jobs:
             echo "No CNB sync script, skip"
           fi
 
-      # ============================================================
-      # Upload workflow artifacts
-      # ============================================================
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
