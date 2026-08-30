@@ -1065,6 +1065,8 @@
     <string name="error_play_stage_network">網路讀取失敗，請檢查網路、請求標頭或更換線路</string>
     <string name="error_play_stage_media">媒體解析失敗或沒有有效音視訊軌道，請更換線路或播放器</string>
     <string name="error_play_stage_decoder">音視訊解碼失敗，請嘗試切換軟硬解或播放器</string>
+    <string name="error_play_stage_audio_output">音訊輸出失敗，請重新進入播放或切換解碼方式</string>
+    <string name="error_play_stage_video_output">視訊輸出失敗，請重新進入播放或切換解碼方式</string>
     <string name="error_play_stage_output">音視訊輸出失敗，請重新進入播放或切換解碼方式</string>
     <string name="error_play_stage_drm">DRM 驗證或受保護媒體處理失敗，請更換線路或播放器</string>
     <string name="error_play_stage_unknown">播放失敗，請重試或切換播放器</string>

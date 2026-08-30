@@ -1084,6 +1084,8 @@
     <string name="error_play_stage_network">Network reading failed. Check the network and request headers, or choose another line.</string>
     <string name="error_play_stage_media">Media parsing failed or no playable audio/video track was found. Choose another line or player.</string>
     <string name="error_play_stage_decoder">Audio/video decoding failed. Try another decode mode or player.</string>
+    <string name="error_play_stage_audio_output">Audio output failed. Reopen playback or try another decode mode.</string>
+    <string name="error_play_stage_video_output">Video output failed. Reopen playback or try another decode mode.</string>
     <string name="error_play_stage_output">Audio/video output failed. Reopen playback or try another decode mode.</string>
     <string name="error_play_stage_drm">DRM authorization or protected-media handling failed. Choose another line or player.</string>
     <string name="error_play_stage_unknown">Playback failed. Retry or switch player.</string>

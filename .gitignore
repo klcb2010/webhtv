@@ -28,3 +28,4 @@ __pycache__/
 *.pyc
 third_party/sources/
 plans/
+.codex/task-state/

@@ -17,6 +17,20 @@ final class MpvOsdSurfacePolicy {
                 || isSelected(secondarySelection);
     }
 
+    static boolean needsCurrentTrackQuery(boolean subtitlesVisible,
+                                          String primarySelection,
+                                          String secondarySelection) {
+        if (!subtitlesVisible) return false;
+        return !isDisabled(primarySelection) || !isDisabled(secondarySelection);
+    }
+
+    private static boolean isDisabled(String value) {
+        if (value == null) return false;
+        String normalized = value.trim();
+        return "no".equalsIgnoreCase(normalized)
+                || "none".equalsIgnoreCase(normalized);
+    }
+
     private static boolean isSelected(String value) {
         if (value == null) return false;
         String normalized = value.trim();
