@@ -90,3 +90,23 @@
     <string name="setting_ai_fetch_models">拉取模型列表</string>
 
     <string name="setting_ai_test">测试连接</string>
+
+    <string name="setting_github_proxy">GitHub 加速源</string>
+
+    <string name="setting_github_proxy_short">加速源</string>
+
+    <string name="setting_github_proxy_hint">输入加速源 URL</string>
+
+    <string name="setting_github_proxy_message">点选列表中的源作为当前加速源，可添加自定义源。关闭加速后 GitHub Raw/Release 使用直连。</string>
+
+    <string name="setting_github_proxy_enabled">使用 GitHub 加速</string>
+
+    <string name="setting_github_proxy_active">当前加速源</string>
+
+    <string name="setting_github_proxy_add">添加自定义加速源</string>
+
+    <string name="setting_github_proxy_reset">恢复内置列表</string>
+
+    <string name="setting_github_proxy_builtin">内置源不可删除</string>
+
+    <string name="setting_github_proxy_invalid">无效的加速源地址</string>

@@ -8,6 +8,7 @@ ACTIVITIES = [
     "SettingPersonalActivity",
     "SettingAiActivity",
     "SettingAssrtActivity",
+    "SettingGithubProxyActivity",
 ]
 
 

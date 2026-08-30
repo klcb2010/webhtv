@@ -90,3 +90,23 @@
     <string name="setting_ai_fetch_models">Fetch models</string>
 
     <string name="setting_ai_test">Test</string>
+
+    <string name="setting_github_proxy">GitHub Proxy</string>
+
+    <string name="setting_github_proxy_short">Proxy</string>
+
+    <string name="setting_github_proxy_hint">Enter proxy URL</string>
+
+    <string name="setting_github_proxy_message">Select a proxy for GitHub Raw/Release. Disable to use direct connection.</string>
+
+    <string name="setting_github_proxy_enabled">Use GitHub proxy</string>
+
+    <string name="setting_github_proxy_active">Active</string>
+
+    <string name="setting_github_proxy_add">Add custom proxy</string>
+
+    <string name="setting_github_proxy_reset">Reset built-in list</string>
+
+    <string name="setting_github_proxy_builtin">Built-in source cannot be removed</string>
+
+    <string name="setting_github_proxy_invalid">Invalid proxy URL</string>

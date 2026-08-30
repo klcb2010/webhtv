@@ -128,3 +128,7 @@ if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
   python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"
 fi
 
+
+if [[ -f "$MOD/hooks/inject_github_proxy_setting.py" ]]; then
+  python3 "$MOD/hooks/inject_github_proxy_setting.py" "$ROOT"
+fi

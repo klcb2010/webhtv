@@ -143,8 +143,33 @@ HOOK = r"""
                 tv.setPadding(pad, pad, pad, pad);
                 tv.setBackgroundColor(0x33FFFFFF);
                 tv.setFocusable(true);
-                tv.setFocusableInTouchMode(true);
                 tv.setClickable(true);
+                tv.setFocusableInTouchMode(false);
+                tv.setOnFocusChangeListener((v, hasFocus) -> {
+                    v.setBackgroundColor(hasFocus ? 0x88FFFFFF : 0x33FFFFFF);
+                    if (hasFocus) {
+                        android.view.ViewParent parent = v.getParent();
+                        while (parent != null) {
+                            if (parent instanceof android.widget.HorizontalScrollView) {
+                                android.widget.HorizontalScrollView hsv = (android.widget.HorizontalScrollView) parent;
+                                int x = Math.max(0, v.getLeft() - (int) (40 * density));
+                                hsv.smoothScrollTo(x, 0);
+                                break;
+                            }
+                            parent = parent.getParent();
+                        }
+                    }
+                });
+                tv.setOnKeyListener((v, keyCode, event) -> {
+                    if (event.getAction() == android.view.KeyEvent.ACTION_UP
+                            && (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER
+                            || keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                            || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_A)) {
+                        v.performClick();
+                        return true;
+                    }
+                    return false;
+                });
                 tv.setMaxWidth(maxW);
                 tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
@@ -162,10 +187,17 @@ HOOK = r"""
                 });
                 mBinding.aiRecommendList.addView(tv);
             }
-        } catch (Throwable ignored) {
+        
+                try {
+                    mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+                    mBinding.aiRecommendList.setFocusable(true);
+                    if (mBinding.aiRecommendList.getChildCount() > 0) {
+                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                    }
+                } catch (Throwable ignored) {}
+} catch (Throwable ignored) {
         }
     }
-
     private void hideAiRecommendPanel() {
         try {
             if (mBinding.aiRecommendPanel != null) mBinding.aiRecommendPanel.setVisibility(android.view.View.GONE);
