@@ -68,6 +68,8 @@
 <string name="setting_search_thread">搜索线程</string>
 <string name="setting_on">开</string>
 <string name="setting_off">关</string>
+<string name="setting_subtitle_auto_match">自动匹配字幕</string>
+<string name="setting_subtitle_language">字幕偏好语言</string>
 <string-array name="select_global_history_mode">
         <item>关闭</item>
         <item>自动</item>

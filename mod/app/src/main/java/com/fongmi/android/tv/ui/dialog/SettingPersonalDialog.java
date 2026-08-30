@@ -1,12 +1,10 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.util.TypedValue;
-import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 
 import com.fongmi.android.tv.R;
@@ -14,7 +12,8 @@ import com.fongmi.android.tv.setting.Setting;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
- * 个性设置：自动备份 / 集数历史 / 全局历史 / 返回详情 / 搜索线程
+ * 个性设置：自动备份 / 集数历史 / 全局历史 / 返回详情 / 搜索线程 /
+ * 自动匹配字幕 / 字幕偏好语言
  */
 public final class SettingPersonalDialog {
 
@@ -31,22 +30,38 @@ public final class SettingPersonalDialog {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(pad, pad / 2, pad, pad / 2);
 
-        String[] modes = safeArray(activity, R.array.select_global_history_mode);
+        String[] historyModes = safeArray(activity, R.array.select_global_history_mode);
+        String[] subLabels = safeArray(activity, R.array.select_subtitle_language);
+        String[] subValues = safeArray(activity, R.array.select_subtitle_language_value);
 
         TextView autoBackup = row(activity, rowPad);
         TextView episodeHistory = row(activity, rowPad);
         TextView globalHistory = row(activity, rowPad);
         TextView playBack = row(activity, rowPad);
         TextView searchThread = row(activity, rowPad);
+        TextView subAuto = row(activity, rowPad);
+        TextView subLang = row(activity, rowPad);
 
         Runnable refresh = () -> {
-            autoBackup.setText(activity.getString(R.string.setting_auto_backup) + "  ·  " + onOff(activity, Setting.isAutoBackup()));
-            episodeHistory.setText(activity.getString(R.string.setting_episode_history) + "  ·  " + onOff(activity, Setting.isEpisodeHistory()));
+            autoBackup.setText(label(activity, R.string.setting_auto_backup, onOff(activity, Setting.isAutoBackup())));
+            episodeHistory.setText(label(activity, R.string.setting_episode_history, onOff(activity, Setting.isEpisodeHistory())));
             int gh = Setting.getGlobalHistoryMode();
-            String ghLabel = (modes != null && gh >= 0 && gh < modes.length) ? modes[gh] : String.valueOf(gh);
-            globalHistory.setText(activity.getString(R.string.setting_global_history) + "  ·  " + ghLabel);
-            playBack.setText(activity.getString(R.string.setting_play_back_to_detail) + "  ·  " + onOff(activity, Setting.isPlayBackToDetail()));
-            searchThread.setText(activity.getString(R.string.setting_search_thread) + "  ·  " + Setting.getSearchThread());
+            String ghLabel = (historyModes != null && gh >= 0 && gh < historyModes.length) ? historyModes[gh] : String.valueOf(gh);
+            globalHistory.setText(label(activity, R.string.setting_global_history, ghLabel));
+            playBack.setText(label(activity, R.string.setting_play_back_to_detail, onOff(activity, Setting.isPlayBackToDetail())));
+            searchThread.setText(label(activity, R.string.setting_search_thread, String.valueOf(Setting.getSearchThread())));
+            subAuto.setText(label(activity, R.string.setting_subtitle_auto_match, onOff(activity, Setting.isSubtitleAutoMatchEnabled())));
+            String lang = Setting.getSubtitlePreferredLanguage();
+            String langLabel = lang;
+            if (subValues != null && subLabels != null) {
+                for (int i = 0; i < subValues.length && i < subLabels.length; i++) {
+                    if (subValues[i].equals(lang)) {
+                        langLabel = subLabels[i];
+                        break;
+                    }
+                }
+            }
+            subLang.setText(label(activity, R.string.setting_subtitle_language, langLabel));
         };
         refresh.run();
 
@@ -59,7 +74,7 @@ public final class SettingPersonalDialog {
             refresh.run();
         });
         globalHistory.setOnClickListener(v -> {
-            int size = modes == null || modes.length == 0 ? 3 : modes.length;
+            int size = historyModes == null || historyModes.length == 0 ? 3 : historyModes.length;
             Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % size);
             refresh.run();
         });
@@ -72,8 +87,19 @@ public final class SettingPersonalDialog {
             int cur = Setting.getSearchThread();
             int idx = 0;
             for (int i = 0; i < options.length; i++) if (options[i] == cur) idx = i;
-            int next = options[(idx + 1) % options.length];
-            Setting.putSearchThread(next);
+            Setting.putSearchThread(options[(idx + 1) % options.length]);
+            refresh.run();
+        });
+        subAuto.setOnClickListener(v -> {
+            Setting.putSubtitleAutoMatchEnabled(!Setting.isSubtitleAutoMatchEnabled());
+            refresh.run();
+        });
+        subLang.setOnClickListener(v -> {
+            if (subValues == null || subValues.length == 0) return;
+            String cur = Setting.getSubtitlePreferredLanguage();
+            int idx = 0;
+            for (int i = 0; i < subValues.length; i++) if (subValues[i].equals(cur)) idx = i;
+            Setting.putSubtitlePreferredLanguage(subValues[(idx + 1) % subValues.length]);
             refresh.run();
         });
 
@@ -82,6 +108,8 @@ public final class SettingPersonalDialog {
         root.addView(globalHistory);
         root.addView(playBack);
         root.addView(searchThread);
+        root.addView(subAuto);
+        root.addView(subLang);
 
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(root);
@@ -91,6 +119,10 @@ public final class SettingPersonalDialog {
                 .setView(scroll)
                 .setPositiveButton(R.string.dialog_positive, null)
                 .show();
+    }
+
+    private static String label(FragmentActivity activity, int titleRes, String value) {
+        return activity.getString(titleRes) + "  ·  " + value;
     }
 
     private static TextView row(FragmentActivity activity, int pad) {
@@ -117,7 +149,7 @@ public final class SettingPersonalDialog {
         try {
             return activity.getResources().getStringArray(id);
         } catch (Throwable e) {
-            return new String[]{"Off", "Auto", "Search"};
+            return new String[0];
         }
     }
 }

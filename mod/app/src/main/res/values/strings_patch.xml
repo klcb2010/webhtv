@@ -68,6 +68,8 @@
 <string name="setting_search_thread">Search threads</string>
 <string name="setting_on">On</string>
 <string name="setting_off">Off</string>
+<string name="setting_subtitle_auto_match">Auto match subtitles</string>
+<string name="setting_subtitle_language">Subtitle language</string>
 <string-array name="select_global_history_mode">
         <item>Off</item>
         <item>Auto</item>

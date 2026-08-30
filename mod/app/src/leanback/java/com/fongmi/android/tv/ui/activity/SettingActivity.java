@@ -94,8 +94,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setOtherText() {
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
-        mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
-        mBinding.subtitleLanguageText.setText(getSubtitleLanguageLabel());
         mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
         refreshAiTexts();
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
@@ -140,8 +138,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
-        mBinding.subtitleAutoMatch.setOnClickListener(this::setSubtitleAutoMatch);
-        mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
         mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
         mBinding.aiConfig.setOnClickListener(this::openAiConfig);
         mBinding.personal.setOnClickListener(this::openPersonal);
@@ -319,10 +315,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
 
-    Setting.putSearchThread(next);
-}
-
-
     private void setSize(View view) {
         int index = (PlayerSetting.getSize() + 1) % size.length;
         mBinding.sizeText.setText(size[index]);
@@ -425,21 +417,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         return getString(android.text.TextUtils.isEmpty(Setting.getSubtitleAssrtToken()) ? R.string.setting_unconfigured : R.string.setting_configured);
     }
 
-    private void setSubtitleAutoMatch(View view) {
-        Setting.putSubtitleAutoMatchEnabled(!Setting.isSubtitleAutoMatchEnabled());
-        mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
-    }
 
-    private void setSubtitleLanguage(View view) {
-        String[] labels = getResources().getStringArray(R.array.select_subtitle_language);
-        String[] values = getResources().getStringArray(R.array.select_subtitle_language_value);
-        int idx = 0;
-        String cur = Setting.getSubtitlePreferredLanguage();
-        for (int i = 0; i < values.length; i++) if (values[i].equals(cur)) idx = i;
-        idx = (idx + 1) % values.length;
-        Setting.putSubtitlePreferredLanguage(values[idx]);
-        mBinding.subtitleLanguageText.setText(labels[idx]);
-    }
 
     private void setSubtitleAssrtToken(View view) {
         final android.widget.EditText input = new android.widget.EditText(view.getContext());
