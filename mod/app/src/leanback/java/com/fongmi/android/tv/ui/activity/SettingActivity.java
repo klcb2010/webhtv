@@ -96,9 +96,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
         mBinding.subtitleAssrtTokenText.setText(getSubtitleTokenLabel());
         refreshAiTexts();
-        mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
-        mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
-        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
         int _gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && globalHistoryMode.length > 0) {
@@ -141,9 +138,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.subtitleAssrtToken.setOnClickListener(this::setSubtitleAssrtToken);
         mBinding.aiConfig.setOnClickListener(this::openAiConfig);
         mBinding.personal.setOnClickListener(this::openPersonal);
-        mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
-        mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
-        mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -294,25 +288,10 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
 
-    private void setHomeHistory(View view) {
-        Setting.putHomeHistory(!Setting.isHomeHistory());
-        mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
-        RefreshEvent.history();
-        RefreshEvent.home();
-    }
-
-    private void setHomeVodAutoLoad(View view) {
-        Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
-        mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
-        RefreshEvent.home();
-    }
 
 
 
-    private void setHomeSiteLock(View view) {
-        Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
-        mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
-    }
+
 
 
     private void setSize(View view) {

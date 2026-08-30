@@ -13,6 +13,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
  * 个性设置：自动备份 / 集数历史 / 全局历史 / 返回详情 / 搜索线程 /
+ * 首页源锁定 / 默认加载点播 / 首页最近观看 /
  * 自动匹配字幕 / 字幕偏好语言
  */
 public final class SettingPersonalDialog {
@@ -39,6 +40,9 @@ public final class SettingPersonalDialog {
         TextView globalHistory = row(activity, rowPad);
         TextView playBack = row(activity, rowPad);
         TextView searchThread = row(activity, rowPad);
+        TextView homeSiteLock = row(activity, rowPad);
+        TextView homeVodAutoLoad = row(activity, rowPad);
+        TextView homeHistory = row(activity, rowPad);
         TextView subAuto = row(activity, rowPad);
         TextView subLang = row(activity, rowPad);
 
@@ -50,6 +54,9 @@ public final class SettingPersonalDialog {
             globalHistory.setText(label(activity, R.string.setting_global_history, ghLabel));
             playBack.setText(label(activity, R.string.setting_play_back_to_detail, onOff(activity, Setting.isPlayBackToDetail())));
             searchThread.setText(label(activity, R.string.setting_search_thread, String.valueOf(Setting.getSearchThread())));
+            homeSiteLock.setText(label(activity, R.string.setting_home_site_lock, onOff(activity, Setting.isHomeSiteLock())));
+            homeVodAutoLoad.setText(label(activity, R.string.setting_home_vod_auto_load, onOff(activity, Setting.isHomeVodAutoLoad())));
+            homeHistory.setText(label(activity, R.string.setting_home_history, onOff(activity, Setting.isHomeHistory())));
             subAuto.setText(label(activity, R.string.setting_subtitle_auto_match, onOff(activity, Setting.isSubtitleAutoMatchEnabled())));
             String lang = Setting.getSubtitlePreferredLanguage();
             String langLabel = lang;
@@ -90,6 +97,18 @@ public final class SettingPersonalDialog {
             Setting.putSearchThread(options[(idx + 1) % options.length]);
             refresh.run();
         });
+        homeSiteLock.setOnClickListener(v -> {
+            Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
+            refresh.run();
+        });
+        homeVodAutoLoad.setOnClickListener(v -> {
+            Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
+            refresh.run();
+        });
+        homeHistory.setOnClickListener(v -> {
+            Setting.putHomeHistory(!Setting.isHomeHistory());
+            refresh.run();
+        });
         subAuto.setOnClickListener(v -> {
             Setting.putSubtitleAutoMatchEnabled(!Setting.isSubtitleAutoMatchEnabled());
             refresh.run();
@@ -108,6 +127,9 @@ public final class SettingPersonalDialog {
         root.addView(globalHistory);
         root.addView(playBack);
         root.addView(searchThread);
+        root.addView(homeSiteLock);
+        root.addView(homeVodAutoLoad);
+        root.addView(homeHistory);
         root.addView(subAuto);
         root.addView(subLang);
 
