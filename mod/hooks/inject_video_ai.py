@@ -145,10 +145,10 @@ HOOK = r"""
                 tv.setFocusable(true);
                 tv.setClickable(true);
                 tv.setFocusableInTouchMode(false);
-                try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { tv.setBackgroundColor(0x33FFFFFF); }
+                tv.setBackgroundColor(0x33FFFFFF);
                 tv.setOnFocusChangeListener((v, hasFocus) -> {
                     if (hasFocus) {
-                        try { v.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { v.setBackgroundColor(0x88FFFFFF); }
+                        v.setBackgroundColor(0x88FFFFFF);
                         android.view.ViewParent parent = v.getParent();
                         while (parent != null) {
                             if (parent instanceof android.widget.HorizontalScrollView) {
@@ -160,7 +160,7 @@ HOOK = r"""
                             parent = parent.getParent();
                         }
                     } else {
-                        try { v.setBackgroundResource(R.drawable.selector_item); } catch (Throwable e) { v.setBackgroundColor(0x33FFFFFF); }
+                        v.setBackgroundColor(0x33FFFFFF);
                     }
                 });
                 tv.setOnKeyListener((v, keyCode, event) -> {

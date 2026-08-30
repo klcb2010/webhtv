@@ -400,7 +400,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void setSubtitleAssrtToken(View view) {
         android.app.Activity activity = getActivitySafe();
-        if (activity != null) SettingAssrtActivity.start(activity);
+        if (activity != null) com.fongmi.android.tv.ui.activity.SettingAssrtActivity.start(activity);
     }
 
 
@@ -425,7 +425,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void openAiConfig(View view) {
         android.app.Activity activity = getActivitySafe();
-        if (activity != null) SettingAiActivity.start(activity);
+        if (activity != null) com.fongmi.android.tv.ui.activity.SettingAiActivity.start(activity);
     }
 
 

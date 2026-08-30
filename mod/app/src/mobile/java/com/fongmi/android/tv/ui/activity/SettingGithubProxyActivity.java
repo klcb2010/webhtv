@@ -82,24 +82,17 @@ public class SettingGithubProxyActivity extends BaseActivity {
             tv.setTextColor(0xFFFFFFFF);
             tv.setTextSize(14);
             tv.setPadding(pad, pad, pad, pad);
-            try {
-                tv.setBackgroundResource(R.drawable.selector_item);
-            } catch (Throwable e) {
-                tv.setBackgroundColor(isActive ? 0x55FFFFFF : 0x22FFFFFF);
-            }
+            tv.setBackgroundColor(isActive ? 0x55FFFFFF : 0x22FFFFFF);
             tv.setFocusable(true);
             tv.setClickable(true);
             tv.setFocusableInTouchMode(false);
+            final String srcKey = source;
             tv.setOnFocusChangeListener((v, hasFocus) -> {
-                // 焦点高亮：白边框感；已选用 ✓ 保留
                 if (hasFocus) {
                     v.setBackgroundColor(0xAA4A90E2);
                 } else {
-                    try {
-                        v.setBackgroundResource(R.drawable.selector_item);
-                    } catch (Throwable e) {
-                        v.setBackgroundColor(source.equals(GithubProxy.getActive()) ? 0x55FFFFFF : 0x22FFFFFF);
-                    }
+                    boolean activeNow = srcKey.equals(GithubProxy.getActive());
+                    v.setBackgroundColor(activeNow ? 0x55FFFFFF : 0x22FFFFFF);
                 }
             });
             tv.setOnClickListener(v -> {
