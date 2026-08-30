@@ -65,3 +65,18 @@
 <string name="ai_recommend_loading_short">Loading…</string>
 <string name="ai_recommend_retry">Failed</string>
 <string name="ai_recommend_retry_action">Tap to retry</string>
+<string-array name="select_global_history_mode">
+        <item>Off</item>
+        <item>Auto</item>
+        <item>Search</item>
+    </string-array>
+    <string-array name="select_subtitle_language">
+        <item>Auto</item>
+        <item>Chinese</item>
+        <item>English</item>
+    </string-array>
+    <string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
