@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="8dp"
+            android:text="@string/setting_ai_config"
+            android:textColor="@color/white"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/enable" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:orientation="horizontal" android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/setting_ai_enable" android:textColor="@color/white" android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView android:id="@+id/enableText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/recommend" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:orientation="horizontal" android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/setting_ai_recommendation_switch" android:textColor="@color/white" android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView android:id="@+id/recommendText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/titleExtract" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:orientation="horizontal" android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/setting_ai_title_extraction" android:textColor="@color/white" android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView android:id="@+id/titleExtractText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/protocol" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:orientation="horizontal" android:padding="8dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/setting_ai_protocol" android:textColor="@color/white" android:textSize="16sp" />
+            <com.google.android.material.textview.MaterialTextView android:id="@+id/protocolText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <com.google.android.material.textview.MaterialTextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/setting_ai_endpoint" android:textColor="@color/white" android:textSize="14sp" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/endpoint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/shape_item" android:padding="10dp" android:singleLine="true" android:textColor="@color/white" android:textColorHint="#88FFFFFF" android:textSize="16sp" />
+        <com.google.android.material.textview.MaterialTextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/setting_ai_api_key" android:textColor="@color/white" android:textSize="14sp" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/apiKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/shape_item" android:inputType="textPassword" android:padding="10dp" android:singleLine="true" android:textColor="@color/white" android:textColorHint="#88FFFFFF" android:textSize="16sp" />
+        <com.google.android.material.textview.MaterialTextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/setting_ai_model" android:textColor="@color/white" android:textSize="14sp" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/model" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/shape_item" android:padding="10dp" android:singleLine="true" android:textColor="@color/white" android:textColorHint="#88FFFFFF" android:textSize="16sp" />
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/fetchModels" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:gravity="center" android:padding="12dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/setting_ai_fetch_models" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/test" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:focusable="true"  android:gravity="center" android:padding="12dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/setting_ai_test" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:layout_marginBottom="24dp" android:background="@drawable/shape_item" android:focusable="true"  android:gravity="center" android:padding="12dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/dialog_positive" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+</androidx.core.widget.NestedScrollView>

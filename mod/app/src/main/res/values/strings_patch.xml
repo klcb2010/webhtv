@@ -39,12 +39,10 @@
 <string name="ai_recommend_not_ready">Configure AI service first</string>
 <string name="ai_recommend_title">AI recommendations (%1$d)</string>
 <string name="ai_config_saved">Saved</string>
-<string name="setting_ai_config">AI config</string>
 <string name="setting_ai_enable">Enable AI service</string>
 <string name="setting_ai_protocol">Protocol</string>
 <string name="setting_ai_user_agent">Custom User-Agent</string>
 <string name="setting_ai_user_agent_hint">Optional</string>
-<string name="setting_ai_test">Test</string>
 <string name="setting_ai_testing">Testing AI…</string>
 <string name="setting_ai_test_ok">OK: %1$s</string>
 <string name="setting_ai_test_fail">Failed: %1$s</string>
@@ -52,7 +50,6 @@
 <string name="setting_ai_status_off">Not configured</string>
 <string name="setting_ai_recommendation_switch">AI recommendation</string>
 <string name="setting_ai_title_extraction">AI real title extraction</string>
-<string name="setting_ai_fetch_models">Fetch models</string>
 <string name="setting_ai_fetching_models">Fetching models…</string>
 <string name="setting_ai_fetch_models_fail">Fetch models failed: %1$s</string>
 <string name="setting_ai_need_key">Fill endpoint and API key first</string>
@@ -87,3 +84,9 @@
     </string-array>
 
     <string name="setting_appearance_summary"></string>
+
+    <string name="setting_ai_config">AI Settings</string>
+
+    <string name="setting_ai_fetch_models">Fetch models</string>
+
+    <string name="setting_ai_test">Test</string>
