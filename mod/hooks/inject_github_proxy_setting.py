@@ -11,24 +11,25 @@ setting = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
 if setting.exists():
     t = setting.read_text(encoding="utf-8")
     
-    # 清理之前可能注入错误的 getPreferences() 方法片段
-    t = re.sub(r"\s*private static final String GITHUB_PROXY_ENABLED = \"github_proxy_enabled\";", "", t)
+    # 强制无条件清理所有历史注入（无论新旧版本、无论全路径还是短路径）
+    t = re.sub(r"\s*public static String getGithubProxy\(\)[\s\S]*?\}\n", "", t)
+    t = re.sub(r"\s*public static void putGithubProxy\(String [^\)]+\)[\s\S]*?\}\n", "", t)
+    t = re.sub(r"\s*public static boolean isGithubProxyEnabled\(\)[\s\S]*?\}\n", "", t)
     t = re.sub(r"\s*public static boolean getGithubProxyEnabled\(\)[\s\S]*?\}\n", "", t)
-    t = re.sub(r"\s*public static void putGithubProxyEnabled\(boolean value\)[\s\S]*?\}\n", "", t)
+    t = re.sub(r"\s*public static void putGithubProxyEnabled\(boolean [^\)]+\)[\s\S]*?\}\n", "", t)
 
-    # 重新判断并注入标准的 Prefers 方法
-    if "getGithubProxy" not in t:
-        block = '''
+    # 注入符合 Setting.java 现有规则的标准方法
+    block = '''
     public static String getGithubProxy() {
-        return com.fongmi.android.tv.utils.Prefers.getString("github_proxy", com.fongmi.android.tv.utils.GithubProxy.defaultSources());
+        return Prefers.getString("github_proxy", com.fongmi.android.tv.utils.GithubProxy.defaultSources());
     }
 
     public static void putGithubProxy(String value) {
-        com.fongmi.android.tv.utils.Prefers.put("github_proxy", com.fongmi.android.tv.utils.GithubProxy.normalizeConfig(value));
+        Prefers.put("github_proxy", com.fongmi.android.tv.utils.GithubProxy.normalizeConfig(value));
     }
 
     public static boolean isGithubProxyEnabled() {
-        return com.fongmi.android.tv.utils.Prefers.getBoolean("github_proxy_enabled", true);
+        return Prefers.getBoolean("github_proxy_enabled", true);
     }
 
     public static boolean getGithubProxyEnabled() {
@@ -36,16 +37,14 @@ if setting.exists():
     }
 
     public static void putGithubProxyEnabled(boolean enabled) {
-        com.fongmi.android.tv.utils.Prefers.put("github_proxy_enabled", enabled);
+        Prefers.put("github_proxy_enabled", enabled);
     }
 '''
-        t = t.rstrip()
-        if t.endswith("}"):
-            t = t[:-1] + block + "\n}\n"
-            setting.write_text(t, encoding="utf-8")
-            print("[mod] Setting github proxy methods added")
-    else:
-        print("[mod] Setting github proxy already present")
+    t = t.rstrip()
+    if t.endswith("}"):
+        t = t[:-1] + block + "\n}\n"
+        setting.write_text(t, encoding="utf-8")
+        print("[mod] Setting github proxy methods injected successfully")
 
 # --- Updater.java ---
 updater = ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java"
