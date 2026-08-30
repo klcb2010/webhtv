@@ -124,3 +124,8 @@ fi
 if [[ -f "$MOD/hooks/fix_migrations_keep.py" ]]; then
   python3 "$MOD/hooks/fix_migrations_keep.py" "$ROOT"
 fi
+
+if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
+  python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"
+fi
+
