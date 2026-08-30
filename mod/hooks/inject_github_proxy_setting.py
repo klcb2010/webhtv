@@ -24,6 +24,10 @@ if setting.exists():
         return Prefers.getBoolean("github_proxy_enabled", true);
     }
 
+    public static boolean getGithubProxyEnabled() {
+        return isGithubProxyEnabled();
+    }
+
     public static void putGithubProxyEnabled(boolean enabled) {
         Prefers.put("github_proxy_enabled", enabled);
     }
