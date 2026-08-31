@@ -14,7 +14,6 @@ import androidx.fragment.app.FragmentActivity;
 import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.DialogAboutBinding;
-import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.ResUtil;
 
@@ -30,26 +29,18 @@ public final class AboutDialog {
 
         Dialog dialog = LightDialog.create(activity, null, binding.getRoot());
         binding.confirm.setOnClickListener(v -> dialog.dismiss());
+        binding.updateSettings.setOnClickListener(v -> {
+            dialog.dismiss();
+            UpdateSettingsDialog.show(activity);
+        });
         binding.checkUpdate.setOnClickListener(v -> {
             dialog.dismiss();
             if (updateAction != null) updateAction.run();
         });
-        // 加速源：点击切换 GitHub 加速开关。不使用 setSelected / requestFocus，
-        // 按钮默认不选中、不抢焦点（焦点保持给 confirm）。
-        binding.accelerate.setOnClickListener(v -> {
-            Setting.putGithubProxyEnabled(!Setting.getGithubProxyEnabled());
-            refreshAccelerate(activity, binding);
-        });
-        refreshAccelerate(activity, binding);
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
         configureWindow(activity, dialog);
         binding.confirm.requestFocus();
-    }
-
-    private static void refreshAccelerate(FragmentActivity activity, DialogAboutBinding binding) {
-        boolean enabled = Setting.getGithubProxyEnabled();
-        binding.accelerate.setText(activity.getString(R.string.setting_github_proxy_short) + " · " + activity.getString(enabled ? R.string.setting_github_proxy_on : R.string.setting_github_proxy_off));
     }
 
     private static void configureContentHeight(FragmentActivity activity, DialogAboutBinding binding) {
