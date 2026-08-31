@@ -437,13 +437,13 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void confirmExitHome() {
-        // 真退出：不要只移到后台，否则再次打开会看到「已加载」状态
+        // 真退出（鱼壳默认在有播放服务时只是进后台）
         try {
             Source.get().exit();
         } catch (Throwable ignored) {
         }
         try {
-            if (PlaybackService.isRunning()) PlaybackService.stop();
+            stopService(new android.content.Intent(this, PlaybackService.class));
         } catch (Throwable ignored) {
         }
         try {
@@ -453,6 +453,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
                 finish();
             } catch (Throwable ignored) {
             }
+        }
+        try {
+            android.os.Process.killProcess(android.os.Process.myPid());
+        } catch (Throwable ignored) {
         }
     }
 

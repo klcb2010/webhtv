@@ -228,6 +228,28 @@ HOOK = r"""
                     if (flagView != null && mBinding.aiRecommendScroll != null) {
                         flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
             flagView.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
+
+            // 兜底：任意 View 上监听下键/右键跳到 AI
+            flagView.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                if (keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                        && keyCode != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                try {
+                    if (mBinding.aiRecommendPanel != null
+                            && mBinding.aiRecommendPanel.getVisibility() == android.view.View.VISIBLE
+                            && mBinding.aiRecommendList.getChildCount() > 0) {
+                        // 右键：仅在无法再向右时交给 AI（简化：总是允许下键；右键仅当无下一个右焦点）
+                        if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                                || v.focusSearch(android.view.View.FOCUS_RIGHT) == null
+                                || v.focusSearch(android.view.View.FOCUS_RIGHT) == v) {
+                            mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                            return true;
+                        }
+                    }
+                } catch (Throwable ignored) {}
+                return false;
+            });
+
                         mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
                         mBinding.aiRecommendScroll.setFocusable(true);
                         mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
