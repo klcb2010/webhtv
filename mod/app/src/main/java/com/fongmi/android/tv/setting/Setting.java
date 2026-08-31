@@ -1,5 +1,11 @@
 package com.fongmi.android.tv.setting;
 
+import com.fongmi.android.tv.update.UpdateSource;
+
+import com.fongmi.android.tv.update.OciMirror;
+
+import com.fongmi.android.tv.update.GithubProxy;
+
 import com.fongmi.android.tv.bean.AiConfig;
 
 import android.Manifest;
@@ -873,5 +879,88 @@ public class Setting {
         return new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + App.get().getPackageName())).resolveActivity(App.get().getPackageManager()) != null || new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).resolveActivity(App.get().getPackageManager()) != null;
     }
 
+
+
+    // ---------- 更新设置桩（兼容上游对话框；发布检测仍走 klcb2010 Github）----------
+
+    public static String getUpdateSource() {
+        try {
+            return UpdateSource.normalize(Prefers.getString("update_source", UpdateSource.OCI));
+        } catch (Throwable e) {
+            return Prefers.getString("update_source", "oci");
+        }
+    }
+
+    public static void putUpdateSource(String source) {
+        try {
+            Prefers.put("update_source", UpdateSource.normalize(source));
+        } catch (Throwable e) {
+            Prefers.put("update_source", source == null ? "" : source);
+        }
+    }
+
+    public static String getUpdateGithubProxy() {
+        try {
+            return GithubProxy.find(Prefers.getString("update_github_proxy", GithubProxy.DIRECT)).id;
+        } catch (Throwable e) {
+            return Prefers.getString("update_github_proxy", "direct");
+        }
+    }
+
+    public static void putUpdateGithubProxy(String proxy) {
+        try {
+            Prefers.put("update_github_proxy", GithubProxy.find(proxy).id);
+        } catch (Throwable e) {
+            Prefers.put("update_github_proxy", proxy == null ? "" : proxy);
+        }
+    }
+
+    public static String getUpdateGithubProxyUrl() {
+        return Prefers.getString("update_github_proxy_url");
+    }
+
+    public static void putUpdateGithubProxyUrl(String url) {
+        Prefers.put("update_github_proxy_url", url == null ? "" : url.trim());
+    }
+
+    public static String getUpdateGithubProxyMode() {
+        try {
+            return GithubProxy.normalizeMode(Prefers.getString("update_github_proxy_mode", GithubProxy.MODE_FULL_URL));
+        } catch (Throwable e) {
+            return Prefers.getString("update_github_proxy_mode", "full_url");
+        }
+    }
+
+    public static void putUpdateGithubProxyMode(String mode) {
+        try {
+            Prefers.put("update_github_proxy_mode", GithubProxy.normalizeMode(mode));
+        } catch (Throwable e) {
+            Prefers.put("update_github_proxy_mode", mode == null ? "" : mode);
+        }
+    }
+
+    public static String getUpdateOciMirror() {
+        try {
+            return OciMirror.find(Prefers.getString("update_oci_mirror", OciMirror.DEFAULT)).id;
+        } catch (Throwable e) {
+            return Prefers.getString("update_oci_mirror", "default");
+        }
+    }
+
+    public static void putUpdateOciMirror(String mirror) {
+        try {
+            Prefers.put("update_oci_mirror", OciMirror.find(mirror).id);
+        } catch (Throwable e) {
+            Prefers.put("update_oci_mirror", mirror == null ? "" : mirror);
+        }
+    }
+
+    public static String getUpdateOciMirrorUrl() {
+        return Prefers.getString("update_oci_mirror_url");
+    }
+
+    public static void putUpdateOciMirrorUrl(String url) {
+        Prefers.put("update_oci_mirror_url", url == null ? "" : url.trim());
+    }
 
 }

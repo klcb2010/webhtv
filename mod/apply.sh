@@ -107,5 +107,6 @@ run_hook "$MOD/hooks/fix_migrations_keep.py"
 run_hook "$MOD/hooks/fix_db_history_schema.py"
 run_hook "$MOD/hooks/fix_recyclerview_fixed_size.py"
 run_hook "$MOD/hooks/inject_home_sites_retry.py"
+run_hook "$MOD/hooks/fix_update_setting_stubs.py"
 
 echo "[mod] done"
