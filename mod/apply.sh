@@ -42,19 +42,19 @@ target_file = Path(sys.argv[2])
 patch = patch_file.read_text(encoding="utf-8")
 
 node_pattern = re.compile(
-    r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="(?P<name>[^"]+)"[^>]*>.*?</(?P=tag)>[ \t]*$'
+    r'''(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="(?P<name>[^"]+)"[^>]*>.*?</(?P=tag)>[ \t]*$'''
 )
 
 entries = {}
 order = []
 
-for m in node_pattern.finditer(patch):
-    name = m.group("name")
+for match in node_pattern.finditer(patch):
+    name = match.group("name")
 
     if name not in entries:
         order.append(name)
 
-    entries[name] = m.group(0).strip()
+    entries[name] = match.group(0).strip()
 
 if not entries:
     raise SystemExit(
@@ -72,17 +72,15 @@ else:
         '</resources>\n'
     )
 
-# Remove existing nodes with the same names,
-# then append all patch entries.
+# Remove existing nodes with the same names.
 for name in order:
-    target = re.sub(
-        r'(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b'
-        r'[^>]*\bname="'
+    remove_pattern = re.compile(
+        r'''(?ms)^[ \t]*<(?P<tag>string-array|integer-array|plurals|string|bool|color|dimen|integer)\b[^>]*\bname="'''
         + re.escape(name)
-        + r'"[^>]*>.*?</(?P=tag)>[ \t]*\n?',
-        '',
-        target,
+        + r''' "[^>]*>.*?</(?P=tag)>[ \t]*\n?'''
     )
+
+    target = remove_pattern.sub("", target)
 
 insert = "\n".join(entries[name] for name in order) + "\n"
 
@@ -154,36 +152,52 @@ if [[ -f "$MOD/hooks/inject_subtitle.py" ]]; then
 fi
 
 
+# Video AI hook
 if [[ -f "$MOD/hooks/inject_video_ai.py" ]]; then
   python3 "$MOD/hooks/inject_video_ai.py" "$ROOT"
 fi
 
+
+# Personal manifest hook
 if [[ -f "$MOD/hooks/inject_personal_manifest.py" ]]; then
   python3 "$MOD/hooks/inject_personal_manifest.py" "$ROOT"
 fi
 
+
+# ExoPlayer Dolby Vision fix
 if [[ -f "$MOD/hooks/fix_exo_dv5.py" ]]; then
   python3 "$MOD/hooks/fix_exo_dv5.py" "$ROOT"
 fi
 
+
+# Migration protection
 if [[ -f "$MOD/hooks/fix_migrations_keep.py" ]]; then
   python3 "$MOD/hooks/fix_migrations_keep.py" "$ROOT"
 fi
 
+
+# Database history schema fix
 if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
   python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"
 fi
 
+
+# RecyclerView fixed-size fix
 if [[ -f "$MOD/hooks/fix_recyclerview_fixed_size.py" ]]; then
   python3 "$MOD/hooks/fix_recyclerview_fixed_size.py" "$ROOT"
 fi
 
+
+# Home sites retry
 if [[ -f "$MOD/hooks/inject_home_sites_retry.py" ]]; then
   python3 "$MOD/hooks/inject_home_sites_retry.py" "$ROOT"
 fi
 
+
+# Remove mod GitHub proxy
 if [[ -f "$MOD/hooks/strip_mod_github_proxy.py" ]]; then
   python3 "$MOD/hooks/strip_mod_github_proxy.py" "$ROOT"
 fi
+
 
 echo "[mod] done"
