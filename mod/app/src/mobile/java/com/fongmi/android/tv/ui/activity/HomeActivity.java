@@ -437,8 +437,23 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void confirmExitHome() {
-        if (PlaybackService.isRunning()) Util.moveToBackground(this);
-        else super.onBackInvoked();
+        // 真退出：不要只移到后台，否则再次打开会看到「已加载」状态
+        try {
+            Source.get().exit();
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (PlaybackService.isRunning()) PlaybackService.stop();
+        } catch (Throwable ignored) {
+        }
+        try {
+            finishAffinity();
+        } catch (Throwable e) {
+            try {
+                finish();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     @Override

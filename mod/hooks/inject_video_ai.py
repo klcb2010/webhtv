@@ -139,6 +139,7 @@ HOOK = r"""
                 tv.setPadding(pad, pad, pad, pad);
                 tv.setBackgroundColor(0x33FFFFFF);
                 tv.setFocusable(true);
+                tv.setMinHeight((int) (36 * density));
                 tv.setClickable(true);
                 tv.setFocusableInTouchMode(false);
                 tv.setBackgroundColor(0x33FFFFFF);
@@ -226,6 +227,7 @@ HOOK = r"""
                     android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
                     if (flagView != null && mBinding.aiRecommendScroll != null) {
                         flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+            flagView.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
                         mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
                         mBinding.aiRecommendScroll.setFocusable(true);
                         mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
@@ -289,7 +291,8 @@ HOOK = r"""
                                                 return false;
                                             android.view.KeyEvent event = (android.view.KeyEvent) args[0];
                                             if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                                            if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                                            if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                                        && event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
                                             try {
                                                 Object selectedObj = bgvCls.getMethod("getSelectedPosition").invoke(grid);
                                                 int selected = selectedObj instanceof Integer ? (Integer) selectedObj : -1;
@@ -327,6 +330,7 @@ HOOK = r"""
             if (mBinding.aiRecommendPanel == null
                     || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE) return;
             flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+            flagView.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
             mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
             mBinding.aiRecommendScroll.setFocusable(true);
             mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
@@ -344,7 +348,8 @@ HOOK = r"""
                                 if (!"onInterceptKeyEvent".equals(method.getName())) return false;
                                 android.view.KeyEvent event = (android.view.KeyEvent) args[0];
                                 if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                                        && event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
                                 try {
                                     Object selectedObj = bgvCls.getMethod("getSelectedPosition").invoke(grid);
                                     int selected = selectedObj instanceof Integer ? (Integer) selectedObj : -1;
