@@ -1,6 +1,9 @@
 name: Android Release
 
 on:
+  schedule:
+    # 每天 02:30 上海时间（UTC 18:30 前一天）检查是否需要打包
+    - cron: "30 18 * * *"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -484,9 +487,111 @@ jobs:
           echo "=========================================="
 
       # ============================================================
+      # 本仓库发布检测：有未发布提交才继续打包
+      # - 最新 Release 已包含当前 HEAD → 跳过
+      # - 今天已有 Release 且之后无新提交 → 跳过
+      # - 否则继续打包
+      # workflow_dispatch 手动触发时：默认仍检测，可用输入强制打包
+      # ============================================================
+      - name: Decide whether to build
+        id: should_build
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+        run: |
+          set -e
+          export TZ=Asia/Shanghai
+          TODAY="$(date +%Y-%m-%d)"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          HEAD_SHORT="$(git rev-parse --short=7 HEAD)"
+
+          echo "=========================================="
+          echo "本仓库发布检测"
+          echo "=========================================="
+          echo "仓库 : ${GITHUB_REPOSITORY}"
+          echo "HEAD : $HEAD_SHA ($HEAD_SHORT)"
+          echo "日期 : $TODAY (Asia/Shanghai)"
+          echo "触发 : ${{ github.event_name }}"
+          echo "=========================================="
+
+          # 手动触发且希望总是打包：检查 inputs（无 force 输入时保持检测）
+          # 默认：有未发布变更才打包
+
+          LATEST_JSON="$(
+            gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=10" \
+              --jq '[.[] | select(.draft == false)] | .[0] // empty' \
+              2>/dev/null || true
+          )"
+
+          if [ -z "$LATEST_JSON" ] || [ "$LATEST_JSON" = "null" ]; then
+            echo "尚无 Release → 需要打包"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "reason=no-release-yet" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name") or "")')"
+          PUBLISHED_AT="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("published_at") or d.get("created_at") or "")')"
+          TARGET_SHA="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("target_commitish") or ""))')"
+
+          echo "最新 Release : $TAG"
+          echo "发布时间     : $PUBLISHED_AT"
+
+          # Release 对应 commit（优先 git rev-parse tag）
+          REL_SHA=""
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            REL_SHA="$(git rev-parse "$TAG^{commit}" 2>/dev/null || git rev-parse "$TAG")"
+          fi
+          if [ -z "$REL_SHA" ]; then
+            REL_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" --jq '.object.sha' 2>/dev/null || true)"
+            # annotated tag → peel
+            OBJ_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" --jq '.object.type' 2>/dev/null || true)"
+            if [ "$OBJ_TYPE" = "tag" ] && [ -n "$REL_SHA" ]; then
+              REL_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/$REL_SHA" --jq '.object.sha' 2>/dev/null || echo "$REL_SHA")"
+            fi
+          fi
+          echo "Release SHA  : ${REL_SHA:-unknown}"
+
+          # 1) HEAD 已包含在该 Release 指向的提交（相同）→ 跳过
+          if [ -n "$REL_SHA" ] && [ "$REL_SHA" = "$HEAD_SHA" ]; then
+            echo "HEAD 与最新 Release 相同 → 跳过打包"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "reason=head-already-released" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2) Release 之后没有新提交 → 跳过
+          if [ -n "$REL_SHA" ] && git merge-base --is-ancestor "$HEAD_SHA" "$REL_SHA" 2>/dev/null; then
+            echo "HEAD 是最新 Release 的祖先（无更新）→ 跳过"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-commits-after-release" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 3) 有新提交：若今天已有 Release 且无新提交则跳过（上面已覆盖）
+          # 有新提交 → 打包
+          echo "存在未发布提交 → 需要打包"
+          if [ -n "$REL_SHA" ]; then
+            echo "Release 之后的提交："
+            git log --oneline "$REL_SHA"..HEAD | head -20 || true
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "reason=unreleased-commits" >> "$GITHUB_OUTPUT"
+
+      - name: Skip remaining steps when no build needed
+        if: steps.should_build.outputs.build != 'true'
+        run: |
+          echo "=========================================="
+          echo "跳过打包：${{ steps.should_build.outputs.reason }}"
+          echo "=========================================="
+          # 用成功退出结束 job：后续步骤加 if
+          echo "skip"
+
+
+      # ============================================================
       # Apply mod patches
       # ============================================================
       - name: Apply mod patches
+        if: steps.should_build.outputs.build == 'true'
         run: |
           if [ -f mod/apply.sh ]; then
             bash mod/apply.sh
@@ -498,6 +603,7 @@ jobs:
       # Prepare Signing and Patch Resources
       # ============================================================
       - name: Prepare Signing and Patch Resources
+        if: steps.should_build.outputs.build == 'true'
         env:
           B64_DATA: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
@@ -565,6 +671,7 @@ jobs:
       # JDK 21
       # ============================================================
       - name: Set up JDK 21
+        if: steps.should_build.outputs.build == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -575,6 +682,7 @@ jobs:
       # Python 3.10
       # ============================================================
       - name: Set up Python 3.10
+        if: steps.should_build.outputs.build == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
@@ -583,6 +691,7 @@ jobs:
       # MPV Native
       # ============================================================
       - name: Verify bundled MPV native assets
+        if: steps.should_build.outputs.build == 'true'
         run: |
           bash scripts/verify_mpv_native_assets.sh --require-elf
 
@@ -590,9 +699,11 @@ jobs:
       # Android SDK
       # ============================================================
       - name: Set up Android SDK
+        if: steps.should_build.outputs.build == 'true'
         uses: android-actions/setup-android@v3
 
       - name: Install Android packages
+        if: steps.should_build.outputs.build == 'true'
         run: |
           sdkmanager \
             "platform-tools" \
@@ -603,6 +714,7 @@ jobs:
       # WebSocket Danmaku tests
       # ============================================================
       - name: Run WebSocket danmaku tests
+        if: steps.should_build.outputs.build == 'true'
         run: |
           chmod +x ./gradlew
 
@@ -615,6 +727,7 @@ jobs:
       # Resolve release tag
       # ============================================================
       - name: Resolve release tag
+        if: steps.should_build.outputs.build == 'true'
         id: meta
         run: |
           VERSION_NAME="$(
@@ -683,6 +796,7 @@ jobs:
       # Configure release signing
       # ============================================================
       - name: Configure release signing
+        if: steps.should_build.outputs.build == 'true'
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -726,6 +840,7 @@ jobs:
       # Build four release APKs
       # ============================================================
       - name: Build four release APKs
+        if: steps.should_build.outputs.build == 'true'
         env:
           WEBHTV_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
           WEBHTV_APK_SUFFIX: ${{ steps.meta.outputs.apk_suffix }}
@@ -745,6 +860,7 @@ jobs:
       # Collect artifacts
       # ============================================================
       - name: Collect artifacts
+        if: steps.should_build.outputs.build == 'true'
         run: |
           rm -rf dist
           mkdir -p dist
@@ -761,6 +877,7 @@ jobs:
       # Prepare release notes
       # ============================================================
       - name: Prepare release notes input
+        if: steps.should_build.outputs.build == 'true'
         id: release_notes
         env:
           RELEASE_NOTES_RAW: ${{ inputs.release_notes }}
@@ -806,6 +923,7 @@ jobs:
       # Generate update manifests
       # ============================================================
       - name: Generate update manifests
+        if: steps.should_build.outputs.build == 'true'
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
           GITHUB_RELEASE_DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}
@@ -878,6 +996,7 @@ jobs:
       # fish2018/webhtv/releases
       # ============================================================
       - name: Create GitHub Release
+        if: steps.should_build.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
@@ -922,7 +1041,7 @@ jobs:
       # Sync to CNB
       # ============================================================
       - name: Sync to CNB
-        if: ${{ inputs.sync_cnb }}
+        if: steps.should_build.outputs.build == 'true' && inputs.sync_cnb
         env:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
           CNB_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
@@ -937,6 +1056,7 @@ jobs:
       # Upload workflow artifacts
       # ============================================================
       - name: Upload workflow artifacts
+        if: steps.should_build.outputs.build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: webhtv-${{ steps.meta.outputs.tag }}
