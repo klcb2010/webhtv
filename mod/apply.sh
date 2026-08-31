@@ -128,14 +128,23 @@ if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
   python3 "$MOD/hooks/fix_db_history_schema.py" "$ROOT"
 fi
 
+
+
+
 if [[ -f "$MOD/hooks/fix_recyclerview_fixed_size.py" ]]; then
   python3 "$MOD/hooks/fix_recyclerview_fixed_size.py" "$ROOT"
 fi
+
+
 
 if [[ -f "$MOD/hooks/inject_home_sites_retry.py" ]]; then
   python3 "$MOD/hooks/inject_home_sites_retry.py" "$ROOT"
 fi
 
+if [[ -f "$MOD/hooks/strip_mod_github_proxy.py" ]]; then
+fi
+
+# last: remove obsolete mod proxy leftovers
 if [[ -f "$MOD/hooks/strip_mod_github_proxy.py" ]]; then
   python3 "$MOD/hooks/strip_mod_github_proxy.py" "$ROOT"
 fi
