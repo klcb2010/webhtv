@@ -18,8 +18,8 @@ import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.ResUtil;
 
 /**
- * 兼容精简关于弹窗：只依赖 version / confirm / checkUpdate。
- * 不包含加速源；也不依赖上游可能尚未同步的 updateSettings。
+ * 关于弹窗：检查更新 + 我已知 + 齿轮(更新设置，含 GitHub/OCI 加速)。
+ * 发布检测仍走 klcb2010/webhtv Releases。
  */
 public final class AboutDialog {
 
@@ -41,21 +41,18 @@ public final class AboutDialog {
             dialog.dismiss();
             if (updateAction != null) updateAction.run();
         });
-        // 可选：若布局里有 updateSettings 且类存在，再绑定（反射，避免编译依赖）
+        // 齿轮：更新设置（加速源在 GitHub 页）
         try {
-            java.lang.reflect.Field f = binding.getClass().getField("updateSettings");
-            Object view = f.get(binding);
-            if (view instanceof android.view.View) {
-                ((android.view.View) view).setOnClickListener(v -> {
-                    dialog.dismiss();
-                    try {
-                        Class<?> cls = Class.forName("com.fongmi.android.tv.ui.dialog.UpdateSettingsDialog");
-                        cls.getMethod("show", FragmentActivity.class).invoke(null, activity);
-                    } catch (Throwable ignored) {
-                    }
-                });
+            binding.updateSettings.setOnClickListener(v -> {
+                dialog.dismiss();
+                UpdateSettingsDialog.show(activity);
+            });
+            binding.updateSettings.setVisibility(android.view.View.VISIBLE);
+        } catch (Throwable e) {
+            try {
+                binding.updateSettings.setVisibility(android.view.View.GONE);
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
         }
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
