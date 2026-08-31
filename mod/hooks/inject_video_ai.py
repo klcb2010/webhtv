@@ -188,6 +188,8 @@ HOOK = r"""
                 });
                 mBinding.aiRecommendList.addView(tv);
             }
+            wireFlagToAiFocus();
+            com.fongmi.android.tv.App.post(this::wireFlagToAiFocus, 300);
         
                 
                 try {
@@ -317,6 +319,92 @@ HOOK = r"""
                 } catch (Throwable ignored) {}
 
     }
+
+    private void wireFlagToAiFocus() {
+        try {
+            android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
+            if (flagView == null || mBinding.aiRecommendScroll == null) return;
+            if (mBinding.aiRecommendPanel == null
+                    || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE) return;
+            flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+            mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
+            mBinding.aiRecommendScroll.setFocusable(true);
+            mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            try {
+                Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
+                if (bgvCls.isInstance(flagView)) {
+                    Object grid = flagView;
+                    Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
+                    Object keyListener = java.lang.reflect.Proxy.newProxyInstance(
+                            keyCls.getClassLoader(),
+                            new Class<?>[]{keyCls},
+                            (proxy, method, args) -> {
+                                if (args == null || args.length < 1) return false;
+                                if (!"onInterceptKeyEvent".equals(method.getName())) return false;
+                                android.view.KeyEvent event = (android.view.KeyEvent) args[0];
+                                if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                                try {
+                                    Object selectedObj = bgvCls.getMethod("getSelectedPosition").invoke(grid);
+                                    int selected = selectedObj instanceof Integer ? (Integer) selectedObj : -1;
+                                    Object adapter = bgvCls.getMethod("getAdapter").invoke(grid);
+                                    int count = 0;
+                                    if (adapter != null) {
+                                        Object n = adapter.getClass().getMethod("getItemCount").invoke(adapter);
+                                        count = n instanceof Integer ? (Integer) n : 0;
+                                    }
+                                    boolean atEnd = count <= 1 || selected >= count - 1;
+                                    if (atEnd && mBinding.aiRecommendList.getChildCount() > 0) {
+                                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                                        return true;
+                                    }
+                                } catch (Throwable ignored) {}
+                                return false;
+                            });
+                    bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(grid, keyListener);
+                    try {
+                        Class<?> selCls = Class.forName("androidx.leanback.widget.OnChildViewHolderSelectedListener");
+                        Object selListener = java.lang.reflect.Proxy.newProxyInstance(
+                                selCls.getClassLoader(),
+                                new Class<?>[]{selCls},
+                                (proxy, method, args) -> {
+                                    if (!"onChildViewHolderSelected".equals(method.getName()) || args == null || args.length < 3)
+                                        return null;
+                                    try {
+                                        Object vh = args[1];
+                                        int position = args[2] instanceof Integer ? (Integer) args[2] : -1;
+                                        if (vh == null) return null;
+                                        java.lang.reflect.Field f = null;
+                                        Class<?> c = vh.getClass();
+                                        while (c != null && f == null) {
+                                            try { f = c.getDeclaredField("itemView"); } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
+                                        }
+                                        if (f == null) return null;
+                                        f.setAccessible(true);
+                                        android.view.View itemView = (android.view.View) f.get(vh);
+                                        Object adapter = bgvCls.getMethod("getAdapter").invoke(grid);
+                                        int count = 0;
+                                        if (adapter != null) {
+                                            Object n = adapter.getClass().getMethod("getItemCount").invoke(adapter);
+                                            count = n instanceof Integer ? (Integer) n : 0;
+                                        }
+                                        if (itemView != null && count > 0 && position >= count - 1) {
+                                            itemView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
+                                        }
+                                    } catch (Throwable ignored) {}
+                                    return null;
+                                });
+                        bgvCls.getMethod("setOnChildViewHolderSelectedListener", selCls).invoke(grid, selListener);
+                    } catch (Throwable ignored) {}
+                }
+            } catch (Throwable ignored) {}
+            if (mBinding.aiRecommendList.getChildCount() > 0) {
+                mBinding.aiRecommendList.getChildAt(0).setNextFocusLeftId(flagView.getId());
+            }
+        } catch (Throwable ignored) {}
+    }
+
     private void hideAiRecommendPanel() {
         try {
             if (mBinding.aiRecommendPanel != null) mBinding.aiRecommendPanel.setVisibility(android.view.View.GONE);

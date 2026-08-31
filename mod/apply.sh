@@ -129,14 +129,14 @@ if [[ -f "$MOD/hooks/fix_db_history_schema.py" ]]; then
 fi
 
 
-if [[ -f "$MOD/hooks/inject_github_proxy_setting.py" ]]; then
-  python3 "$MOD/hooks/inject_github_proxy_setting.py" "$ROOT"
 fi
 
 if [[ -f "$MOD/hooks/fix_recyclerview_fixed_size.py" ]]; then
   python3 "$MOD/hooks/fix_recyclerview_fixed_size.py" "$ROOT"
 fi
 
-if [[ -f "$MOD/hooks/fix_github_proxy_alias.py" ]]; then
-  python3 "$MOD/hooks/fix_github_proxy_alias.py" "$ROOT"
+fi
+
+if [[ -f "$MOD/hooks/inject_home_sites_retry.py" ]]; then
+  python3 "$MOD/hooks/inject_home_sites_retry.py" "$ROOT"
 fi
