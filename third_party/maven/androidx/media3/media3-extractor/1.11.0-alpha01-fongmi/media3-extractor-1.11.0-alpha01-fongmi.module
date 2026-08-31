@@ -42,11 +42,11 @@
         {
           "name": "media3-extractor-1.11.0-alpha01-fongmi.aar",
           "url": "media3-extractor-1.11.0-alpha01-fongmi.aar",
-          "size": 1005712,
-          "sha512": "9a5948a99c083e32670aa8aa53d23c37d2bfb273ce1911ab407b1bd93a7cce913d9de56a7f3316df3fae3556087a93d715bbd4d197213488f197fadbc33e70b5",
-          "sha256": "61f021994fac1a99e1f92f647bbd981d4f9d5e67d6aa05ad83e6622fb5b3ab83",
-          "sha1": "dce0ae3a9ab2ee89d544b4f2e75e2aac41205a37",
-          "md5": "15749f9e9fa296a86a59a4bbdfc2baa4"
+          "size": 1016886,
+          "sha512": "733b82b29e7307e9df482fb32f81a8bf7b1711b61fa6b9d072223fb0a75aa2e74fa7c1df41240a7eeeff2da97dba7010d663e20bfdf7b1fb52e8386736dd27c0",
+          "sha256": "59a090bad8efc32552cf5a7ec1d2fb66444168bfbc97bd45e50764527f80c768",
+          "sha1": "cf2769361a8b4b97c77738f07920055dd45c9a30",
+          "md5": "f6ef0358e9764d3adf09bbd5192240d0"
         }
       ]
     },
@@ -99,11 +99,11 @@
         {
           "name": "media3-extractor-1.11.0-alpha01-fongmi.aar",
           "url": "media3-extractor-1.11.0-alpha01-fongmi.aar",
-          "size": 1005712,
-          "sha512": "9a5948a99c083e32670aa8aa53d23c37d2bfb273ce1911ab407b1bd93a7cce913d9de56a7f3316df3fae3556087a93d715bbd4d197213488f197fadbc33e70b5",
-          "sha256": "61f021994fac1a99e1f92f647bbd981d4f9d5e67d6aa05ad83e6622fb5b3ab83",
-          "sha1": "dce0ae3a9ab2ee89d544b4f2e75e2aac41205a37",
-          "md5": "15749f9e9fa296a86a59a4bbdfc2baa4"
+          "size": 1016886,
+          "sha512": "733b82b29e7307e9df482fb32f81a8bf7b1711b61fa6b9d072223fb0a75aa2e74fa7c1df41240a7eeeff2da97dba7010d663e20bfdf7b1fb52e8386736dd27c0",
+          "sha256": "59a090bad8efc32552cf5a7ec1d2fb66444168bfbc97bd45e50764527f80c768",
+          "sha1": "cf2769361a8b4b97c77738f07920055dd45c9a30",
+          "md5": "f6ef0358e9764d3adf09bbd5192240d0"
         }
       ]
     },
@@ -119,11 +119,11 @@
         {
           "name": "media3-extractor-1.11.0-alpha01-fongmi-sources.jar",
           "url": "media3-extractor-1.11.0-alpha01-fongmi-sources.jar",
-          "size": 848870,
-          "sha512": "f2b3b970b6ba850970927950e2a77d0107c6bede6a8cb3367b2a8d8281fd55d93ef42fa32d76ef5b5b6ae762ae7ccbed3d0db560e3866fd08fba6e8f954acfba",
-          "sha256": "d352667b65f3d46e033a9fe8eb77e99200e70745cc2cbe96a2f2257b231242da",
-          "sha1": "2eedd5fb26e68491d121183fd78f215485d1c9da",
-          "md5": "cba55d5f325cda0dfa39de7bb5f294cd"
+          "size": 854530,
+          "sha512": "c03effbf8116bc5adebda3af3789c4dc734e9181ac4232755098e4f36356cca83a64008f6ba024150191ce7046bb1378e088fe23a69d83e8b7693f342fee3547",
+          "sha256": "9314a303f402e903dd075db5e9babf9be6474da539a4b76bb1ed765b95b6ef4e",
+          "sha1": "721767dccdf192727aa6d88666044743875c53aa",
+          "md5": "f832babd94641c6cc371e0f12b4c9f9c"
         }
       ]
     }
