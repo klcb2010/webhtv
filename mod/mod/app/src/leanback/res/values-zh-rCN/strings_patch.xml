@@ -1,0 +1,16 @@
+    <string name="home_history_button">历史</string>
+<string-array name="select_global_history_mode">
+        <item>关闭</item>
+        <item>自动</item>
+        <item>搜索时</item>
+    </string-array>
+    <string-array name="select_subtitle_language">
+        <item>自动</item>
+        <item>中文</item>
+        <item>英文</item>
+    </string-array>
+    <string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
