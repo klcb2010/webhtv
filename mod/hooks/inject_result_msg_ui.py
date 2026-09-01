@@ -105,6 +105,13 @@ def patch_app() -> None:
 
 
 def main() -> None:
+    # lint allowlist for UiSurface private field read
+    src_lint = pathlib.Path(__file__).resolve().parent.parent / "app" / "lint.xml"
+    if src_lint.exists():
+        dst = ROOT / "app" / "lint.xml"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(src_lint.read_bytes())
+        print("[mod] lint.xml applied")
     write_intoast()
     n = sum(1 for rel in TARGETS if patch_msg(ROOT / rel))
     patch_app()

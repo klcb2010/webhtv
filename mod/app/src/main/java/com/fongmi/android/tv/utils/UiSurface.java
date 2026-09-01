@@ -1,6 +1,12 @@
 package com.fongmi.android.tv.utils;
 
+import android.annotation.SuppressLint;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.fongmi.android.tv.App;
@@ -19,21 +25,20 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Result.msg + optional toast filter.
- * Rules file is an opaque asset written only at CI time (not in public source).
+ * intoast 名单过滤。enqueue 常不带文案，需从 Toast 视图/字段取文本再决定 cancel。
  */
 public final class UiSurface {
 
     private static final String ASSET = "intoast";
     private static final AtomicReference<List<String>> RULES = new AtomicReference<>();
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static volatile boolean installed;
 
     private UiSurface() {
     }
 
-    /** Spider Result.msg：命中规则才丢弃；无规则时仍丢弃 msg（避免广告文案） */
     public static void show(String msg) {
-        // Result.msg 一律不走 Notify；系统 Toast 由 install 黑名单处理
+        // Result.msg 不展示
     }
 
     public static boolean blocked(String text) {
@@ -89,6 +94,7 @@ public final class UiSurface {
     }
 
     private static void gateToastService() throws Exception {
+        if (rules().isEmpty()) return; // 无名单不代理，避免误伤
         Field field = null;
         for (String name : new String[]{"sService", "service"}) {
             try {
@@ -122,8 +128,14 @@ public final class UiSurface {
                         if (n != null) {
                             String ln = n.toLowerCase();
                             if (ln.contains("toast") && (ln.contains("enqueue") || ln.equals("show"))) {
-                                if (shouldBlockArgs(args)) {
+                                Toast toast = findToast(args);
+                                String text = collectText(args, toast);
+                                if (blocked(text)) {
                                     return defaultValue(method.getReturnType());
+                                }
+                                // 文案此时可能还没进参数：放行后主线程再取视图/字段，命中则 cancel
+                                if (toast != null && !rules().isEmpty()) {
+                                    scheduleCancelIfMatched(toast);
                                 }
                             }
                         }
@@ -133,27 +145,122 @@ public final class UiSurface {
         field.set(null, proxy);
     }
 
-    private static boolean shouldBlockArgs(Object[] args) {
-        if (args == null || rules().isEmpty()) return false;
-        for (Object a : args) {
-            if (a == null) continue;
-            if (a instanceof CharSequence) {
-                if (blocked(a.toString())) return true;
+    private static void scheduleCancelIfMatched(final Toast toast) {
+        Runnable check = new Runnable() {
+            int round = 0;
+
+            @Override
+            public void run() {
+                try {
+                    String text = collectText(null, toast);
+                    if (blocked(text)) {
+                        toast.cancel();
+                        return;
+                    }
+                } catch (Throwable ignored) {
+                }
+                if (round++ < 5) MAIN.postDelayed(this, 50L * round);
             }
-            if (a instanceof Toast) {
-                String t = toastText((Toast) a);
-                if (blocked(t)) return true;
-            }
-            // 部分实现把文本放在 Object[] / List
-            if (a instanceof Object[]) {
-                if (shouldBlockArgs((Object[]) a)) return true;
-            }
-        }
-        return false;
+        };
+        MAIN.post(check);
+        MAIN.postDelayed(check, 80);
+        MAIN.postDelayed(check, 200);
     }
 
-    private static String toastText(Toast toast) {
-        // text comes from CharSequence args when available
+    private static Toast findToast(Object[] args) {
+        if (args == null) return null;
+        for (Object a : args) {
+            if (a instanceof Toast) return (Toast) a;
+        }
+        return null;
+    }
+
+    private static String collectText(Object[] args, Toast toast) {
+        StringBuilder sb = new StringBuilder();
+        if (args != null) {
+            for (Object a : args) {
+                if (a instanceof CharSequence) {
+                    if (sb.length() > 0) sb.append('\n');
+                    sb.append(a);
+                }
+            }
+        }
+        if (toast != null) {
+            String fromView = textFromView(toast.getView());
+            if (!TextUtils.isEmpty(fromView)) {
+                if (sb.length() > 0) sb.append('\n');
+                sb.append(fromView);
+            }
+            String fromField = textFromToastFields(toast);
+            if (!TextUtils.isEmpty(fromField)) {
+                if (sb.length() > 0) sb.append('\n');
+                sb.append(fromField);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String textFromView(View view) {
+        if (view == null) return "";
+        if (view instanceof TextView) {
+            CharSequence cs = ((TextView) view).getText();
+            return cs == null ? "" : cs.toString();
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < g.getChildCount(); i++) {
+                String t = textFromView(g.getChildAt(i));
+                if (TextUtils.isEmpty(t)) continue;
+                if (sb.length() > 0) sb.append('\n');
+                sb.append(t);
+            }
+            return sb.toString();
+        }
+        return "";
+    }
+
+    /**
+     * 读取 Toast 文本字段。仅用于名单匹配；lint 在模块 lint.xml 中对私有 API 放行本类。
+     */
+    @SuppressLint({"PrivateApi", "DiscouragedPrivateApi", "BlockedPrivateApi"})
+    private static String textFromToastFields(Toast toast) {
+        if (toast == null) return "";
+        String[] names = new String[]{"mText", "mNextView", "text"};
+        for (String name : names) {
+            try {
+                Field f = Toast.class.getDeclaredField(name);
+                f.setAccessible(true);
+                Object v = f.get(toast);
+                if (v instanceof CharSequence) return v.toString();
+                if (v instanceof View) {
+                    String t = textFromView((View) v);
+                    if (!TextUtils.isEmpty(t)) return t;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        // TN.mNextView
+        try {
+            Field tnF = Toast.class.getDeclaredField("mTN");
+            tnF.setAccessible(true);
+            Object tn = tnF.get(toast);
+            if (tn != null) {
+                for (String name : new String[]{"mNextView", "mView"}) {
+                    try {
+                        Field f = tn.getClass().getDeclaredField(name);
+                        f.setAccessible(true);
+                        Object v = f.get(tn);
+                        if (v instanceof View) {
+                            String t = textFromView((View) v);
+                            if (!TextUtils.isEmpty(t)) return t;
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         return "";
     }
 
