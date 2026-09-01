@@ -117,9 +117,8 @@ public class Updater implements Download.Callback, UpdateListener {
         boolean betaNew = reallyHasUpdate(beta);
         if (!stableNew && !betaNew) {
             if (forceCheck) {
-                String err = !android.text.TextUtils.isEmpty(stable.error) ? stable.error : (beta != null ? beta.error : null);
-                boolean rate = err != null && (err.contains("rate limit") || err.contains("API rate limit"));
-                App.post(() -> Notify.show(rate ? R.string.update_failed : (hasErrorOnly() ? R.string.update_failed : R.string.update_latest)));
+                boolean failed = hasErrorOnly() || (stable != null && !stable.hasManifest() && beta != null && !beta.hasManifest());
+                App.post(() -> Notify.show(failed ? R.string.update_failed : R.string.update_latest));
             }
             return;
         }
@@ -151,49 +150,12 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private Update getGithubStableUpdate(String channel) {
-        // 1) 优先 latest/download 清单（不走 api.github.com，避免未认证 60次/小时限流）
-        Update direct = readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
-        if (direct != null && direct.hasManifest()) return direct;
-        try {
-            // 2) 再扫 releases API（可能被限流）
-            Update best = pickNewestGithubUpdate(channel, false);
-            if (best != null && best.hasManifest()) return best;
-            JSONObject release = new JSONObject(OkHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            return readGithubReleaseUpdate(channel, release);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Update empty = Update.empty(channel);
-            empty.error = e.getMessage();
-            return empty;
-        }
+        // 仅 latest/download，不访问 api.github.com（避免限流导致「检测失败」）
+        return readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
     }
 
     private Update pickNewestGithubUpdate(String channel, boolean betaOnly) {
-        try {
-            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            Update best = null;
-            String bestTag = "";
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null) continue;
-                boolean beta = isBetaRelease(release);
-                if (betaOnly && !beta) continue;
-                if (!betaOnly && beta) continue;
-                if (findAsset(release.optJSONArray("assets"), getManifestName(channel)) == null) continue;
-                String tag = release.optString("tag_name");
-                if (best == null || AppVersion.compare(tag, bestTag) > 0) {
-                    Update u = readGithubReleaseUpdate(channel, release);
-                    if (u != null && u.hasManifest()) {
-                        best = u;
-                        bestTag = tag;
-                    }
-                }
-            }
-            return best == null ? Update.empty(channel) : best;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Update.empty(channel);
-        }
+        return Update.empty(channel);
     }
 
     /** 优先完整 tag/时间戳；同 versionCode 多次构建也能识别 */
@@ -211,21 +173,8 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private Update getGithubBetaUpdate(String channel) {
-        Update picked = pickNewestGithubUpdate(channel, true);
-        if (picked != null && picked.hasManifest()) return picked;
-        String manifestName = getManifestName(channel);
-        try {
-            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null || !isBetaRelease(release)) continue;
-                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
-                return readGithubReleaseUpdate(channel, release);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return Update.empty(channel);
+        // beta 同样只走 latest/download 的 *-beta.json
+        return readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
     }
 
     private boolean isBetaRelease(JSONObject release) {
@@ -341,18 +290,11 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private String getReleaseNotes(String tag) {
-        if (TextUtils.isEmpty(tag)) return "";
-        String notes = readReleaseNotes(tag);
-        if (!TextUtils.isEmpty(notes) || tag.startsWith("v")) return notes;
-        return readReleaseNotes("v" + tag);
+        return "";
     }
 
     private String readReleaseNotes(String tag) {
-        try {
-            return new JSONObject(OkHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
-        } catch (Exception ignored) {
-            return "";
-        }
+        return "";
     }
 
     private boolean hasErrorOnly() {
