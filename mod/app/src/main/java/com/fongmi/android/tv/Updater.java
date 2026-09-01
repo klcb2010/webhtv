@@ -16,6 +16,7 @@ import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Github;
+import com.fongmi.android.tv.update.GithubProxy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
@@ -113,16 +114,20 @@ public class Updater implements Download.Callback, UpdateListener {
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
-        if (!reallyHasUpdate(stable) && !reallyHasUpdate(beta)) {
-            if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
-                selected = stable;
-                App.post(() -> show(activity));
-                return;
+        boolean stableNew = reallyHasUpdate(stable);
+        boolean betaNew = reallyHasUpdate(beta);
+        if (!stableNew && !betaNew) {
+            if (forceCheck) {
+                boolean failed = hasErrorOnly() || (stable != null && !stable.hasManifest() && beta != null && !beta.hasManifest());
+                App.post(() -> Notify.show(failed ? R.string.update_failed : R.string.update_latest));
             }
-            if (forceCheck) App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
             return;
         }
-        selected = stable;
+        if (stableNew && betaNew) {
+            selected = AppVersion.compare(stable.name, beta.name) >= 0 ? stable : beta;
+        } else {
+            selected = stableNew ? stable : beta;
+        }
         App.post(() -> show(activity));
     }
 
@@ -146,74 +151,31 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private Update getGithubStableUpdate(String channel) {
-        try {
-            // 先扫 releases 列表，按 tag 选最新（避免 /latest 指向旧版或预发布）
-            Update best = pickNewestGithubUpdate(channel, false);
-            if (best != null && best.hasManifest()) return best;
-            JSONObject release = new JSONObject(OkHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            return readGithubReleaseUpdate(channel, release);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Update.empty(channel);
-        }
+        // 仅 latest/download，不访问 api.github.com（避免限流导致「检测失败」）
+        return readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
     }
 
     private Update pickNewestGithubUpdate(String channel, boolean betaOnly) {
-        try {
-            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            Update best = null;
-            String bestTag = "";
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null) continue;
-                boolean beta = isBetaRelease(release);
-                if (betaOnly && !beta) continue;
-                if (!betaOnly && beta) continue;
-                if (findAsset(release.optJSONArray("assets"), getManifestName(channel)) == null) continue;
-                String tag = release.optString("tag_name");
-                if (best == null || AppVersion.compare(tag, bestTag) > 0) {
-                    Update u = readGithubReleaseUpdate(channel, release);
-                    if (u != null && u.hasManifest()) {
-                        best = u;
-                        bestTag = tag;
-                    }
-                }
-            }
-            return best == null ? Update.empty(channel) : best;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Update.empty(channel);
-        }
+        return Update.empty(channel);
     }
 
-    /** 比 Update.hasUpdate 更稳：同 versionCode 时按完整 tag 时间戳比较 */
+    /** 优先完整 tag/时间戳；同 versionCode 多次构建也能识别 */
     private boolean reallyHasUpdate(Update update) {
         if (update == null || !update.hasManifest()) return false;
+        if (!android.text.TextUtils.isEmpty(update.name)) {
+            if (AppVersion.isCurrent(update.name)) return false;
+            if (AppVersion.isNewerThanCurrent(update.name)) return true;
+        }
         try {
             if (update.code > 0 && update.code > com.fongmi.android.tv.BuildConfig.VERSION_CODE) return true;
-            if (update.code > 0 && update.code < com.fongmi.android.tv.BuildConfig.VERSION_CODE) return false;
         } catch (Throwable ignored) {
         }
-        if (AppVersion.isCurrent(update.name)) return false;
-        return AppVersion.isNewerThanCurrent(update.name);
+        return false;
     }
 
     private Update getGithubBetaUpdate(String channel) {
-        Update picked = pickNewestGithubUpdate(channel, true);
-        if (picked != null && picked.hasManifest()) return picked;
-        String manifestName = getManifestName(channel);
-        try {
-            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null || !isBetaRelease(release)) continue;
-                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
-                return readGithubReleaseUpdate(channel, release);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return Update.empty(channel);
+        // beta 同样只走 latest/download 的 *-beta.json
+        return readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
     }
 
     private boolean isBetaRelease(JSONObject release) {
@@ -245,8 +207,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            String text = headers == null ? OkHttp.string(manifestUrl, GITHUB_REQUEST_TIMEOUT_MS) : OkHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
-            if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
+            String text = fetchManifestText(manifestUrl, headers);
+            if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest");
             JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
             update.desc = normalizeText(object.optString("desc"));
@@ -257,16 +219,94 @@ public class Updater implements Download.Callback, UpdateListener {
             update.size = object.optLong("size");
             update.sha256 = object.optString("sha256");
             update.apkUrl = getApkUrl(update, source);
+            // 下载也尽量走加速源（用户在更新设置里选的）
+            update.apkUrl = rewriteGithubUrl(update.apkUrl);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
-            if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
-                String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
-                if (!TextUtils.isEmpty(notes)) update.notes = normalizeText(notes);
+            if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc) && !TextUtils.isEmpty(fallbackNotes)) {
+                update.notes = normalizeText(fallbackNotes);
             }
         } catch (Exception e) {
             e.printStackTrace();
             update.error = e.getMessage();
         }
         return update;
+    }
+
+    /** 直连 + 更新设置里的 GitHub 加速 + 内置镜像，依次尝试（不访问 api.github.com） */
+    private String fetchManifestText(String manifestUrl, Map<String, String> headers) {
+        for (String url : manifestCandidates(manifestUrl)) {
+            try {
+                String text = httpGetText(url, headers);
+                if (!TextUtils.isEmpty(text) && text.trim().startsWith("{")) return text;
+            } catch (Throwable ignored) {
+            }
+        }
+        return "";
+    }
+
+    private java.util.List<String> manifestCandidates(String manifestUrl) {
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
+        if (!TextUtils.isEmpty(manifestUrl)) urls.add(manifestUrl);
+        // 用户配置的加速
+        try {
+            String rewritten = rewriteGithubUrl(manifestUrl);
+            if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
+        } catch (Throwable ignored) {
+        }
+        // 内置常用镜像（latest/download 在国内常 302 后断在 release-assets）
+        String[] mirrors = new String[]{
+                "https://ghfast.top/",
+                "https://gh.acmsz.top/",
+                "https://gh.monlor.com/",
+                "https://github.chenc.dev/",
+        };
+        for (String m : mirrors) {
+            try {
+                if (manifestUrl.startsWith("https://")) {
+                    if (m.contains("chenc.dev")) {
+                        urls.add(m + manifestUrl.substring("https://".length()));
+                    } else {
+                        urls.add(m + manifestUrl);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return new java.util.ArrayList<>(urls);
+    }
+
+    private String rewriteGithubUrl(String url) {
+        if (TextUtils.isEmpty(url)) return url;
+        try {
+            GithubProxy.Config cfg = GithubProxy.resolve(
+                    Setting.getUpdateGithubProxy(),
+                    Setting.getUpdateGithubProxyUrl(),
+                    Setting.getUpdateGithubProxyMode());
+            return cfg.rewrite(url);
+        } catch (Throwable e) {
+            return url;
+        }
+    }
+
+    private String httpGetText(String url, Map<String, String> headers) throws Exception {
+        // 优先上游 UpdateHttp（followRedirects），否则 OkHttp 且允许 SSL 跳转
+        try {
+            return com.fongmi.android.tv.update.UpdateHttp.string(url, headers, GITHUB_REQUEST_TIMEOUT_MS);
+        } catch (Throwable ignored) {
+        }
+        okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
+                .connectTimeout(GITHUB_REQUEST_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(GITHUB_REQUEST_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .writeTimeout(GITHUB_REQUEST_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build();
+        okhttp3.Request.Builder b = new okhttp3.Request.Builder().url(url).header("Accept-Encoding", "identity");
+        if (headers != null) for (Map.Entry<String, String> e : headers.entrySet()) b.header(e.getKey(), e.getValue());
+        try (okhttp3.Response res = client.newCall(b.build()).execute()) {
+            if (!res.isSuccessful() || res.body() == null) return "";
+            return res.body().string();
+        }
     }
 
     private void attachDownloadFallback(Update selected, Update cnb, Update github) {
@@ -329,18 +369,11 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private String getReleaseNotes(String tag) {
-        if (TextUtils.isEmpty(tag)) return "";
-        String notes = readReleaseNotes(tag);
-        if (!TextUtils.isEmpty(notes) || tag.startsWith("v")) return notes;
-        return readReleaseNotes("v" + tag);
+        return "";
     }
 
     private String readReleaseNotes(String tag) {
-        try {
-            return new JSONObject(OkHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
-        } catch (Exception ignored) {
-            return "";
-        }
+        return "";
     }
 
     private boolean hasErrorOnly() {
