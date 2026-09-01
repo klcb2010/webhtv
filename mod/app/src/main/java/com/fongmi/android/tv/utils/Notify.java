@@ -82,6 +82,8 @@ public class Notify {
     }
 
     private void makeText(String text) {
-        // toasts disabled
+        if (mToast != null) mToast.cancel();
+        mToast = Toast.makeText(App.get(), text, Toast.LENGTH_LONG);
+        mToast.show();
     }
 }
