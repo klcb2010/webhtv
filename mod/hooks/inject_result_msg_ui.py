@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Suppress Result.msg toasts + install process toast gate in App.onCreate."""
+"""Result.msg → UiSurface.show; install toast gate; write assets/intoast from CI secret."""
+import base64
+import os
 import pathlib
 import re
 import sys
@@ -31,7 +33,28 @@ def ensure_import(text: str, imp: str) -> str:
     return text
 
 
-def patch_msg_sites(path: pathlib.Path) -> bool:
+def write_intoast() -> None:
+    """Decode secret → assets/intoast (opaque name). Never log rule contents."""
+    assets = ROOT / "app/src/main/assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    out = assets / "intoast"
+    b64 = (os.environ.get("INTOAST_B64") or os.environ.get("SPIDER_TOAST_BLOCK_B64") or "").strip()
+    if not b64:
+        out.write_text("", encoding="utf-8")
+        print("[mod] intoast: empty (set secret INTOAST_B64)")
+        return
+    try:
+        raw = base64.b64decode(b64)
+        text = raw.decode("utf-8", errors="replace")
+        out.write_bytes(text.encode("utf-8"))
+        n = sum(1 for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#"))
+        print("[mod] intoast: loaded", n, "entries")
+    except Exception as e:
+        out.write_text("", encoding="utf-8")
+        print("[mod] intoast: decode failed", type(e).__name__)
+
+
+def patch_msg(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
     t = path.read_text(encoding="utf-8")
@@ -39,8 +62,6 @@ def patch_msg_sites(path: pathlib.Path) -> bool:
     t = ensure_import(t, IMPORT)
     t = t.replace("SpiderToastGuard.showMsg", "UiSurface.show")
     t = t.replace("ResultMsgUi.show", "UiSurface.show")
-    t = t.replace("import com.fongmi.android.tv.utils.SpiderToastGuard;", IMPORT)
-    t = t.replace("import com.fongmi.android.tv.utils.ResultMsgUi;", IMPORT)
     t = t.replace(
         "result -> Notify.show(result.getMsg())",
         "result -> UiSurface.show(result.getMsg())",
@@ -57,7 +78,7 @@ def patch_msg_sites(path: pathlib.Path) -> bool:
     )
     if t != orig:
         path.write_text(t, encoding="utf-8")
-        print("[mod] msg sites", path.relative_to(ROOT))
+        print("[mod] msg", path.relative_to(ROOT))
         return True
     return False
 
@@ -65,40 +86,29 @@ def patch_msg_sites(path: pathlib.Path) -> bool:
 def patch_app() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/App.java"
     if not path.exists():
-        print("[mod] App.java missing")
         return
     t = path.read_text(encoding="utf-8")
     if "UiSurface.install" in t:
-        print("[mod] App already gated")
         return
     t = ensure_import(t, IMPORT)
-    # after Notify.createChannel() or start of onCreate body
     if "Notify.createChannel();" in t:
-        t = t.replace(
-            "Notify.createChannel();",
-            "Notify.createChannel();\n        UiSurface.install();",
-            1,
-        )
-    elif "protected void onCreate()" in t or "public void onCreate()" in t:
+        t = t.replace("Notify.createChannel();", "Notify.createChannel();\n        UiSurface.install();", 1)
+    else:
         t = re.sub(
             r"(void onCreate\(\) \{\s*super\.onCreate\(\);)",
             r"\1\n        UiSurface.install();",
             t,
             count=1,
         )
-    else:
-        print("[mod] WARN cannot find App.onCreate insert point")
-        return
     path.write_text(t, encoding="utf-8")
-    print("[mod] App.onCreate UiSurface.install")
+    print("[mod] App UiSurface.install")
 
 
 def main() -> None:
-    for p in ROOT.rglob("spider_toast_block.dat"):
-        p.unlink(missing_ok=True)
-    n = sum(1 for rel in TARGETS if patch_msg_sites(ROOT / rel))
+    write_intoast()
+    n = sum(1 for rel in TARGETS if patch_msg(ROOT / rel))
     patch_app()
-    print("[mod] toast gate done, msg files:", n)
+    print("[mod] intoast pipeline done, msg files:", n)
 
 
 if __name__ == "__main__":

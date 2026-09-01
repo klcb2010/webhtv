@@ -82,6 +82,10 @@ public class Notify {
     }
 
     private void makeText(String text) {
+        try {
+            if (UiSurface.blocked(text)) return;
+        } catch (Throwable ignored) {
+        }
         if (mToast != null) mToast.cancel();
         mToast = Toast.makeText(App.get(), text, Toast.LENGTH_LONG);
         mToast.show();

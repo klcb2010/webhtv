@@ -1,25 +1,49 @@
 package com.fongmi.android.tv.utils;
 
+import android.text.TextUtils;
 import android.widget.Toast;
 
+import com.fongmi.android.tv.App;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * - show(): swallow Result.msg only (app Notify 仍正常)
- * - install(): 尽量拦截系统 Toast.enqueue*，返回类型必须合法（boolean→false），禁止返回 null
+ * Result.msg + optional toast filter.
+ * Rules file is an opaque asset written only at CI time (not in public source).
  */
 public final class UiSurface {
 
+    private static final String ASSET = "intoast";
+    private static final AtomicReference<List<String>> RULES = new AtomicReference<>();
     private static volatile boolean installed;
 
     private UiSurface() {
     }
 
+    /** Spider Result.msg：命中规则才丢弃；无规则时仍丢弃 msg（避免广告文案） */
     public static void show(String msg) {
-        // spider Result.msg：不弹
+        // Result.msg 一律不走 Notify；系统 Toast 由 install 黑名单处理
+    }
+
+    public static boolean blocked(String text) {
+        if (TextUtils.isEmpty(text)) return false;
+        List<String> rules = rules();
+        if (rules.isEmpty()) return false;
+        for (String r : rules) {
+            if (!r.isEmpty() && text.contains(r)) return true;
+        }
+        return false;
     }
 
     public static void install() {
@@ -31,6 +55,36 @@ public final class UiSurface {
                 gateToastService();
             } catch (Throwable ignored) {
             }
+        }
+    }
+
+    private static List<String> rules() {
+        List<String> cached = RULES.get();
+        if (cached != null) return cached;
+        synchronized (UiSurface.class) {
+            cached = RULES.get();
+            if (cached != null) return cached;
+            List<String> loaded = load();
+            RULES.set(loaded);
+            return loaded;
+        }
+    }
+
+    private static List<String> load() {
+        try {
+            InputStream in = App.get().getAssets().open(ASSET);
+            BufferedReader br = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+            List<String> list = new ArrayList<>();
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) continue;
+                list.add(line);
+            }
+            br.close();
+            return list.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(list);
+        } catch (Throwable ignored) {
+            return Collections.emptyList();
         }
     }
 
@@ -67,15 +121,52 @@ public final class UiSurface {
                         String n = method.getName();
                         if (n != null) {
                             String ln = n.toLowerCase();
-                            // 拦截排队显示 toast；必须按返回类型给默认值
-                            if (ln.contains("toast") && (ln.contains("enqueue") || ln.contains("show"))) {
-                                return defaultValue(method.getReturnType());
+                            if (ln.contains("toast") && (ln.contains("enqueue") || ln.equals("show"))) {
+                                if (shouldBlockArgs(args)) {
+                                    return defaultValue(method.getReturnType());
+                                }
                             }
                         }
                         return method.invoke(target, args);
                     }
                 });
         field.set(null, proxy);
+    }
+
+    private static boolean shouldBlockArgs(Object[] args) {
+        if (args == null || rules().isEmpty()) return false;
+        for (Object a : args) {
+            if (a == null) continue;
+            if (a instanceof CharSequence) {
+                if (blocked(a.toString())) return true;
+            }
+            if (a instanceof Toast) {
+                String t = toastText((Toast) a);
+                if (blocked(t)) return true;
+            }
+            // 部分实现把文本放在 Object[] / List
+            if (a instanceof Object[]) {
+                if (shouldBlockArgs((Object[]) a)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static String toastText(Toast toast) {
+        try {
+            Field f = Toast.class.getDeclaredField("mText");
+            f.setAccessible(true);
+            Object v = f.get(toast);
+            return v == null ? "" : v.toString();
+        } catch (Throwable e) {
+            try {
+                Method m = Toast.class.getMethod("getText");
+                Object v = m.invoke(toast);
+                return v == null ? "" : v.toString();
+            } catch (Throwable ignored) {
+                return "";
+            }
+        }
     }
 
     private static Object defaultValue(Class<?> rt) {
