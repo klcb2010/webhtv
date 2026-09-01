@@ -248,7 +248,7 @@ jobs:
           s = sys.argv[1].strip()
           # 2026-08-31T03:12:00Z
           if s.endswith("Z"):
-              s = s[:-1] + "+00:00"
+             s = s[:-1] + "+00:00"
           dt = datetime.fromisoformat(s)
           print(int(dt.timestamp()))
           ' "$RELEASE_PUBLISHED_AT"
@@ -592,8 +592,6 @@ jobs:
       # ============================================================
       - name: Apply mod patches
         if: steps.should_build.outputs.build == 'true'
-        env:
-          INTOAST_B64: ${{ secrets.INTOAST_B64 }}
         run: |
           if [ -f mod/apply.sh ]; then
             bash mod/apply.sh
