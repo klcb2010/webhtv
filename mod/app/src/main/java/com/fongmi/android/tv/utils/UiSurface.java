@@ -153,20 +153,8 @@ public final class UiSurface {
     }
 
     private static String toastText(Toast toast) {
-        try {
-            Field f = Toast.class.getDeclaredField("mText");
-            f.setAccessible(true);
-            Object v = f.get(toast);
-            return v == null ? "" : v.toString();
-        } catch (Throwable e) {
-            try {
-                Method m = Toast.class.getMethod("getText");
-                Object v = m.invoke(toast);
-                return v == null ? "" : v.toString();
-            } catch (Throwable ignored) {
-                return "";
-            }
-        }
+        // text comes from CharSequence args when available
+        return "";
     }
 
     private static Object defaultValue(Class<?> rt) {
