@@ -108,6 +108,5 @@ run_hook "$MOD/hooks/fix_db_history_schema.py"
 run_hook "$MOD/hooks/fix_recyclerview_fixed_size.py"
 run_hook "$MOD/hooks/inject_home_sites_retry.py"
 run_hook "$MOD/hooks/fix_update_setting_stubs.py"
-run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
 echo "[mod] done"
