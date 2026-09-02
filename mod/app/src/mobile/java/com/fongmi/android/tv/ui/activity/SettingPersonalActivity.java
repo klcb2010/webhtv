@@ -173,4 +173,9 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putHomeHistory(!Setting.isHomeHistory());
         refreshTexts();
     }
+
+    private void setHomePush(View view) {
+        Setting.putHomePush(!Setting.isHomePush());
+        refreshTexts();
+    }
 }
