@@ -36,7 +36,8 @@ public final class UpdateSettingsDialog {
     public static void show(FragmentActivity activity) {
         DialogUpdateSettingsBinding binding = DialogUpdateSettingsBinding.inflate(LayoutInflater.from(activity));
         State state = State.load();
-        Dialog dialog = LightDialog.create(activity, null, binding.getRoot());
+        // LightDialog 默认 factor/maxDp 为 0 会把窗口宽度算成 0，保存按钮像“消失”
+        Dialog dialog = LightDialog.create(activity, null, binding.getRoot(), 0.62f, 0.92f, 640);
         setupTabs(activity, binding, state);
         bind(activity, dialog, binding, state);
         render(activity, binding, state);
@@ -170,14 +171,18 @@ public final class UpdateSettingsDialog {
         return value == null ? "" : value.toString().trim();
     }
 
-    private static void configureWindow(FragmentActivity activity, Dialog dialog) {
+        private static void configureWindow(FragmentActivity activity, Dialog dialog) {
         Window window = dialog.getWindow();
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
-        params.width = (int) (ResUtil.getScreenWidth(activity) * (ResUtil.isLand(activity) ? 0.62f : 0.92f));
+        int w = (int) (ResUtil.getScreenWidth(activity) * (ResUtil.isLand(activity) ? 0.62f : 0.92f));
+        if (w < ResUtil.dp2px(280)) w = ResUtil.dp2px(280);
+        params.width = w;
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
+        params.dimAmount = 0.58f;
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }

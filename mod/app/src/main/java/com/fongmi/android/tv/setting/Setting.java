@@ -901,9 +901,14 @@ public class Setting {
 
     public static String getUpdateGithubProxy() {
         try {
-            return GithubProxy.find(Prefers.getString("update_github_proxy", GithubProxy.DIRECT)).id;
+            String id = Prefers.getString("update_github_proxy", GithubProxy.DIRECT);
+            if (id != null && id.toLowerCase().contains("ghfast")) {
+                Prefers.put("update_github_proxy", GithubProxy.DIRECT);
+                id = GithubProxy.DIRECT;
+            }
+            return GithubProxy.find(id).id;
         } catch (Throwable e) {
-            return Prefers.getString("update_github_proxy", "direct");
+            return "direct";
         }
     }
 
