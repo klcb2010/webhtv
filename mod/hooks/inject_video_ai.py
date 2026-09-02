@@ -348,7 +348,7 @@ HOOK = r"""
 
     private void wireFlagToAiFocus() {
         try {
-            wireEpisodeDownToAi();
+            try { if (com.fongmi.android.tv.utils.Util.isLeanback()) wireEpisodeDownToAi(); } catch (Throwable ignored) {}
             android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
             if (flagView == null || mBinding.aiRecommendScroll == null) return;
             if (mBinding.aiRecommendPanel == null
@@ -393,6 +393,8 @@ HOOK = r"""
     /** 任意集数按「下」进入 AI 推荐（参考 mod 源体验） */
     private void wireEpisodeDownToAi() {
         try {
+            // 仅 TV / leanback：手机无此焦点需求，也没有 episodeGrid
+            if (!com.fongmi.android.tv.utils.Util.isLeanback()) return;
             if (mBinding.aiRecommendPanel == null
                     || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE
                     || mBinding.aiRecommendList == null
@@ -400,10 +402,21 @@ HOOK = r"""
                     || mBinding.aiRecommendScroll == null) return;
             int aiId = mBinding.aiRecommendScroll.getId();
             android.view.View firstAi = mBinding.aiRecommendList.getChildAt(0);
-            int[] episodeIds = new int[]{R.id.episode, R.id.episodeGrid};
-            for (int eid : episodeIds) {
-                android.view.View ep = mBinding.getRoot().findViewById(eid);
+            java.util.List<android.view.View> episodeViews = new java.util.ArrayList<>();
+            try {
+                android.view.View ep1 = mBinding.getRoot().findViewById(R.id.episode);
+                if (ep1 != null) episodeViews.add(ep1);
+            } catch (Throwable ignored) {}
+            try {
+                int gridId = getResources().getIdentifier("episodeGrid", "id", getPackageName());
+                if (gridId != 0) {
+                    android.view.View ep2 = mBinding.getRoot().findViewById(gridId);
+                    if (ep2 != null) episodeViews.add(ep2);
+                }
+            } catch (Throwable ignored) {}
+            for (android.view.View ep : episodeViews) {
                 if (ep == null || ep.getVisibility() != android.view.View.VISIBLE) continue;
+                int eid = ep.getId();
                 ep.setNextFocusDownId(aiId);
                 firstAi.setNextFocusUpId(eid);
                 mBinding.aiRecommendScroll.setNextFocusUpId(eid);
@@ -428,22 +441,6 @@ HOOK = r"""
                                     return false;
                                 });
                         bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(ep, keyListener);
-                    }
-                } catch (Throwable ignored) {}
-                // RecyclerView 回退
-                try {
-                    if (ep instanceof androidx.recyclerview.widget.RecyclerView) {
-                        ep.setOnKeyListener((v, keyCode, event) -> {
-                            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                            if (keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
-                            try {
-                                if (mBinding.aiRecommendList.getChildCount() > 0) {
-                                    mBinding.aiRecommendList.getChildAt(0).requestFocus();
-                                    return true;
-                                }
-                            } catch (Throwable ignored) {}
-                            return false;
-                        });
                     }
                 } catch (Throwable ignored) {}
             }
