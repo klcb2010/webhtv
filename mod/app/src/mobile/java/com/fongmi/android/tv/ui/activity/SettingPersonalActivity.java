@@ -9,6 +9,7 @@ import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 
@@ -44,10 +45,10 @@ public class SettingPersonalActivity extends BaseActivity {
         }
         refreshTexts();
         setListeners();
-        // mobile touch UI
     }
 
     private void setListeners() {
+        mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
@@ -61,6 +62,11 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void refreshTexts() {
+        try {
+            mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
+        } catch (Throwable e) {
+            mBinding.autoChangeText.setText(getSwitch(true));
+        }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
@@ -73,19 +79,37 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
         String lang = Setting.getSubtitlePreferredLanguage();
-        String langLabel = lang;
+        String label = lang;
         if (subtitleValues != null && subtitleLabels != null) {
-            for (int i = 0; i < subtitleValues.length && i < subtitleLabels.length; i++) {
+            for (int i = 0; i < subtitleValues.length; i++) {
                 if (subtitleValues[i].equals(lang)) {
-                    langLabel = subtitleLabels[i];
+                    label = subtitleLabels[i];
                     break;
                 }
             }
         }
-        mBinding.subtitleLanguageText.setText(langLabel);
+        mBinding.subtitleLanguageText.setText(label);
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
+        // TV-only rows may be GONE on mobile via layout; still safe if present
+        try {
+            boolean tv = false;
+            try {
+                Class.forName("androidx.leanback.widget.VerticalGridView");
+                // detect by presence of leanback resources package flavor is compile-time
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setAutoChange(View view) {
+        try {
+            PlayerSetting.putAutoChange(!PlayerSetting.isAutoChange());
+        } catch (Throwable ignored) {
+        }
+        refreshTexts();
     }
 
     private void setAutoBackup(View view) {
@@ -99,7 +123,8 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setGlobalHistory(View view) {
-        int size = globalHistoryMode == null || globalHistoryMode.length == 0 ? 3 : globalHistoryMode.length;
+        int size = globalHistoryMode == null ? 2 : globalHistoryMode.length;
+        if (size <= 0) size = 2;
         Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % size);
         refreshTexts();
     }
@@ -113,7 +138,7 @@ public class SettingPersonalActivity extends BaseActivity {
         int[] options = new int[]{1, 2, 4, 8, 16};
         int cur = Setting.getSearchThread();
         int idx = 0;
-        for (int i = 0; i < options.length; i++) if (options[i] == cur) idx = i;
+        for (int i = 0; i < options.length; i++) if (options[i] == cur) { idx = i; break; }
         Setting.putSearchThread(options[(idx + 1) % options.length]);
         refreshTexts();
     }
@@ -127,7 +152,7 @@ public class SettingPersonalActivity extends BaseActivity {
         if (subtitleValues == null || subtitleValues.length == 0) return;
         String cur = Setting.getSubtitlePreferredLanguage();
         int idx = 0;
-        for (int i = 0; i < subtitleValues.length; i++) if (subtitleValues[i].equals(cur)) idx = i;
+        for (int i = 0; i < subtitleValues.length; i++) if (subtitleValues[i].equals(cur)) { idx = i; break; }
         Setting.putSubtitlePreferredLanguage(subtitleValues[(idx + 1) % subtitleValues.length]);
         refreshTexts();
     }
