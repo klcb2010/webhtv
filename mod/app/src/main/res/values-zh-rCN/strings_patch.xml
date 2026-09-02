@@ -1,3 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
 <string name="setting_home_history">首页最近观看</string>
 <string name="setting_home_vod_auto_load">默认加载点播</string>
 <string name="setting_home_site_lock">首页源锁定</string>
@@ -90,3 +92,7 @@
     <string name="setting_ai_fetch_models">拉取模型列表</string>
 
     <string name="setting_ai_test">测试连接</string>
+    <string name="player_auto_change">自动换源</string>
+    <string name="setting_player_auto_change">自动换源</string>
+    <string name="setting_home_push">主页推送</string>
+</resources>

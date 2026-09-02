@@ -1104,12 +1104,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
             finish();
-        } else if (getName().isEmpty()) {
+        } else if (getName().isEmpty() && !(getId() != null && getId().startsWith("msearch:"))) {
             showEmpty();
         } else {
-            mBinding.name.setText(getName());
+            String name = getName();
+            if ((name == null || name.isEmpty()) && getId() != null && getId().startsWith("msearch:")) {
+                name = getId().substring("msearch:".length()).trim();
+            }
+            if (name == null) name = "";
+            mBinding.name.setText(name);
             App.post(mR4, 10000);
-            checkSearch(false);
+            // 豆瓣等 msearch 直达：强制静默多站搜索（不依赖「自动换源」开关）
+            if (getId() != null && getId().startsWith("msearch:")) checkSearch(true);
+            else checkSearch(false);
         }
     }
 
@@ -5924,9 +5931,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void checkSearch(boolean force) {
-        if (!force && !PlayerSetting.isAutoChange()) return;
+        boolean msearch = getId() != null && getId().startsWith("msearch:");
+        if (!force && !msearch && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.isEmpty()) initSearch(mBinding.name.getText().toString(), true);
-        else if (isAutoMode() || force) nextSite();
+        else if (isAutoMode() || force || msearch) nextSite();
     }
 
     private void initSearch(String keyword, boolean auto) {
@@ -5959,7 +5967,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickAdapter.addAll(items);
         if (isQuickSearchVisible()) mQuickSearchDialog.addAll(items);
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
-        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
+        if (isInitAuto() && (PlayerSetting.isAutoChange() || (getId() != null && getId().startsWith("msearch:")))) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }

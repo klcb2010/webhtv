@@ -725,6 +725,15 @@ public class Setting {
         Prefers.put("home_history", homeHistory);
     }
 
+    /** 手机端主页推送/链接悬浮按钮 */
+    public static boolean isHomePush() {
+        return Prefers.getBoolean("home_push", true);
+    }
+
+    public static void putHomePush(boolean homePush) {
+        Prefers.put("home_push", homePush);
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }
@@ -901,9 +910,14 @@ public class Setting {
 
     public static String getUpdateGithubProxy() {
         try {
-            return GithubProxy.find(Prefers.getString("update_github_proxy", GithubProxy.DIRECT)).id;
+            String id = Prefers.getString("update_github_proxy", GithubProxy.DIRECT);
+            if (id != null && id.toLowerCase().contains("ghfast")) {
+                Prefers.put("update_github_proxy", GithubProxy.DIRECT);
+                id = GithubProxy.DIRECT;
+            }
+            return GithubProxy.find(id).id;
         } catch (Throwable e) {
-            return Prefers.getString("update_github_proxy", "direct");
+            return "direct";
         }
     }
 
