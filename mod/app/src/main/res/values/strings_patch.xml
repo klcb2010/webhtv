@@ -94,4 +94,5 @@
     <string name="setting_ai_test">Test</string>
     <string name="player_auto_change">Auto change source</string>
     <string name="setting_player_auto_change">Auto change source</string>
+    <string name="setting_home_push">Home push button</string>
 </resources>

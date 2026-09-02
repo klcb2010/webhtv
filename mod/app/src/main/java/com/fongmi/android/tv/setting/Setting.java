@@ -725,6 +725,15 @@ public class Setting {
         Prefers.put("home_history", homeHistory);
     }
 
+    /** 手机端主页推送/链接悬浮按钮 */
+    public static boolean isHomePush() {
+        return Prefers.getBoolean("home_push", true);
+    }
+
+    public static void putHomePush(boolean homePush) {
+        Prefers.put("home_push", homePush);
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }
