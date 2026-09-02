@@ -180,6 +180,7 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/save"
+        android:visibility="gone"
         style="@style/Widget.Material3.Button"
         android:layout_width="match_parent"
         android:layout_height="44dp"

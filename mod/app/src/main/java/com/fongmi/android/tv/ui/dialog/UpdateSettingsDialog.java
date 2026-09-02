@@ -54,7 +54,7 @@ public final class UpdateSettingsDialog {
         });
         binding.githubProxy.setOnClickListener(view -> chooseGithub(activity, binding, state));
         binding.ociMirror.setOnClickListener(view -> chooseOci(activity, binding, state));
-        binding.save.setOnClickListener(view -> save(activity, dialog, binding, state));
+        // 保存改到「加速镜像列表」底部；主设置页不再放保存
     }
 
     private static void setupTabs(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
@@ -76,6 +76,95 @@ public final class UpdateSettingsDialog {
         binding.sourceTabs.selectTab(binding.sourceTabs.getTabAt(position));
     }
 
+
+    /** 加速镜像列表：底部 左保存 右取消 */
+    private static void showProxyList(FragmentActivity activity, String title, CharSequence[] labels, int selected, ChoiceDialog.OnChoice onSave) {
+        final int[] pending = new int[]{Math.max(0, selected)};
+        android.widget.LinearLayout root = new android.widget.LinearLayout(activity);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setPadding(ResUtil.dp2px(20), ResUtil.dp2px(16), ResUtil.dp2px(20), ResUtil.dp2px(12));
+
+        com.google.android.material.textview.MaterialTextView titleView = new com.google.android.material.textview.MaterialTextView(activity);
+        titleView.setText(title);
+        titleView.setTextSize(18);
+        titleView.setTextColor(android.graphics.Color.parseColor("#202124"));
+        titleView.setPadding(0, 0, 0, ResUtil.dp2px(12));
+        root.addView(titleView);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        android.widget.LinearLayout list = new android.widget.LinearLayout(activity);
+        list.setOrientation(android.widget.LinearLayout.VERTICAL);
+        final com.google.android.material.button.MaterialButton[] itemBtns = new com.google.android.material.button.MaterialButton[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            com.google.android.material.button.MaterialButton btn = new com.google.android.material.button.MaterialButton(activity);
+            btn.setText(labels[i]);
+            btn.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
+            styleProxyListItem(btn, index == pending[0]);
+            btn.setOnClickListener(v -> {
+                pending[0] = index;
+                for (int j = 0; j < itemBtns.length; j++) styleProxyListItem(itemBtns[j], j == pending[0]);
+            });
+            itemBtns[i] = btn;
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(46));
+            lp.bottomMargin = ResUtil.dp2px(8);
+            list.addView(btn, lp);
+        }
+        scroll.addView(list);
+        root.addView(scroll, new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(280)));
+
+        android.widget.LinearLayout actions = new android.widget.LinearLayout(activity);
+        actions.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        actions.setPadding(0, ResUtil.dp2px(12), 0, 0);
+
+        com.google.android.material.button.MaterialButton saveBtn = new com.google.android.material.button.MaterialButton(activity);
+        saveBtn.setText(R.string.update_settings_save);
+        com.google.android.material.button.MaterialButton cancelBtn = new com.google.android.material.button.MaterialButton(activity);
+        try {
+            cancelBtn.setText(R.string.dialog_negative);
+        } catch (Throwable e) {
+            cancelBtn.setText("取消");
+        }
+        android.widget.LinearLayout.LayoutParams half = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(44), 1f);
+        half.setMarginEnd(ResUtil.dp2px(8));
+        android.widget.LinearLayout.LayoutParams half2 = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(44), 1f);
+        half2.setMarginStart(ResUtil.dp2px(8));
+        // 左保存 右取消
+        actions.addView(saveBtn, half);
+        actions.addView(cancelBtn, half2);
+        root.addView(actions);
+
+        Dialog listDialog = LightDialog.create(activity, null, root, 0.55f, 0.88f, 520);
+        listDialog.setCanceledOnTouchOutside(false);
+        saveBtn.setOnClickListener(v -> {
+            if (onSave != null) onSave.onChoice(pending[0]);
+            listDialog.dismiss();
+        });
+        cancelBtn.setOnClickListener(v -> listDialog.dismiss());
+        listDialog.show();
+        Window window = listDialog.getWindow();
+        if (window != null) {
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.width = (int) (ResUtil.getScreenWidth(activity) * (ResUtil.isLand(activity) ? 0.55f : 0.88f));
+            params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setAttributes(params);
+            window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private static void styleProxyListItem(com.google.android.material.button.MaterialButton btn, boolean selected) {
+        if (btn == null) return;
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                android.graphics.Color.parseColor(selected ? "#E8F0FE" : "#F1F3F4")));
+        btn.setTextColor(android.graphics.Color.parseColor(selected ? "#1A73E8" : "#202124"));
+        try { btn.setElevation(0); } catch (Throwable ignored) {}
+    }
+
+
     private static void chooseGithub(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         GithubProxy.Preset[] presets = GithubProxy.presets();
         CharSequence[] labels = new CharSequence[presets.length];
@@ -84,9 +173,14 @@ public final class UpdateSettingsDialog {
             labels[i] = label(activity, presets[i].label, presets[i].id);
             if (presets[i].id.equals(state.githubProxy)) selected = i;
         }
-        ChoiceDialog.showSingle(activity, R.string.update_github_proxy, labels, selected, which -> {
+        showProxyList(activity, activity.getString(R.string.update_github_proxy), labels, selected, which -> {
             state.githubProxy = presets[which].id;
+            Setting.putUpdateGithubProxy(state.githubProxy);
+            Setting.putUpdateGithubProxyUrl(state.githubCustom);
+            Setting.putUpdateGithubProxyMode(state.githubMode);
+            Setting.putUpdateSource(state.source);
             renderGithub(activity, binding, state);
+            Notify.show(R.string.update_settings_saved);
         });
     }
 
@@ -98,9 +192,13 @@ public final class UpdateSettingsDialog {
             labels[i] = label(activity, presets[i].label, presets[i].id);
             if (presets[i].id.equals(state.ociMirror)) selected = i;
         }
-        ChoiceDialog.showSingle(activity, R.string.update_oci_mirror, labels, selected, which -> {
+        showProxyList(activity, activity.getString(R.string.update_oci_mirror), labels, selected, which -> {
             state.ociMirror = presets[which].id;
+            Setting.putUpdateOciMirror(state.ociMirror);
+            Setting.putUpdateOciMirrorUrl(state.ociCustom);
+            Setting.putUpdateSource(state.source);
             renderOci(activity, binding, state);
+            Notify.show(R.string.update_settings_saved);
         });
     }
 
@@ -171,7 +269,7 @@ public final class UpdateSettingsDialog {
         return value == null ? "" : value.toString().trim();
     }
 
-        private static void configureWindow(FragmentActivity activity, Dialog dialog) {
+    private static void configureWindow(FragmentActivity activity, Dialog dialog) {
         Window window = dialog.getWindow();
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
@@ -190,7 +288,7 @@ public final class UpdateSettingsDialog {
     private static void configureTvFocus(DialogUpdateSettingsBinding binding, State state) {
         if (!Util.isLeanback()) return;
         tvFocusable(binding.close);
-        tvFocusable(binding.save);
+        try { if (binding.save.getVisibility() == View.VISIBLE) tvFocusable(binding.save); } catch (Throwable ignored) {}
         binding.close.setOnKeyListener((view, keyCode, event) -> event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN && focusSelectedTab(binding));
         binding.save.setOnKeyListener((view, keyCode, event) -> event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP && focusLastControl(binding, state));
         binding.githubProxy.setOnKeyListener((view, keyCode, event) -> focusFromPrimary(binding, keyCode, event));
