@@ -353,16 +353,25 @@ HOOK = r"""
             int aiId = mBinding.aiRecommendScroll.getId();
             android.view.View firstAi = mBinding.aiRecommendList.getChildAt(0);
 
-            // 布局：线路 → AI → 集数
-            // 1) 任意线路「下」→ AI
+            // 上游顺序：flag → quality → array(集数分组) → episode
+            // AI 插在线路下方：flag ↓ → AI；集数 ↑ 先到分组，分组 ↑ 再到 AI
             android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
             if (flagView != null) {
                 flagView.setNextFocusDownId(aiId);
                 firstAi.setNextFocusUpId(flagView.getId());
-                installDownToAi(flagView);
+                mBinding.aiRecommendScroll.setNextFocusUpId(flagView.getId());
+                installKeyToAi(flagView, android.view.KeyEvent.KEYCODE_DPAD_DOWN);
             }
 
-            // 2) 任意集数「上」→ AI
+            android.view.View arrayView = null;
+            try {
+                int arrayId = getResources().getIdentifier("array", "id", getPackageName());
+                if (arrayId != 0) arrayView = mBinding.getRoot().findViewById(arrayId);
+            } catch (Throwable ignored) {}
+            boolean arrayVisible = arrayView != null
+                    && arrayView.getVisibility() == android.view.View.VISIBLE
+                    && arrayView.getWidth() > 0;
+
             java.util.List<android.view.View> episodeViews = new java.util.ArrayList<>();
             try {
                 android.view.View ep = mBinding.getRoot().findViewById(R.id.episode);
@@ -375,27 +384,34 @@ HOOK = r"""
                     if (ep2 != null) episodeViews.add(ep2);
                 }
             } catch (Throwable ignored) {}
-            for (android.view.View ep : episodeViews) {
-                if (ep.getVisibility() != android.view.View.VISIBLE) continue;
-                ep.setNextFocusUpId(aiId);
-                firstAi.setNextFocusDownId(ep.getId());
-                mBinding.aiRecommendScroll.setNextFocusDownId(ep.getId());
-                installUpToAi(ep);
+
+            if (arrayVisible) {
+                // 集数「上」→ 分组；分组「上」→ AI；不拦截集数上键，避免回不去 1-20
+                for (android.view.View ep : episodeViews) {
+                    if (ep.getVisibility() != android.view.View.VISIBLE) continue;
+                    ep.setNextFocusUpId(arrayView.getId());
+                    // 明确不装 UP 拦截
+                }
+                arrayView.setNextFocusUpId(aiId);
+                arrayView.setNextFocusDownId(episodeViews.isEmpty() ? aiId : episodeViews.get(0).getId());
+                firstAi.setNextFocusDownId(arrayView.getId());
+                mBinding.aiRecommendScroll.setNextFocusDownId(arrayView.getId());
+                installKeyToAi(arrayView, android.view.KeyEvent.KEYCODE_DPAD_UP);
+            } else {
+                // 无分组时：集数「上」→ AI
+                for (android.view.View ep : episodeViews) {
+                    if (ep.getVisibility() != android.view.View.VISIBLE) continue;
+                    ep.setNextFocusUpId(aiId);
+                    firstAi.setNextFocusDownId(ep.getId());
+                    mBinding.aiRecommendScroll.setNextFocusDownId(ep.getId());
+                    installKeyToAi(ep, android.view.KeyEvent.KEYCODE_DPAD_UP);
+                }
             }
 
             mBinding.aiRecommendScroll.setFocusable(true);
             mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
             mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
-            if (flagView != null) mBinding.aiRecommendScroll.setNextFocusUpId(flagView.getId());
         } catch (Throwable ignored) {}
-    }
-
-    private void installDownToAi(android.view.View host) {
-        installKeyToAi(host, android.view.KeyEvent.KEYCODE_DPAD_DOWN);
-    }
-
-    private void installUpToAi(android.view.View host) {
-        installKeyToAi(host, android.view.KeyEvent.KEYCODE_DPAD_UP);
     }
 
     private void installKeyToAi(android.view.View host, int keyCodeWanted) {
