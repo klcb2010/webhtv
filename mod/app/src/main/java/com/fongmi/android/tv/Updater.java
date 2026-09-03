@@ -125,9 +125,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private void doInBackground(FragmentActivity activity, boolean forceCheck) {
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
-        Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
-        beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
+        beta = Update.empty(Update.CHANNEL_BETA);
         if (!stable.hasUpdate() && !beta.hasUpdate()) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = getPreferredUpdate();
@@ -170,48 +169,23 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
-    }
-
-    private Update getGithubStableUpdate(String channel) {
-        // 优先直连 Release 资源 JSON，避免 api.github.com 未认证 60 次/小时限流
+        // 仅直连 GitHub Release 资源 JSON，不走 api.github.com，不做 beta 探测
         try {
             String direct = Github.getJson(getName());
-            Update update = readUpdate(channel, direct, GITHUB_DOWNLOAD_HEADERS, "");
+            Update update = readUpdate(Update.CHANNEL_STABLE, direct, GITHUB_DOWNLOAD_HEADERS, "");
             if (update.hasManifest()) return update;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        try {
-            JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            return readGithubReleaseUpdate(channel, release);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Update.empty(channel);
-        }
-    }
-
-    private Update getGithubBetaUpdate(String channel) {
-        try {
-            String direct = Github.getJson(getName(), Update.CHANNEL_BETA);
-            Update update = readUpdate(channel, direct, GITHUB_DOWNLOAD_HEADERS, "");
-            if (update.hasManifest()) return update;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        String manifestName = getManifestName(channel);
-        try {
-            JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null || !isBetaRelease(release)) continue;
-                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
-                return readGithubReleaseUpdate(channel, release);
+            if (!TextUtils.isEmpty(update.error)) {
+                Update empty = Update.empty(Update.CHANNEL_STABLE);
+                empty.error = update.error;
+                return empty;
             }
         } catch (Exception e) {
             e.printStackTrace();
+            Update empty = Update.empty(Update.CHANNEL_STABLE);
+            empty.error = e.getMessage();
+            return empty;
         }
-        return Update.empty(channel);
+        return Update.empty(Update.CHANNEL_STABLE);
     }
 
     private boolean isBetaRelease(JSONObject release) {
@@ -333,11 +307,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private String readReleaseNotes(String tag) {
-        try {
-            return new JSONObject(UpdateHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
-        } catch (Exception ignored) {
-            return "";
-        }
+        // 已取消 GitHub API 拉取 release notes
+        return "";
     }
 
     private boolean hasErrorOnly() {

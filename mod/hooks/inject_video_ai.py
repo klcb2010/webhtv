@@ -184,8 +184,19 @@ HOOK = r"""
                     try {
                         String key = getKey();
                         if (key == null || key.isEmpty()) key = "recommend";
-                        // msearch 直达：静默多站搜索并自动选源播放（与豆瓣海报一致）
-                        com.fongmi.android.tv.ui.activity.VideoActivity.start(this, key, "msearch:" + clickTitle, clickTitle, "");
+                        // 停掉当前播放，避免画面仍是旧片再被拉回
+                        try { player().stop(); } catch (Throwable ignored) {}
+                        try { player().clear(); } catch (Throwable ignored) {}
+                        try { mClock.setCallback(null); } catch (Throwable ignored) {}
+                        android.content.Intent intent = new android.content.Intent(this, getClass());
+                        intent.putExtra("key", key);
+                        intent.putExtra("id", "msearch:" + clickTitle);
+                        intent.putExtra("name", clickTitle);
+                        intent.putExtra("pic", "");
+                        intent.putExtra("mark", "");
+                        intent.putExtra("collect", false);
+                        // singleTop：走 onNewIntent 彻底换片，而不是再叠一层 Activity
+                        onNewIntent(intent);
                     } catch (Throwable e) {
                         try {
                             com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
