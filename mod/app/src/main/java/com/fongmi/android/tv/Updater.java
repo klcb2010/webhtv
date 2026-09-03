@@ -55,6 +55,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
+    private static final Map<String, String> GITHUB_DOWNLOAD_HEADERS = createGithubDownloadHeaders();
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
     private static final Updater INSTANCE = new Updater();
@@ -161,11 +162,26 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         }
     }
 
+    private static Map<String, String> createGithubDownloadHeaders() {
+        Map<String, String> headers = new java.util.HashMap<>();
+        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+        headers.put("Accept", "application/octet-stream, application/json, text/plain, */*");
+        return headers;
+    }
+
     private Update getUpdate(String channel) {
         return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
     }
 
     private Update getGithubStableUpdate(String channel) {
+        // 优先直连 Release 资源 JSON，避免 api.github.com 未认证 60 次/小时限流
+        try {
+            String direct = Github.getJson(getName());
+            Update update = readUpdate(channel, direct, GITHUB_DOWNLOAD_HEADERS, "");
+            if (update.hasManifest()) return update;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         try {
             JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
             return readGithubReleaseUpdate(channel, release);
@@ -176,6 +192,13 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getGithubBetaUpdate(String channel) {
+        try {
+            String direct = Github.getJson(getName(), Update.CHANNEL_BETA);
+            Update update = readUpdate(channel, direct, GITHUB_DOWNLOAD_HEADERS, "");
+            if (update.hasManifest()) return update;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         String manifestName = getManifestName(channel);
         try {
             JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
