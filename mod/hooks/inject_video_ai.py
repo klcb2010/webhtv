@@ -203,7 +203,7 @@ HOOK = r"""
                     mBinding.aiRecommendList.setFocusable(false);
                     // 下键从选集进入推荐：把 episode / flag 的 nextFocusDown 指到推荐滚动条
                     if (mBinding.episode != null) {
-                        mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId()); // kept
+                        // episode nextFocus left to upstream
 
                 }
                     try {
@@ -344,79 +344,63 @@ HOOK = r"""
 
     private void wireFlagToAiFocus() {
         try {
-            // 禁止线路右键进 AI：右键只在线路内移动；仅 TV 选集下键进 AI
-            try {
-                android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
-                if (flagView != null) {
-                    // 取消指向 AI 的右焦点
-                    flagView.setNextFocusRightId(flagView.getId());
-                    try {
-                        Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
-                        if (bgvCls.isInstance(flagView)) {
-                            // 清掉可能残留的右键拦截
-                            Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
-                            bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(flagView, new Object[]{null});
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            } catch (Throwable ignored) {}
-            try { if (com.fongmi.android.tv.utils.Util.isLeanback()) wireEpisodeDownToAi(); } catch (Throwable ignored) {}
-        } catch (Throwable ignored) {}
-    }
-
-    private void wireEpisodeDownToAi() {
-        try {
-            // 仅 TV / leanback：手机无此焦点需求，也没有 episodeGrid
             if (!com.fongmi.android.tv.utils.Util.isLeanback()) return;
             if (mBinding.aiRecommendPanel == null
                     || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE
                     || mBinding.aiRecommendList == null
                     || mBinding.aiRecommendList.getChildCount() == 0
                     || mBinding.aiRecommendScroll == null) return;
+            android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
+            if (flagView == null) return;
             int aiId = mBinding.aiRecommendScroll.getId();
             android.view.View firstAi = mBinding.aiRecommendList.getChildAt(0);
-            java.util.List<android.view.View> episodeViews = new java.util.ArrayList<>();
+            // 任意线路「下」→ AI；右键保持上游线路内切换
+            flagView.setNextFocusDownId(aiId);
+            firstAi.setNextFocusUpId(flagView.getId());
+            mBinding.aiRecommendScroll.setNextFocusUpId(flagView.getId());
+            mBinding.aiRecommendScroll.setFocusable(true);
+            mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
             try {
-                android.view.View ep1 = mBinding.getRoot().findViewById(R.id.episode);
-                if (ep1 != null) episodeViews.add(ep1);
-            } catch (Throwable ignored) {}
-            try {
-                int gridId = getResources().getIdentifier("episodeGrid", "id", getPackageName());
-                if (gridId != 0) {
-                    android.view.View ep2 = mBinding.getRoot().findViewById(gridId);
-                    if (ep2 != null) episodeViews.add(ep2);
+                Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
+                if (bgvCls.isInstance(flagView)) {
+                    Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
+                    Object keyListener = java.lang.reflect.Proxy.newProxyInstance(
+                            keyCls.getClassLoader(),
+                            new Class[]{keyCls},
+                            (proxy, method, args) -> {
+                                if (!"onInterceptKeyEvent".equals(method.getName())) return false;
+                                android.view.KeyEvent event = (android.view.KeyEvent) args[0];
+                                if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                                // 只拦下键，右键完全交给上游
+                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
+                                try {
+                                    if (mBinding.aiRecommendList.getChildCount() > 0) {
+                                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                                        return true;
+                                    }
+                                } catch (Throwable ignored) {}
+                                return false;
+                            });
+                    bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(flagView, keyListener);
                 }
             } catch (Throwable ignored) {}
-            for (android.view.View ep : episodeViews) {
-                if (ep == null || ep.getVisibility() != android.view.View.VISIBLE) continue;
-                int eid = ep.getId();
-                ep.setNextFocusDownId(aiId);
-                firstAi.setNextFocusUpId(eid);
-                mBinding.aiRecommendScroll.setNextFocusUpId(eid);
-                try {
-                    Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
-                    if (bgvCls.isInstance(ep)) {
-                        Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
-                        Object keyListener = java.lang.reflect.Proxy.newProxyInstance(
-                                keyCls.getClassLoader(),
-                                new Class[]{keyCls},
-                                (proxy, method, args) -> {
-                                    if (!"onInterceptKeyEvent".equals(method.getName())) return false;
-                                    android.view.KeyEvent event = (android.view.KeyEvent) args[0];
-                                    if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                                    if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
-                                    try {
-                                        if (mBinding.aiRecommendList.getChildCount() > 0) {
-                                            mBinding.aiRecommendList.getChildAt(0).requestFocus();
-                                            return true;
-                                        }
-                                    } catch (Throwable ignored) {}
-                                    return false;
-                                });
-                        bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(ep, keyListener);
-                    }
-                } catch (Throwable ignored) {}
-            }
+            // RecyclerView 回退
+            try {
+                if (flagView instanceof androidx.recyclerview.widget.RecyclerView) {
+                    flagView.setOnKeyListener((v, keyCode, event) -> {
+                        if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                        if (keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
+                        try {
+                            if (mBinding.aiRecommendList.getChildCount() > 0) {
+                                mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                                return true;
+                            }
+                        } catch (Throwable ignored) {}
+                        return false;
+                    });
+                }
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
     }
 

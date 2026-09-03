@@ -356,36 +356,11 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private List<UpdateTarget> getRoutes(Update update) {
         try {
-            java.util.List<UpdateTarget> routes = new java.util.ArrayList<>();
-            String githubUrl = update.githubUrl;
-            if (githubUrl == null || githubUrl.trim().isEmpty()) return routes;
-            // 1) 永远先试直连（不强制走 ghfast 等镜像）
-            try {
-                routes.add(UpdateTarget.github(githubUrl));
-            } catch (Throwable ignored) {
-            }
-            // 2) 用户选的加速（若不是 direct 再追加）
-            try {
-                GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
-                if (github != null && !GithubProxy.DIRECT.equals(github.id)) {
-                    String rewritten = github.rewrite(githubUrl);
-                    if (rewritten != null && !rewritten.equals(githubUrl)) {
-                        routes.add(UpdateTarget.github(rewritten));
-                    }
-                }
-            } catch (Throwable ignored) {
-            }
-            // 3) OCI（若有）
-            try {
-                String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
-                if (update.oci != null && endpoint != null && !endpoint.isEmpty()) {
-                    routes.addAll(UpdateRoutePlanner.plan(Setting.getUpdateSource(), "", update.oci, GithubProxy.resolve(GithubProxy.DIRECT, "", ""), endpoint));
-                }
-            } catch (Throwable ignored) {
-            }
-            return routes;
+            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
+            String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
+            return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
         } catch (Exception e) {
-            return java.util.List.of();
+            return List.of();
         }
     }
 

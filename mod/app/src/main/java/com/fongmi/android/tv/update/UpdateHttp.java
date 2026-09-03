@@ -17,11 +17,11 @@ public final class UpdateHttp {
             .readTimeout(45, TimeUnit.SECONDS)
             .writeTimeout(45, TimeUnit.SECONDS)
             .followRedirects(true)
-            .followSslRedirects(true)
+            .followSslRedirects(false)
             .build();
     private static final OkHttpClient OCI_CLIENT = CLIENT.newBuilder()
             .followRedirects(false)
-            .followSslRedirects(true)
+            .followSslRedirects(false)
             .build();
 
     private UpdateHttp() {

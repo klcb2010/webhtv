@@ -48,7 +48,7 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setListeners() {
-        mBinding.autoChange.setOnClickListener(this::setAutoChange);
+        // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
@@ -64,9 +64,9 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void refreshTexts() {
         try {
-            mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
+        // autoChange hidden
         } catch (Throwable e) {
-            mBinding.autoChangeText.setText(getSwitch(true));
+        // autoChange hidden
         }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
