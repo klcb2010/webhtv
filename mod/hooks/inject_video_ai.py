@@ -182,22 +182,36 @@ HOOK = r"""
                 final String clickTitle = it.title;
                 tv.setOnClickListener(v -> {
                     try {
-                        String key = getKey();
-                        if (key == null || key.isEmpty()) key = "recommend";
-                        // 停掉当前片，写入新 Intent 后 recreate，避免 singleTop 下旧播放被拉回
+                        final String key = (getKey() == null || getKey().isEmpty()) ? "recommend" : getKey();
+                        final String title = clickTitle;
+                        try { saveHistory(); } catch (Throwable ignored) {}
                         try { player().stop(); } catch (Throwable ignored) {}
                         try { player().clear(); } catch (Throwable ignored) {}
                         try { mClock.setCallback(null); } catch (Throwable ignored) {}
-                        try { saveHistory(); } catch (Throwable ignored) {}
-                        getIntent().putExtra("key", key);
-                        getIntent().putExtra("id", "msearch:" + clickTitle);
-                        getIntent().putExtra("name", clickTitle);
-                        getIntent().putExtra("pic", "");
-                        getIntent().putExtra("mark", "");
-                        getIntent().putExtra("collect", false);
-                        getIntent().removeExtra("content");
-                        getIntent().removeExtra("wallPic");
-                        recreate();
+                        // singleTop + recreate 会恢复旧状态；先 finish，再从 Application 新开一页
+                        finish();
+                        com.fongmi.android.tv.App.post(() -> {
+                            try {
+                                android.content.Intent intent = new android.content.Intent(
+                                        com.fongmi.android.tv.App.get(),
+                                        com.fongmi.android.tv.ui.activity.VideoActivity.class);
+                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                intent.putExtra("key", key);
+                                intent.putExtra("id", "msearch:" + title);
+                                intent.putExtra("name", title);
+                                intent.putExtra("pic", "");
+                                intent.putExtra("mark", "");
+                                intent.putExtra("collect", false);
+                                com.fongmi.android.tv.App.get().startActivity(intent);
+                            } catch (Throwable e) {
+                                try {
+                                    com.fongmi.android.tv.ui.activity.SearchActivity.start(
+                                            com.fongmi.android.tv.App.activity(), title);
+                                } catch (Throwable e2) {
+                                    com.fongmi.android.tv.utils.Notify.show(title);
+                                }
+                            }
+                        }, 80);
                     } catch (Throwable e) {
                         try {
                             com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
