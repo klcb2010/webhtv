@@ -169,23 +169,49 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        // 仅直连 GitHub Release 资源 JSON，不走 api.github.com，不做 beta 探测
+        // 不走 api.github.com：用户选的加速镜像 → 直连 → 其它内置镜像
+        String direct = Github.getJson(getName());
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         try {
-            String direct = Github.getJson(getName());
-            Update update = readUpdate(Update.CHANNEL_STABLE, direct, GITHUB_DOWNLOAD_HEADERS, "");
-            if (update.hasManifest()) return update;
-            if (!TextUtils.isEmpty(update.error)) {
-                Update empty = Update.empty(Update.CHANNEL_STABLE);
-                empty.error = update.error;
-                return empty;
+            String selected = Setting.getUpdateGithubProxy();
+            GithubProxy.Config github = GithubProxy.resolve(
+                    selected,
+                    Setting.getUpdateGithubProxyUrl(),
+                    Setting.getUpdateGithubProxyMode());
+            if (github != null && !GithubProxy.DIRECT.equals(github.id)) {
+                String rewritten = github.rewrite(direct);
+                if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            Update empty = Update.empty(Update.CHANNEL_STABLE);
-            empty.error = e.getMessage();
-            return empty;
+        } catch (Throwable ignored) {
         }
-        return Update.empty(Update.CHANNEL_STABLE);
+        urls.add(direct);
+        try {
+            for (GithubProxy.Preset preset : GithubProxy.presets()) {
+                if (GithubProxy.DIRECT.equals(preset.id) || GithubProxy.CUSTOM.equals(preset.id)) continue;
+                if (TextUtils.isEmpty(preset.baseUrl)) continue;
+                try {
+                    GithubProxy.Config cfg = GithubProxy.resolve(preset.id, "", GithubProxy.MODE_FULL_URL);
+                    String rewritten = cfg.rewrite(direct);
+                    if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        String lastError = "";
+        for (String url : urls) {
+            try {
+                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
+                if (update.hasManifest()) return update;
+                if (!TextUtils.isEmpty(update.error)) lastError = update.error;
+            } catch (Exception e) {
+                e.printStackTrace();
+                lastError = e.getMessage();
+            }
+        }
+        Update empty = Update.empty(Update.CHANNEL_STABLE);
+        empty.error = lastError;
+        return empty;
     }
 
     private boolean isBetaRelease(JSONObject release) {

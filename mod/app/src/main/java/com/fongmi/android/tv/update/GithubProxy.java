@@ -11,10 +11,11 @@ public final class GithubProxy {
 
     private static final Preset[] PRESETS = {
             new Preset(DIRECT, "GitHub", "", MODE_FULL_URL),
-            new Preset("github_chenc", "github.chenc.dev", "https://github.chenc.dev", MODE_STRIP_SCHEME),
-            new Preset("gh_acmsz", "gh.acmsz.top", "https://gh.acmsz.top", MODE_FULL_URL),
-            // ghfast.top 在部分网络会解析到 127.0.0.1，已从列表移除
-            new Preset("gh_monlor", "gh.monlor.com", "https://gh.monlor.com", MODE_FULL_URL),
+            new Preset("cdn_crashmc", "cdn.crashmc.com", "https://cdn.crashmc.com", MODE_FULL_URL),
+            new Preset("git_yylx", "git.yylx.win", "https://git.yylx.win", MODE_FULL_URL),
+            new Preset("ghfile_geekertao", "ghfile.geekertao.top", "https://ghfile.geekertao.top", MODE_FULL_URL),
+            new Preset("ghfast", "ghfast.top", "https://ghfast.top", MODE_FULL_URL),
+            new Preset("gh_chjina", "gh.chjina.com", "https://gh.chjina.com", MODE_FULL_URL),
             new Preset(CUSTOM, "Custom", "", MODE_FULL_URL),
     };
 

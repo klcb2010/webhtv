@@ -184,19 +184,20 @@ HOOK = r"""
                     try {
                         String key = getKey();
                         if (key == null || key.isEmpty()) key = "recommend";
-                        // 停掉当前播放，避免画面仍是旧片再被拉回
+                        // 停掉当前片，写入新 Intent 后 recreate，避免 singleTop 下旧播放被拉回
                         try { player().stop(); } catch (Throwable ignored) {}
                         try { player().clear(); } catch (Throwable ignored) {}
                         try { mClock.setCallback(null); } catch (Throwable ignored) {}
-                        android.content.Intent intent = new android.content.Intent(this, getClass());
-                        intent.putExtra("key", key);
-                        intent.putExtra("id", "msearch:" + clickTitle);
-                        intent.putExtra("name", clickTitle);
-                        intent.putExtra("pic", "");
-                        intent.putExtra("mark", "");
-                        intent.putExtra("collect", false);
-                        // singleTop：走 onNewIntent 彻底换片，而不是再叠一层 Activity
-                        onNewIntent(intent);
+                        try { saveHistory(); } catch (Throwable ignored) {}
+                        getIntent().putExtra("key", key);
+                        getIntent().putExtra("id", "msearch:" + clickTitle);
+                        getIntent().putExtra("name", clickTitle);
+                        getIntent().putExtra("pic", "");
+                        getIntent().putExtra("mark", "");
+                        getIntent().putExtra("collect", false);
+                        getIntent().removeExtra("content");
+                        getIntent().removeExtra("wallPic");
+                        recreate();
                     } catch (Throwable e) {
                         try {
                             com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
