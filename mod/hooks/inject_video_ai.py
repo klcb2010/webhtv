@@ -97,14 +97,9 @@ HOOK = r"""
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
             mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
             mBinding.aiRecommendList.removeAllViews();
-            float density = getResources().getDisplayMetrics().density;
-            int pad = (int) (10 * density);
             com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
             tv.setText(R.string.ai_recommend_retry_action);
-            tv.setTextColor(0xFFFFFFFF);
-            tv.setTextSize(13);
-            tv.setPadding(pad * 2, pad, pad * 2, pad);
-            tv.setBackgroundColor(0x55FFFFFF);
+            styleAiRecommendChip(tv);
             tv.setOnClickListener(v -> {
                 if (gen != mAiRecommendGen) return;
                 loadAiRecommendations(gen, vod, title, 0);
@@ -134,30 +129,22 @@ HOOK = r"""
                 String text = it.title == null ? "" : it.title.trim();
                 if (it.year > 0) text = text + " (" + it.year + ")";
                 tv.setText(text);
-                tv.setTextColor(0xFFFFFFFF);
-                tv.setTextSize(11);
-                tv.setPadding(pad, pad, pad, pad);
-                tv.setBackgroundColor(0x33FFFFFF);
-                tv.setFocusable(true);
-                tv.setMinHeight((int) (36 * density));
-                tv.setClickable(true);
-                tv.setFocusableInTouchMode(false);
-                tv.setBackgroundColor(0x33FFFFFF);
+                styleAiRecommendChip(tv);
+                // 与选集一致的外观；焦点时滚动进可视区，不覆盖背景 selector
+                final float dens = density;
                 tv.setOnFocusChangeListener((v, hasFocus) -> {
+                    try { v.setSelected(hasFocus); } catch (Throwable ignored) {}
                     if (hasFocus) {
-                        v.setBackgroundColor(0x88FFFFFF);
                         android.view.ViewParent parent = v.getParent();
                         while (parent != null) {
                             if (parent instanceof android.widget.HorizontalScrollView) {
                                 android.widget.HorizontalScrollView hsv = (android.widget.HorizontalScrollView) parent;
-                                int x = Math.max(0, v.getLeft() - (int) (40 * density));
+                                int x = Math.max(0, v.getLeft() - (int) (40 * dens));
                                 hsv.smoothScrollTo(x, 0);
                                 break;
                             }
                             parent = parent.getParent();
                         }
-                    } else {
-                        v.setBackgroundColor(0x33FFFFFF);
                     }
                 });
                 tv.setOnKeyListener((v, keyCode, event) -> {
@@ -170,9 +157,8 @@ HOOK = r"""
                     }
                     return false;
                 });
-                tv.setMaxWidth(maxW);
-                tv.setMaxLines(2);
-                tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                // 片名可稍长，仍单行省略，外观对齐选集芯片
+                tv.setMaxWidth(Math.max(maxW, (int) (200 * dens)));
                 tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -373,6 +359,53 @@ HOOK = r"""
                     }
                 } catch (Throwable ignored) {}
 
+    }
+
+
+    private void styleAiRecommendChip(com.google.android.material.textview.MaterialTextView tv) {
+        try {
+            int margin = com.fongmi.android.tv.utils.ResUtil.dp2px(8);
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, margin, 0);
+            tv.setLayoutParams(lp);
+            tv.setGravity(android.view.Gravity.CENTER);
+            tv.setSingleLine(true);
+            tv.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
+            tv.setMarqueeRepeatLimit(-1);
+            tv.setClickable(true);
+            boolean leanback = false;
+            try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
+            if (leanback) {
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+                tv.setFocusable(true);
+                tv.setFocusableInTouchMode(true);
+                try {
+                    tv.setBackgroundResource(R.drawable.selector_video_item);
+                } catch (Throwable e) {
+                    try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable ignored) {}
+                }
+                try {
+                    tv.setTextColor(getResources().getColorStateList(R.color.text, getTheme()));
+                } catch (Throwable e) {
+                    tv.setTextColor(0xFFFFFFFF);
+                }
+            } else {
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
+                tv.setFocusable(true);
+                try {
+                    tv.setBackgroundResource(R.drawable.shape_video_item);
+                } catch (Throwable e) {
+                    try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable ignored) {}
+                }
+                try {
+                    tv.setTextColor(getResources().getColorStateList(R.color.selector_video_text, getTheme()));
+                } catch (Throwable e) {
+                    tv.setTextColor(0xFFFFFFFF);
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     private void wireFlagToAiFocus() {
