@@ -375,33 +375,35 @@ HOOK = r"""
             tv.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
             tv.setMarqueeRepeatLimit(-1);
             tv.setClickable(true);
+            tv.setFocusable(true);
             boolean leanback = false;
             try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
+            // 用 getIdentifier，避免 mobile/leanback 资源 ID 在编译期互相不存在
+            String pkg = getPackageName();
             if (leanback) {
                 tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
-                tv.setFocusable(true);
                 tv.setFocusableInTouchMode(true);
-                try {
-                    tv.setBackgroundResource(R.drawable.selector_video_item);
-                } catch (Throwable e) {
-                    try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable ignored) {}
-                }
-                try {
-                    tv.setTextColor(getResources().getColorStateList(R.color.text, getTheme()));
-                } catch (Throwable e) {
+                int bg = getResources().getIdentifier("selector_video_item", "drawable", pkg);
+                if (bg == 0) bg = getResources().getIdentifier("selector_item", "drawable", pkg);
+                if (bg != 0) tv.setBackgroundResource(bg);
+                int colorId = getResources().getIdentifier("text", "color", pkg);
+                if (colorId != 0) {
+                    try { tv.setTextColor(getResources().getColorStateList(colorId, getTheme())); }
+                    catch (Throwable e) { tv.setTextColor(0xFFFFFFFF); }
+                } else {
                     tv.setTextColor(0xFFFFFFFF);
                 }
             } else {
                 tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
-                tv.setFocusable(true);
-                try {
-                    tv.setBackgroundResource(R.drawable.shape_video_item);
-                } catch (Throwable e) {
-                    try { tv.setBackgroundResource(R.drawable.selector_item); } catch (Throwable ignored) {}
-                }
-                try {
-                    tv.setTextColor(getResources().getColorStateList(R.color.selector_video_text, getTheme()));
-                } catch (Throwable e) {
+                int bg = getResources().getIdentifier("shape_video_item", "drawable", pkg);
+                if (bg == 0) bg = getResources().getIdentifier("selector_video_item", "drawable", pkg);
+                if (bg != 0) tv.setBackgroundResource(bg);
+                int colorId = getResources().getIdentifier("selector_video_text", "color", pkg);
+                if (colorId == 0) colorId = getResources().getIdentifier("text", "color", pkg);
+                if (colorId != 0) {
+                    try { tv.setTextColor(getResources().getColorStateList(colorId, getTheme())); }
+                    catch (Throwable e) { tv.setTextColor(0xFFFFFFFF); }
+                } else {
                     tv.setTextColor(0xFFFFFFFF);
                 }
             }
