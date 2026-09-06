@@ -550,6 +550,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
                             : PlaybackPerformanceSetting.getDv7HandlingText();
             case PlaybackPerformanceCatalog.SOFT_VIDEO_TUNE -> onOff(PlaybackPerformanceSetting.isSoftVideoTuneEnabled());
             case PlaybackPerformanceCatalog.AUDIO_PASSTHROUGH -> onOff(PlayerSetting.isAudioPassThrough());
+            case PlaybackPerformanceCatalog.MPV_MULTICHANNEL_AUDIO -> MpvPerformanceSetting.getMultichannelAudioText();
             case PlaybackPerformanceCatalog.PREFER_AAC -> onOff(PlayerSetting.isPreferAAC());
             case PlaybackPerformanceCatalog.AUDIO_SOFT_PREFER -> onOff(PlayerSetting.isAudioPrefer());
             case PlaybackPerformanceCatalog.VIDEO_SOFT_PREFER -> onOff(PlayerSetting.isVideoPrefer());
@@ -644,6 +645,13 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             };
             case PlaybackPerformanceCatalog.SOFT_VIDEO_TUNE -> () -> toggle(PlaybackPerformanceSetting::isSoftVideoTuneEnabled, PlaybackPerformanceSetting::putSoftVideoTuneEnabled);
             case PlaybackPerformanceCatalog.AUDIO_PASSTHROUGH -> () -> togglePlayer(id, PlayerSetting::isAudioPassThrough, PlayerSetting::putAudioPassThrough);
+            case PlaybackPerformanceCatalog.MPV_MULTICHANNEL_AUDIO -> () -> {
+                MpvPerformanceSetting.putMultichannelAudioMode(
+                        MpvPerformanceSetting.isMultichannelPcm()
+                                ? MpvPerformanceSetting.MULTICHANNEL_STEREO_COMPAT
+                                : MpvPerformanceSetting.MULTICHANNEL_PCM);
+                refresh();
+            };
             case PlaybackPerformanceCatalog.PREFER_AAC -> () -> togglePlayer(id, PlayerSetting::isPreferAAC, PlayerSetting::putPreferAAC);
             case PlaybackPerformanceCatalog.AUDIO_SOFT_PREFER -> () -> togglePlayer(id, PlayerSetting::isAudioPrefer, PlayerSetting::putAudioPrefer);
             case PlaybackPerformanceCatalog.VIDEO_SOFT_PREFER -> () -> togglePlayer(id, PlayerSetting::isVideoPrefer, PlayerSetting::putVideoPrefer);

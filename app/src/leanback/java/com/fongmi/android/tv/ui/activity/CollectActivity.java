@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.KeyEvent;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -120,6 +121,10 @@ public class CollectActivity extends BaseActivity implements CollectAdapter.OnCl
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
                 scheduleCollect(position, 260);
             }
+        });
+        mBinding.collect.setOnKeyListener((view, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN || keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+            return focusFirstSearchResult();
         });
         mBinding.recycler.setHasFixedSize(true);
         mBinding.recycler.setItemAnimator(null);
@@ -261,6 +266,12 @@ public class CollectActivity extends BaseActivity implements CollectAdapter.OnCl
         scheduleCollect(position, 0);
     }
 
+    @Override
+    public boolean onCollectKey(int position, int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN || keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+        return focusFirstSearchResult();
+    }
+
     private void scheduleCollect(int position, long delayMillis) {
         if (position < 0 || position >= mCollectAdapter.getItemCount()) return;
         Collect item = mCollectAdapter.get(position);
@@ -291,12 +302,32 @@ public class CollectActivity extends BaseActivity implements CollectAdapter.OnCl
     }
 
     private void setSearchItemsLazy(List<Vod> items) {
-        mBinding.recycler.scrollToPosition(0);
         mSearchAdapter.setSource(items, getCount() * 4);
         mBinding.recycler.post(() -> {
+            scrollSearchToTop();
             ensureSearchRows(getCount(), 2);
             preloadNextRows(getCount());
         });
+    }
+
+    private void scrollSearchToTop() {
+        RecyclerView.LayoutManager manager = mBinding.recycler.getLayoutManager();
+        if (manager instanceof GridLayoutManager layoutManager) layoutManager.scrollToPositionWithOffset(0, 0);
+        else mBinding.recycler.scrollToPosition(0);
+    }
+
+    private boolean focusFirstSearchResult() {
+        if (mSearchAdapter == null || mSearchAdapter.getItemCount() == 0) return false;
+        mBinding.recycler.post(() -> {
+            scrollSearchToTop();
+            mBinding.recycler.post(() -> {
+                RecyclerView.LayoutManager manager = mBinding.recycler.getLayoutManager();
+                View target = manager == null ? null : manager.findViewByPosition(0);
+                if (target != null) target.requestFocus();
+                else mBinding.recycler.requestFocus();
+            });
+        });
+        return true;
     }
 
     @Override

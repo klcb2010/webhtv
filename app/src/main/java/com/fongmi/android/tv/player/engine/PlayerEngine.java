@@ -11,6 +11,7 @@ import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 
 import com.fongmi.android.tv.bean.Track;
+import com.fongmi.android.tv.player.AudioPlaybackDiagnostics;
 import com.fongmi.android.tv.player.PlaybackRoute;
 import com.fongmi.android.tv.player.PlaybackResourceClassifier;
 import com.fongmi.android.tv.player.PlaybackTrace;
@@ -127,6 +128,11 @@ public interface PlayerEngine {
     /** Source-track identity and runtime decode/output facts for the selected video track. */
     default VideoPlaybackDetails getVideoPlaybackDetails() {
         return VideoPlaybackDetails.empty();
+    }
+
+    /** Actual runtime audio decode and AudioTrack/AO output facts. */
+    default AudioPlaybackDiagnostics.Snapshot getAudioPlaybackDiagnostics() {
+        return AudioPlaybackDiagnostics.Snapshot.empty();
     }
 
     default long getDroppedFrames() {

@@ -27,6 +27,7 @@ import androidx.media3.common.Tracks;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.DolbyVisionFormatLabel;
+import com.fongmi.android.tv.player.AudioPlaybackDiagnostics;
 import com.fongmi.android.tv.player.GpuLoadMonitor;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.PlaybackPanelResourceMonitor;
@@ -353,15 +354,18 @@ public class PlayerOsdController {
                 snapshot.videoDecoderName(), getVideoTrackState(player),
                 videoDetails);
         AudioTrackState audioTrack = getAudioTrackState(player);
-        String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
+        String runtimeAudio = AudioPlaybackDiagnostics.format(
+                player.getAudioPlaybackDiagnostics());
+        String audioText = TextUtils.isEmpty(runtimeAudio)
+                ? summarizeAudio(audio, audioTrack, snapshot.audioDecoderName())
+                : runtimeAudio;
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
         String tunnel = switchText(PlayerSetting.isTunnelingEnabled());
         String performance = PlaybackPerformanceSetting.getProfileName();
-        String passThrough = player.getAudioPassThroughText();
         String preload = "预载" + switchText(PreloadSetting.isPreload());
         String frameRateMatch = player.isExo() ? "帧率匹配 开" : "";
         String softTune = getSoftDecodeTuneText(player);
-        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isExo() ? "兜底开" : "");
+        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, softTune, player.isExo() ? "兜底开" : "");
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + player.getDroppedFrames());
         String error = getErrorText(player, snapshot);
         String main = join("\n",

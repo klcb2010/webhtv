@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.adapter;
 
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -28,6 +29,10 @@ public class CollectAdapter extends RecyclerView.Adapter<CollectAdapter.ViewHold
     public interface OnClickListener {
 
         void onItemClick(int position, Collect item);
+
+        default boolean onCollectKey(int position, int keyCode, KeyEvent event) {
+            return false;
+        }
     }
 
     public void add(Collect item) {
@@ -96,6 +101,10 @@ public class CollectAdapter extends RecyclerView.Adapter<CollectAdapter.ViewHold
         holder.binding.getRoot().setOnClickListener(v -> {
             int adapterPosition = holder.getBindingAdapterPosition();
             if (listener != null && adapterPosition >= 0) listener.onItemClick(adapterPosition, item);
+        });
+        holder.binding.getRoot().setOnKeyListener((v, keyCode, event) -> {
+            int adapterPosition = holder.getBindingAdapterPosition();
+            return listener != null && adapterPosition >= 0 && listener.onCollectKey(adapterPosition, keyCode, event);
         });
         holder.binding.text.setText(item.getSite().getName());
         holder.binding.text.setSelected(holder.binding.text.hasFocus() || item.isSelected());

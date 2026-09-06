@@ -246,6 +246,9 @@ apply_media_patches() {
     "$patch_dir/media3-exo-iso-reader-safety.patch"
     "$patch_dir/media3-exo-iso-multi-extent.patch"
     "$patch_dir/media3-precache-hls-safety.patch"
+    "$patch_dir/media3-exo-av3a-mp4.patch"
+    "$patch_dir/media3-exo-av3a-dash-channel-config.patch"
+    "$patch_dir/media3-exo-alac-wave.patch"
   )
   for patch_file in "${patches[@]}"; do
     [[ -f "$patch_file" ]] || continue
@@ -260,6 +263,7 @@ apply_nextlib_patches() {
   local patches=(
     "$THIRD_PARTY_DIR/patches/nextlib-ffmpeg-soft-load-shedding.patch"
     "$THIRD_PARTY_DIR/patches/nextlib-av3a.patch"
+    "$THIRD_PARTY_DIR/patches/nextlib-ape-support.patch"
   )
   for patch_file in "${patches[@]}"; do
     if [[ ! -f "$patch_file" ]]; then
@@ -267,8 +271,8 @@ apply_nextlib_patches() {
       exit 1
     fi
     echo "Applying nextlib patch $(basename "$patch_file")"
-    git -C "$NEXTLIB_DIR" apply --check "$patch_file"
-    git -C "$NEXTLIB_DIR" apply "$patch_file"
+    git -C "$NEXTLIB_DIR" apply --recount --check "$patch_file"
+    git -C "$NEXTLIB_DIR" apply --recount "$patch_file"
   done
 }
 
