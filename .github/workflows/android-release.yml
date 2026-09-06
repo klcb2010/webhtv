@@ -957,7 +957,7 @@ jobs:
 
           if up_body:
               parts.append("")
-              parts.append("---")
+              parts.append("")
               parts.append("")
               if up_tag:
                   parts.append(f"### 上游更新（fish2018/webhtv {up_tag}）")
