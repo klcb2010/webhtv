@@ -875,48 +875,121 @@ jobs:
 
       # ============================================================
       # Prepare release notes
+      # - 手动 inputs.release_notes 优先
+      # - 自动附带上游 fish2018/webhtv 最新 Release 说明
       # ============================================================
       - name: Prepare release notes input
         if: steps.should_build.outputs.build == 'true'
         id: release_notes
         env:
           RELEASE_NOTES_RAW: ${{ inputs.release_notes }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          UPSTREAM_OWNER: fish2018
+          UPSTREAM_REPO_NAME: webhtv
         run: |
           python3 - <<'PY'
+          import json
           import os
+          import subprocess
+          import urllib.request
 
-          raw = os.environ.get("RELEASE_NOTES_RAW", "").strip()
+          def normalize(raw: str) -> str:
+              return (
+                  (raw or "")
+                  .strip()
+                  .replace("\\r\\n", "\n")
+                  .replace("\\n", "\n")
+                  .replace("\\t", "\t")
+                  .replace('\\"', '"')
+                  .replace("\\'", "'")
+              )
 
-          notes = (
-              raw
-              .replace("\\r\\n", "\n")
-              .replace("\\n", "\n")
-              .replace("\\t", "\t")
-              .replace('\\"', '"')
-              .replace("\\'", "'")
-          )
+          def fetch_upstream_notes():
+              owner = os.environ.get("UPSTREAM_OWNER", "fish2018")
+              repo = os.environ.get("UPSTREAM_REPO_NAME", "webhtv")
+              token = os.environ.get("GH_TOKEN", "").strip()
+
+              try:
+                  cmd = [
+                      "gh", "api",
+                      f"repos/{owner}/{repo}/releases/latest",
+                      "--jq", '.tag_name + "\n" + (.body // "")',
+                  ]
+                  out = subprocess.check_output(cmd, text=True, timeout=30)
+                  lines = out.splitlines()
+                  if lines:
+                      tag = lines[0].strip()
+                      body = "\n".join(lines[1:]).strip()
+                      if body:
+                          return tag, body
+              except Exception as e:
+                  print(f"[notes] gh api failed: {e}")
+
+              try:
+                  headers = {
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "klcb-webhtv-release",
+                  }
+                  if token:
+                      headers["Authorization"] = f"Bearer {token}"
+                  req = urllib.request.Request(
+                      f"https://api.github.com/repos/{owner}/{repo}/releases/latest",
+                      headers=headers,
+                  )
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      data = json.loads(resp.read().decode("utf-8"))
+                  tag = (data.get("tag_name") or "").strip()
+                  body = (data.get("body") or "").strip()
+                  return tag, body
+              except Exception as e:
+                  print(f"[notes] urllib failed: {e}")
+                  return "", ""
+
+          manual = normalize(os.environ.get("RELEASE_NOTES_RAW", ""))
+          up_tag, up_body = fetch_upstream_notes()
+
+          parts = []
+          if manual:
+              parts.append(manual)
+          else:
+              parts.append("基于上游同步构建的 mod 版本发布。")
+
+          if up_body:
+              parts.append("")
+              parts.append("---")
+              parts.append("")
+              if up_tag:
+                  parts.append(f"### 上游更新（fish2018/webhtv {up_tag}）")
+              else:
+                  parts.append("### 上游更新（fish2018/webhtv）")
+              parts.append("")
+              parts.append(up_body)
+          else:
+              print("[notes] upstream release body empty, skip attach")
+
+          notes = "\n".join(parts).strip()
+          if not notes:
+              notes = "手动触发 GitHub Actions 构建发布。"
 
           delimiter = "RELEASE_NOTES_EOF"
-
           while delimiter in notes:
               delimiter += "_"
 
-          with open(
-              os.environ["GITHUB_OUTPUT"],
-              "a",
-              encoding="utf-8"
-          ) as fh:
-              fh.write(
-                  f"has_notes={'true' if notes else 'false'}\n"
-              )
-
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"has_notes={'true' if notes else 'false'}\n")
+              fh.write(f"upstream_tag={up_tag}\n")
               fh.write(f"notes<<{delimiter}\n")
               fh.write(notes)
-
-              if notes and not notes.endswith("\n"):
+              if not notes.endswith("\n"):
                   fh.write("\n")
-
               fh.write(f"{delimiter}\n")
+
+          print("==========================================")
+          print("Release notes preview:")
+          print("==========================================")
+          print(notes[:2000])
+          print("==========================================")
           PY
 
       # ============================================================
@@ -1063,3 +1136,4 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 30
+
