@@ -960,9 +960,9 @@ jobs:
               parts.append("")
               parts.append("")
               if up_tag:
-                  parts.append(f"### 上游更新（fish2018/webhtv {up_tag}）")
+                  parts.append(f"### 上游更新日志（fish2018/webhtv {up_tag}）")
               else:
-                  parts.append("### 上游更新（fish2018/webhtv）")
+                  parts.append("### 上游更新日志（fish2018/webhtv）")
               parts.append("")
               parts.append(up_body)
           else:
