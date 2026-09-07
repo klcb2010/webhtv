@@ -33,6 +33,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_build:
+        description: "Force build even if upstream has no new Release (manual only)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -45,7 +50,6 @@ env:
   CNB_REPO_SLUG: fish2035/webhtv-release
   CNB_REPO_URL: https://cnb.cool/fish2035/webhtv-release.git
 
- 
   UPSTREAM_REPO: https://github.com/fish2018/webhtv.git
   UPSTREAM_BRANCH: main
 
@@ -57,7 +61,6 @@ jobs:
 
     steps:
 
-    
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -65,12 +68,15 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: true
 
-      
       - name: Check and sync upstream
+        id: upstream_sync
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
         run: |
           set -e
+
+          echo "synced=false" >> "$GITHUB_OUTPUT"
+          echo "reason=init" >> "$GITHUB_OUTPUT"
 
           echo "=========================================="
           echo "检查上游更新"
@@ -82,22 +88,15 @@ jobs:
           echo "=========================================="
 
           CURRENT_BRANCH="${GITHUB_REF_NAME}"
-
           if [ -z "$CURRENT_BRANCH" ]; then
             echo "❌ 无法确定当前分支"
             exit 1
           fi
 
-          # --------------------------------------------------------
-          # 确保 origin 始终是当前仓库
-          # --------------------------------------------------------
           echo ""
           echo "当前 Git remote："
           git remote -v
 
-          # --------------------------------------------------------
-          # 添加 upstream
-          # --------------------------------------------------------
           git remote remove upstream 2>/dev/null || true
           git remote add upstream "$UPSTREAM_REPO"
 
@@ -106,11 +105,7 @@ jobs:
           echo "获取上游源码"
           echo "=========================================="
 
-          git fetch \
-            --no-tags \
-            --prune \
-            upstream \
-            "$UPSTREAM_BRANCH"
+          git fetch --no-tags --prune upstream "$UPSTREAM_BRANCH"
 
           CURRENT_SHA="$(git rev-parse HEAD)"
           UPSTREAM_SHA="$(git rev-parse "upstream/$UPSTREAM_BRANCH")"
@@ -119,19 +114,13 @@ jobs:
           echo "当前 HEAD : $CURRENT_SHA"
           echo "上游 HEAD : $UPSTREAM_SHA"
 
-          # --------------------------------------------------------
-          # 判断上游是否已经包含在当前仓库
-          # --------------------------------------------------------
-          if git merge-base \
-            --is-ancestor \
-            "upstream/$UPSTREAM_BRANCH" \
-            HEAD; then
-
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
             echo ""
             echo "=========================================="
             echo "✅ 上游没有新的提交"
             echo "=========================================="
-            echo "跳过同步和提交"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=upstream-already-merged" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -139,111 +128,111 @@ jobs:
           echo "=========================================="
           echo "⚠️ 检测到上游更新"
           echo "=========================================="
-
-          # --------------------------------------------------------
-          # 显示上游新增提交
-          # --------------------------------------------------------
           echo ""
           echo "上游新增提交："
+          git log --oneline --decorate HEAD.."upstream/$UPSTREAM_BRANCH" | head -30 || true
 
-          git log \
-            --oneline \
-            --decorate \
-            HEAD.."upstream/$UPSTREAM_BRANCH" \
-            | head -30 || true
-
-          # --------------------------------------------------------
-          # 就绪检测：main 最新提交 vs 最新 GitHub Release
-          # 作者可能先推 main，稍后再发 Release / 更新 .so
-          # 仅当最新 Release 时间不早于 main 最新提交时才同步
-          # --------------------------------------------------------
           echo ""
           echo "=========================================="
-          echo "检查上游是否已发布就绪"
+          echo "检查上游是否已发布就绪（按 Release 提交，而非发布时间）"
           echo "=========================================="
 
-          UPSTREAM_COMMIT_UNIX="$(
-            git show -s --format=%ct "upstream/$UPSTREAM_BRANCH"
-          )"
-          UPSTREAM_COMMIT_ISO="$(
-            git show -s --format=%cI "upstream/$UPSTREAM_BRANCH"
-          )"
-
-          echo "main 最新提交时间 : $UPSTREAM_COMMIT_ISO ($UPSTREAM_COMMIT_UNIX)"
-
-          # fish2018/webhtv 最新 Release（含 prerelease）
+          # 取最新非 draft Release（含 prerelease）
           RELEASE_JSON="$(
-            gh api "repos/fish2018/webhtv/releases?per_page=5" \
+            gh api "repos/fish2018/webhtv/releases?per_page=10" \
               --jq '[.[] | select(.draft == false)] | .[0] // empty' \
               2>/dev/null || true
           )"
 
           if [ -z "$RELEASE_JSON" ] || [ "$RELEASE_JSON" = "null" ]; then
-            echo ""
-            echo "=========================================="
-            echo "⏳ 上游尚无可用 GitHub Release"
-            echo "跳过本次同步，等待作者发布后再同步"
-            echo "=========================================="
+            echo "⏳ 上游尚无可用 GitHub Release → 跳过同步"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-upstream-release" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          RELEASE_TAG="$(
-            printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tag_name") or "")'
-          )"
-          RELEASE_PUBLISHED_AT="$(
-            printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("published_at") or d.get("created_at") or "")'
-          )"
-          RELEASE_PRERELEASE="$(
-            printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("true" if d.get("prerelease") else "false")'
-          )"
+          RELEASE_TAG="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tag_name") or "")')"
+          RELEASE_PUBLISHED_AT="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("published_at") or d.get("created_at") or "")')"
+          RELEASE_PRERELEASE="$(printf '%s' "$RELEASE_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("true" if d.get("prerelease") else "false")')"
 
-          if [ -z "$RELEASE_PUBLISHED_AT" ]; then
-            echo ""
-            echo "=========================================="
-            echo "⏳ 无法解析最新 Release 发布时间"
-            echo "跳过本次同步"
-            echo "=========================================="
+          echo "最新 Release     : $RELEASE_TAG"
+          echo "Release 发布时间 : $RELEASE_PUBLISHED_AT"
+          echo "是否预发布       : $RELEASE_PRERELEASE"
+          echo "上游 main HEAD   : $UPSTREAM_SHA"
+
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "⏳ 无法解析 Release tag → 跳过同步"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=bad-release-tag" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          RELEASE_UNIX="$(
-            python3 -c '
-          import sys
-          from datetime import datetime, timezone
-          s = sys.argv[1].strip()
-          # 2026-08-31T03:12:00Z
-          if s.endswith("Z"):
-             s = s[:-1] + "+00:00"
-          dt = datetime.fromisoformat(s)
-          print(int(dt.timestamp()))
-          ' "$RELEASE_PUBLISHED_AT"
-          )"
+          # 拉取该 tag 对应 commit（关键：用提交包含关系，不用 published_at）
+          git fetch --no-tags upstream "refs/tags/${RELEASE_TAG}:refs/tags/upstream-rel-${RELEASE_TAG}" 2>/dev/null || \
+            git fetch upstream "refs/tags/${RELEASE_TAG}:refs/tags/upstream-rel-${RELEASE_TAG}" 2>/dev/null || true
 
-          echo "最新 Release       : $RELEASE_TAG"
-          echo "Release 发布时间   : $RELEASE_PUBLISHED_AT ($RELEASE_UNIX)"
-          echo "是否预发布         : $RELEASE_PRERELEASE"
+          REL_SHA=""
+          if git rev-parse "upstream-rel-${RELEASE_TAG}^{commit}" >/dev/null 2>&1; then
+            REL_SHA="$(git rev-parse "upstream-rel-${RELEASE_TAG}^{commit}")"
+          elif git rev-parse "upstream-rel-${RELEASE_TAG}" >/dev/null 2>&1; then
+            REL_SHA="$(git rev-parse "upstream-rel-${RELEASE_TAG}")"
+          else
+            # API 回退：target_commitish 有时是分支名，尽量解析 tag object
+            REL_SHA="$(
+              gh api "repos/fish2018/webhtv/git/ref/tags/${RELEASE_TAG}" \
+                --jq '.object.sha' 2>/dev/null || true
+            )"
+            OBJ_TYPE="$(
+              gh api "repos/fish2018/webhtv/git/ref/tags/${RELEASE_TAG}" \
+                --jq '.object.type' 2>/dev/null || true
+            )"
+            if [ "$OBJ_TYPE" = "tag" ] && [ -n "$REL_SHA" ]; then
+              REL_SHA="$(
+                gh api "repos/fish2018/webhtv/git/tags/${REL_SHA}" \
+                  --jq '.object.sha' 2>/dev/null || echo "$REL_SHA"
+              )"
+            fi
+          fi
 
-          if [ "$RELEASE_UNIX" -lt "$UPSTREAM_COMMIT_UNIX" ]; then
+          echo "Release 指向 SHA : ${REL_SHA:-unknown}"
+
+          if [ -z "$REL_SHA" ]; then
+            echo "⏳ 无法解析 Release 对应提交 → 跳过同步"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=cannot-resolve-release-sha" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 就绪条件：上游 main HEAD 已被该 Release 包含（HEAD == Release 或 HEAD 是 Release 的祖先）
+          # 未就绪：main 比 Release 更新（Release 是 main 的祖先但不相等）
+          if [ "$UPSTREAM_SHA" = "$REL_SHA" ]; then
+            echo "✅ 上游 main HEAD 与最新 Release 提交一致 → 就绪"
+          elif git merge-base --is-ancestor "$UPSTREAM_SHA" "$REL_SHA" 2>/dev/null; then
+            echo "✅ 上游 main HEAD 已包含在最新 Release 中 → 就绪"
+          elif git merge-base --is-ancestor "$REL_SHA" "$UPSTREAM_SHA" 2>/dev/null; then
             echo ""
             echo "=========================================="
-            echo "⏳ 上游 main 有比最新 Release 更新的提交"
-            echo "Release 时间早于 main 最新提交 → 视为半成品"
-            echo "跳过本次同步，等待作者发布对应 Release"
+            echo "⏳ 上游 main 比最新 Release 更新（仅源码、尚未对该提交发版）"
+            echo "跳过同步，等待 fish2018 发布对应 Release"
             echo "=========================================="
-            echo "main   : $UPSTREAM_COMMIT_ISO"
-            echo "release: $RELEASE_PUBLISHED_AT"
+            echo "main    : $UPSTREAM_SHA"
+            echo "release : $REL_SHA ($RELEASE_TAG)"
+            git log --oneline "$REL_SHA".."$UPSTREAM_SHA" | head -20 || true
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=main-ahead-of-release" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            echo "⏳ 上游 main 与最新 Release 分叉 → 跳过同步"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=diverged" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo ""
           echo "=========================================="
-          echo "✅ 上游已就绪（Release 不早于 main 最新提交）"
-          echo "开始同步"
+          echo "✅ 上游已就绪，开始同步"
           echo "=========================================="
 
-          # --------------------------------------------------------
-          # 保存保护文件
-          # --------------------------------------------------------
           rm -rf /tmp/webhtv-protected
           mkdir -p /tmp/webhtv-protected
 
@@ -253,55 +242,32 @@ jobs:
           echo "=========================================="
 
           if [ -f README.md ]; then
-            cp -a \
-              README.md \
-              /tmp/webhtv-protected/README.md
-
+            cp -a README.md /tmp/webhtv-protected/README.md
             echo "🔒 README.md"
           fi
 
           if [ -d mod ]; then
-            cp -a \
-              mod \
-              /tmp/webhtv-protected/mod
-
+            cp -a mod /tmp/webhtv-protected/mod
             echo "🔒 mod/"
           fi
 
           if [ -f .github/workflows/android-release.yml ]; then
-            mkdir -p \
-              /tmp/webhtv-protected/workflows
-
-            cp -a \
-              .github/workflows/android-release.yml \
+            mkdir -p /tmp/webhtv-protected/workflows
+            cp -a .github/workflows/android-release.yml \
               /tmp/webhtv-protected/workflows/android-release.yml
-
             echo "🔒 .github/workflows/android-release.yml"
           fi
 
-          # --------------------------------------------------------
-          # 导出上游最新源码
-          # --------------------------------------------------------
           rm -rf /tmp/webhtv-upstream
           mkdir -p /tmp/webhtv-upstream
+          git archive "upstream/$UPSTREAM_BRANCH" | tar -x -C /tmp/webhtv-upstream
 
-          git archive \
-            "upstream/$UPSTREAM_BRANCH" \
-            | tar -x -C /tmp/webhtv-upstream
-
-          # --------------------------------------------------------
-          # 同步上游
-          #
-          # 以下三个路径绝不覆盖
-          # --------------------------------------------------------
           echo ""
           echo "=========================================="
           echo "同步上游源码"
           echo "=========================================="
 
-          rsync \
-            -a \
-            --delete \
+          rsync -a --delete \
             --exclude='.git/' \
             --exclude='README.md' \
             --exclude='mod/' \
@@ -309,46 +275,24 @@ jobs:
             /tmp/webhtv-upstream/ \
             ./
 
-          # --------------------------------------------------------
-          # 恢复 README.md
-          # --------------------------------------------------------
           if [ -f /tmp/webhtv-protected/README.md ]; then
-            cp -a \
-              /tmp/webhtv-protected/README.md \
-              README.md
-
+            cp -a /tmp/webhtv-protected/README.md README.md
             echo "🔒 已恢复 README.md"
           fi
 
-          # --------------------------------------------------------
-          # 恢复 mod/
-          # --------------------------------------------------------
           if [ -d /tmp/webhtv-protected/mod ]; then
             rm -rf mod
-
-            cp -a \
-              /tmp/webhtv-protected/mod \
-              mod
-
+            cp -a /tmp/webhtv-protected/mod mod
             echo "🔒 已恢复 mod/"
           fi
 
-          # --------------------------------------------------------
-          # 恢复当前 workflow
-          # --------------------------------------------------------
           if [ -f /tmp/webhtv-protected/workflows/android-release.yml ]; then
             mkdir -p .github/workflows
-
-            cp -a \
-              /tmp/webhtv-protected/workflows/android-release.yml \
+            cp -a /tmp/webhtv-protected/workflows/android-release.yml \
               .github/workflows/android-release.yml
-
             echo "🔒 已恢复 .github/workflows/android-release.yml"
           fi
 
-          # --------------------------------------------------------
-          # 检查实际变化
-          # --------------------------------------------------------
           git add -A
 
           echo ""
@@ -357,49 +301,35 @@ jobs:
           echo "=========================================="
 
           if git diff --cached --quiet; then
-
-            echo ""
-            echo "=========================================="
-            echo "✅ 上游虽然有新提交"
-            echo "但保护文件后没有实际变化"
-            echo "跳过提交"
-            echo "=========================================="
-
+            echo "✅ 保护文件后没有实际变化，跳过提交"
+            echo "synced=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-file-change-after-protect" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo ""
           echo "实际变化："
           git diff --cached --stat
-
-          echo ""
-          echo "变化文件："
           git diff --cached --name-status
 
-          # --------------------------------------------------------
-          # 强制确认三个保护对象没有被上游覆盖
-          # --------------------------------------------------------
           echo ""
           echo "=========================================="
           echo "检查保护文件"
           echo "=========================================="
 
           PROTECTED_CHANGED=0
-
           if git diff --cached --quiet -- README.md; then
             echo "✅ README.md 未被修改"
           else
             echo "❌ README.md 被修改"
             PROTECTED_CHANGED=1
           fi
-
           if git diff --cached --quiet -- mod/; then
             echo "✅ mod/ 未被修改"
           else
             echo "❌ mod/ 被修改"
             PROTECTED_CHANGED=1
           fi
-
           if git diff --cached --quiet -- .github/workflows/android-release.yml; then
             echo "✅ android-release.yml 未被修改"
           else
@@ -408,50 +338,32 @@ jobs:
           fi
 
           if [ "$PROTECTED_CHANGED" -ne 0 ]; then
-            echo ""
             echo "❌ 保护文件检测失败，停止提交"
             git reset
             exit 1
           fi
 
-          # --------------------------------------------------------
-          # Git 配置
-          # --------------------------------------------------------
-          git config \
-            user.name \
-            "github-actions[bot]"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git config \
-            user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: sync upstream fish2018/webhtv (${RELEASE_TAG})"
 
-          # --------------------------------------------------------
-          # 提交
-          # --------------------------------------------------------
-          git commit \
-            -m "chore: sync upstream fish2018/webhtv"
-
-          # --------------------------------------------------------
-          # 推送到当前仓库
-          #
-          # 明确使用 origin
-          # 不使用 upstream
-          # --------------------------------------------------------
           echo ""
           echo "=========================================="
           echo "推送到当前仓库"
           echo "=========================================="
 
-          git push \
-            origin \
-            "HEAD:$CURRENT_BRANCH"
+          git push origin "HEAD:$CURRENT_BRANCH"
+
+          echo "synced=true" >> "$GITHUB_OUTPUT"
+          echo "reason=synced-${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "upstream_release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
           echo ""
           echo "=========================================="
           echo "✅ 上游同步完成并已提交"
           echo "=========================================="
 
-    
       - name: Decide whether to build
         id: should_build
         env:
@@ -462,6 +374,10 @@ jobs:
           TODAY="$(date +%Y-%m-%d)"
           HEAD_SHA="$(git rev-parse HEAD)"
           HEAD_SHORT="$(git rev-parse --short=7 HEAD)"
+          EVENT="${{ github.event_name }}"
+          SYNCED="${{ steps.upstream_sync.outputs.synced }}"
+          SYNC_REASON="${{ steps.upstream_sync.outputs.reason }}"
+          FORCE="${{ inputs.force_build }}"
 
           echo "=========================================="
           echo "本仓库发布检测"
@@ -469,11 +385,29 @@ jobs:
           echo "仓库 : ${GITHUB_REPOSITORY}"
           echo "HEAD : $HEAD_SHA ($HEAD_SHORT)"
           echo "日期 : $TODAY (Asia/Shanghai)"
-          echo "触发 : ${{ github.event_name }}"
+          echo "触发 : $EVENT"
+          echo "上游同步 : synced=$SYNCED reason=$SYNC_REASON"
           echo "=========================================="
 
-          # 手动触发且希望总是打包：检查 inputs（无 force 输入时保持检测）
-          # 默认：有未发布变更才打包
+          # 定时任务：仅当「本轮成功同步了已发版的上游」才打包
+          # 避免：上游只推源码未发 Release 时误打包，或无同步却重复发版
+          if [ "$EVENT" = "schedule" ]; then
+            if [ "$SYNCED" != "true" ]; then
+              echo "定时任务且本轮未同步上游 → 跳过打包"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              echo "reason=schedule-no-upstream-sync" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "定时任务且本轮已同步就绪上游 → 继续打包检测"
+          fi
+
+          # 手动 force_build
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
+            echo "手动强制打包"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "reason=force-build" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           LATEST_JSON="$(
             gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=10" \
@@ -490,19 +424,15 @@ jobs:
 
           TAG="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name") or "")')"
           PUBLISHED_AT="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("published_at") or d.get("created_at") or "")')"
-          TARGET_SHA="$(printf '%s' "$LATEST_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("target_commitish") or ""))')"
-
           echo "最新 Release : $TAG"
           echo "发布时间     : $PUBLISHED_AT"
 
-          # Release 对应 commit（优先 git rev-parse tag）
           REL_SHA=""
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             REL_SHA="$(git rev-parse "$TAG^{commit}" 2>/dev/null || git rev-parse "$TAG")"
           fi
           if [ -z "$REL_SHA" ]; then
             REL_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" --jq '.object.sha' 2>/dev/null || true)"
-            # annotated tag → peel
             OBJ_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" --jq '.object.type' 2>/dev/null || true)"
             if [ "$OBJ_TYPE" = "tag" ] && [ -n "$REL_SHA" ]; then
               REL_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/$REL_SHA" --jq '.object.sha' 2>/dev/null || echo "$REL_SHA")"
@@ -510,7 +440,6 @@ jobs:
           fi
           echo "Release SHA  : ${REL_SHA:-unknown}"
 
-          # 1) HEAD 已包含在该 Release 指向的提交（相同）→ 跳过
           if [ -n "$REL_SHA" ] && [ "$REL_SHA" = "$HEAD_SHA" ]; then
             echo "HEAD 与最新 Release 相同 → 跳过打包"
             echo "build=false" >> "$GITHUB_OUTPUT"
@@ -518,7 +447,6 @@ jobs:
             exit 0
           fi
 
-          # 2) Release 之后没有新提交 → 跳过
           if [ -n "$REL_SHA" ] && git merge-base --is-ancestor "$HEAD_SHA" "$REL_SHA" 2>/dev/null; then
             echo "HEAD 是最新 Release 的祖先（无更新）→ 跳过"
             echo "build=false" >> "$GITHUB_OUTPUT"
@@ -526,8 +454,6 @@ jobs:
             exit 0
           fi
 
-          # 3) 有新提交：若今天已有 Release 且无新提交则跳过（上面已覆盖）
-          # 有新提交 → 打包
           echo "存在未发布提交 → 需要打包"
           if [ -n "$REL_SHA" ]; then
             echo "Release 之后的提交："
@@ -541,10 +467,8 @@ jobs:
         run: |
           echo "=========================================="
           echo "跳过打包：${{ steps.should_build.outputs.reason }}"
+          echo "上游同步：${{ steps.upstream_sync.outputs.reason }}"
           echo "=========================================="
-          # 用成功退出结束 job：后续步骤加 if
-          echo "skip"
-
 
       # ============================================================
       # Apply mod patches
@@ -832,7 +756,11 @@ jobs:
 
           ls -lh dist/
 
-     
+      # ============================================================
+      # Prepare release notes
+      # - 手动 inputs.release_notes 优先
+      # - 自动附带上游 fish2018/webhtv 最新 Release 说明
+      # ============================================================
       - name: Prepare release notes input
         if: steps.should_build.outputs.build == 'true'
         id: release_notes
@@ -908,11 +836,11 @@ jobs:
           if manual:
               parts.append(manual)
           else:
-              parts.append("基于上游同步构建的 mod 版本")
+              parts.append("基于上游同步构建的 mod 版本发布。")
 
           if up_body:
               parts.append("")
-              parts.append("")
+              parts.append("---")
               parts.append("")
               if up_tag:
                   parts.append(f"### 上游更新（fish2018/webhtv {up_tag}）")
@@ -1008,7 +936,21 @@ jobs:
 
           ls -lh dist/
 
-    
+      # ============================================================
+      # Create GitHub Release
+      #
+      # 重要：
+      #
+      # --repo "${GITHUB_REPOSITORY}"
+      #
+      # 强制指定目标仓库为：
+      #
+      # klcb2010/webhtv
+      #
+      # 即使存在 upstream remote，也不会去：
+      #
+      # fish2018/webhtv/releases
+      # ============================================================
       - name: Create GitHub Release
         if: steps.should_build.outputs.build == 'true'
         env:
