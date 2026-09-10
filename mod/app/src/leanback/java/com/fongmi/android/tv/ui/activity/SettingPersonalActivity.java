@@ -47,6 +47,9 @@ public class SettingPersonalActivity extends BaseActivity {
         setListeners();
     }
 
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
+
     private void setListeners() {
         // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
@@ -171,4 +174,19 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putHomeHistory(!Setting.isHomeHistory());
         refreshTexts();
     }
+
+    private String recommendSourceLabel() {
+        int src = Setting.getRecommendSource();
+        if (src == Setting.RECOMMEND_AI) return getString(R.string.setting_recommend_ai);
+        if (src == Setting.RECOMMEND_DOUBAN) return getString(R.string.setting_recommend_douban);
+        return getString(R.string.setting_recommend_off);
+    }
+
+    private void setRecommendSource(View view) {
+        int src = Setting.getRecommendSource();
+        src = (src + 1) % 3;
+        Setting.putRecommendSource(src);
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+    }
+
 }

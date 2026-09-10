@@ -55,7 +55,7 @@
 <string name="setting_ai_fetching_models">Fetching models…</string>
 <string name="setting_ai_fetch_models_fail">Fetch models failed: %1$s</string>
 <string name="setting_ai_need_key">Fill endpoint and API key first</string>
-<string name="ai_recommend_section">AI recommendations</string>
+<string name="ai_recommend_section">For You</string>
 <string name="ai_recommend_loading_short">Loading…</string>
 <string name="ai_recommend_retry">Failed</string>
 <string name="ai_recommend_retry_action">Tap to retry</string>
@@ -95,4 +95,9 @@
     <string name="player_auto_change">Auto change source</string>
     <string name="setting_player_auto_change">Auto change source</string>
     <string name="setting_home_push">Home push button</string>
+    <string name="personal_recommend_section">For You</string>
+    <string name="setting_recommend_source">Recommendations</string>
+    <string name="setting_recommend_off">Off</string>
+    <string name="setting_recommend_ai">AI</string>
+    <string name="setting_recommend_douban">Douban</string>
 </resources>

@@ -17,8 +17,9 @@ HOOK = r"""
         final int gen = ++mAiRecommendGen;
         mAiRecommendVod = item;
         mAiRecommendTitle = rawName;
-        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()
-                && !com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled()) {
+        int recommendSource = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        boolean needTitleExtract = com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled();
+        if (recommendSource == com.fongmi.android.tv.setting.Setting.RECOMMEND_OFF && !needTitleExtract) {
             hideAiRecommendPanel();
             return;
         }
@@ -34,24 +35,81 @@ HOOK = r"""
                             try { mBinding.name.setText(title); } catch (Throwable ignored) {}
                             mAiRecommendTitle = title;
                         }
-                        loadAiRecommendations(gen, item, mAiRecommendTitle, 0);
+                        maybeLoadPersonalRecommend(gen, item, mAiRecommendTitle, 0);
                     });
                 });
             } else {
-                loadAiRecommendations(gen, item, rawName, 0);
+                maybeLoadPersonalRecommend(gen, item, rawName, 0);
             }
         }, 400);
     }
 
-    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
-        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()) {
+
+    private void maybeLoadPersonalRecommend(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        int src = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_OFF) {
+            hideAiRecommendPanel();
+            return;
+        }
+        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN) {
+            loadDoubanRecommendations(gen, vod, title, attempt);
+        } else {
+            loadAiRecommendations(gen, vod, title, attempt);
+        }
+    }
+
+    private void loadDoubanRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        if (com.fongmi.android.tv.setting.Setting.getRecommendSource() != com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN) {
             hideAiRecommendPanel();
             return;
         }
         try {
             if (mBinding.aiRecommendPanel == null) return;
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
+            mBinding.aiRecommendList.removeAllViews();
+        } catch (Throwable e) {
+            if (attempt < 2) {
+                com.fongmi.android.tv.App.post(() -> {
+                    if (gen != mAiRecommendGen) return;
+                    loadDoubanRecommendations(gen, vod, title, attempt + 1);
+                }, 500);
+            }
+            return;
+        }
+        final String reqTitle = title == null ? "" : title;
+        com.fongmi.android.tv.utils.Task.execute(() -> {
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items = null;
+            for (int i = 0; i < 2; i++) {
+                if (gen != mAiRecommendGen) return;
+                try {
+                    items = com.fongmi.android.tv.service.DoubanRecommendService.load(reqTitle);
+                    if (items != null && !items.isEmpty()) break;
+                } catch (Exception e) {
+                    try { Thread.sleep(500L * (i + 1)); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                }
+            }
+            final java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> result = items;
+            com.fongmi.android.tv.App.post(() -> {
+                if (gen != mAiRecommendGen || isFinishing()) return;
+                if (result != null && !result.isEmpty()) {
+                    bindAiRecommendList(gen, result);
+                } else {
+                    hideAiRecommendPanel();
+                }
+            });
+        });
+    }
+
+    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        if (com.fongmi.android.tv.setting.Setting.getRecommendSource() != com.fongmi.android.tv.setting.Setting.RECOMMEND_AI) {
+            hideAiRecommendPanel();
+            return;
+        }
+        try {
+            if (mBinding.aiRecommendPanel == null) return;
+            mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
             mBinding.aiRecommendList.removeAllViews();
         } catch (Throwable e) {
             // binding 偶发未就绪，延迟再试一次
@@ -95,7 +153,7 @@ HOOK = r"""
         try {
             if (mBinding.aiRecommendPanel == null) return;
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
             mBinding.aiRecommendList.removeAllViews();
             com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
             tv.setText(R.string.ai_recommend_retry_action);
@@ -118,7 +176,7 @@ HOOK = r"""
                 return;
             }
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section));
             mBinding.aiRecommendList.removeAllViews();
             float density = getResources().getDisplayMetrics().density;
             int pad = (int) (10 * density);

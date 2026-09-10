@@ -802,6 +802,44 @@ public class Setting {
         return getAiConfig().isReady();
     }
 
+    /** 个性推荐来源：0关闭 1AI 2豆瓣 */
+    public static final int RECOMMEND_OFF = 0;
+    public static final int RECOMMEND_AI = 1;
+    public static final int RECOMMEND_DOUBAN = 2;
+
+    public static int getRecommendSource() {
+        int v = Prefers.getInt("recommend_source", -1);
+        if (v >= 0 && v <= 2) return v;
+        // 兼容旧配置：曾开启 AI 推荐则迁移为 AI
+        try {
+            if (isAiRecommendationEnabled()) return RECOMMEND_AI;
+        } catch (Throwable ignored) {}
+        return RECOMMEND_OFF;
+    }
+
+    public static void putRecommendSource(int source) {
+        if (source < 0 || source > 2) source = RECOMMEND_OFF;
+        Prefers.put("recommend_source", source);
+        // 同步旧 AI recommendation 开关，避免别处逻辑冲突
+        try {
+            if (source == RECOMMEND_AI) {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(true);
+                putAiConfig(c);
+            } else if (source != RECOMMEND_AI) {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(false);
+                putAiConfig(c);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static boolean isPersonalRecommendEnabled() {
+        return getRecommendSource() != RECOMMEND_OFF;
+    }
+
+
+
     public static boolean isSubtitleAutoMatchEnabled() {
         return Prefers.getBoolean("subtitle_auto_match", false);
     }
