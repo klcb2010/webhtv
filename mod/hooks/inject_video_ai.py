@@ -116,6 +116,12 @@ HOOK = r"""
             hideAiRecommendPanel();
             return;
         }
+        // 自动模式下若 AI 未配置就绪，静默结束（豆瓣已失败）
+        if (srcAi == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO
+                && !com.fongmi.android.tv.setting.Setting.isAiRecommendReady()) {
+            hideAiRecommendPanel();
+            return;
+        }
         try {
             if (mBinding.aiRecommendPanel == null) return;
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
@@ -233,44 +239,65 @@ HOOK = r"""
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
                 lp.setMarginEnd(gap);
                 tv.setLayoutParams(lp);
-                final String clickTitle = it.title;
+                final String clickTitle = it.title == null ? "" : it.title.trim();
                 tv.setOnClickListener(v -> {
+                    if (clickTitle.isEmpty()) return;
                     try {
                         final String key = (getKey() == null || getKey().isEmpty()) ? "recommend" : getKey();
                         final String title = clickTitle;
                         try { saveHistory(); } catch (Throwable ignored) {}
                         try { player().stop(); } catch (Throwable ignored) {}
                         try { player().clear(); } catch (Throwable ignored) {}
-                        try { mClock.setCallback(null); } catch (Throwable ignored) {}
-                        // singleTop + recreate 会恢复旧状态；先 finish，再从 Application 新开一页
-                        finish();
-                        com.fongmi.android.tv.App.post(() -> {
+                        try { if (mClock != null) mClock.setCallback(null); } catch (Throwable ignored) {}
+
+                        boolean leanback = false;
+                        try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
+
+                        if (leanback) {
+                            // TV：用官方 start，避免 finish+NEW_TASK 造成 created/destroyed 抖动与空列表竞态
                             try {
-                                android.content.Intent intent = new android.content.Intent(
-                                        com.fongmi.android.tv.App.get(),
-                                        com.fongmi.android.tv.ui.activity.VideoActivity.class);
-                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                                intent.putExtra("key", key);
-                                intent.putExtra("id", "msearch:" + title);
-                                intent.putExtra("name", title);
-                                intent.putExtra("pic", "");
-                                intent.putExtra("mark", "");
-                                intent.putExtra("collect", false);
-                                com.fongmi.android.tv.App.get().startActivity(intent);
-                            } catch (Throwable e) {
+                                com.fongmi.android.tv.ui.activity.VideoActivity.start(
+                                        this, key, "msearch:" + title, title, "", "");
+                            } catch (Throwable e1) {
                                 try {
-                                    com.fongmi.android.tv.ui.activity.SearchActivity.start(
-                                            com.fongmi.android.tv.App.activity(), title);
+                                    com.fongmi.android.tv.ui.activity.SearchActivity.start(this, title);
                                 } catch (Throwable e2) {
-                                    com.fongmi.android.tv.utils.Notify.show(title);
+                                    try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
                                 }
                             }
-                        }, 80);
+                        } else {
+                            // 手机：singleTop 需 finish 后新开，否则标题/片源不换
+                            try { finish(); } catch (Throwable ignored) {}
+                            com.fongmi.android.tv.App.post(() -> {
+                                try {
+                                    android.content.Intent intent = new android.content.Intent(
+                                            com.fongmi.android.tv.App.get(),
+                                            com.fongmi.android.tv.ui.activity.VideoActivity.class);
+                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.putExtra("key", key);
+                                    intent.putExtra("id", "msearch:" + title);
+                                    intent.putExtra("name", title);
+                                    intent.putExtra("pic", "");
+                                    intent.putExtra("mark", "");
+                                    intent.putExtra("collect", false);
+                                    com.fongmi.android.tv.App.get().startActivity(intent);
+                                } catch (Throwable e) {
+                                    try {
+                                        android.app.Activity act = com.fongmi.android.tv.App.activity();
+                                        if (act != null) {
+                                            com.fongmi.android.tv.ui.activity.SearchActivity.start(act, title);
+                                        }
+                                    } catch (Throwable e2) {
+                                        try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                                    }
+                                }
+                            }, 80);
+                        }
                     } catch (Throwable e) {
                         try {
                             com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
                         } catch (Throwable e2) {
-                            com.fongmi.android.tv.utils.Notify.show(clickTitle);
+                            try { com.fongmi.android.tv.utils.Notify.show(clickTitle); } catch (Throwable ignored) {}
                         }
                     }
                 });
