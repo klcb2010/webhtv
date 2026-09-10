@@ -734,6 +734,20 @@ public class Setting {
         Prefers.put("home_push", homePush);
     }
 
+    /** 播放直达：msearch 静默搜源；关闭则进搜索页。默认关 */
+    public static boolean isPlayDirect() {
+        return Prefers.getBoolean("play_direct", false);
+    }
+
+    public static void putPlayDirect(boolean value) {
+        Prefers.put("play_direct", value);
+    }
+
+    /** 播放直达时随机搜索站点数上限 */
+    public static int getPlayDirectSearchLimit() {
+        return 10;
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }

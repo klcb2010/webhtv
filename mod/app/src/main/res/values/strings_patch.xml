@@ -101,4 +101,5 @@
     <string name="setting_recommend_ai">AI</string>
     <string name="setting_recommend_douban">Douban</string>
     <string name="setting_recommend_auto">Auto</string>
+    <string name="setting_play_direct">Play Direct</string>
 </resources>

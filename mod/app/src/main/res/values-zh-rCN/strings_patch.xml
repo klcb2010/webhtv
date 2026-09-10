@@ -101,4 +101,5 @@
     <string name="setting_recommend_ai">AI</string>
     <string name="setting_recommend_douban">豆瓣</string>
     <string name="setting_recommend_auto">自动</string>
+    <string name="setting_play_direct">播放直达</string>
 </resources>

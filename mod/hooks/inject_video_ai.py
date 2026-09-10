@@ -250,6 +250,16 @@ HOOK = r"""
                         try { player().clear(); } catch (Throwable ignored) {}
                         try { if (mClock != null) mClock.setCallback(null); } catch (Throwable ignored) {}
 
+                        // 关闭播放直达：只进搜索
+                        if (!com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
+                            try {
+                                com.fongmi.android.tv.ui.activity.SearchActivity.start(this, title);
+                            } catch (Throwable e) {
+                                try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                            }
+                            return;
+                        }
+
                         boolean leanback = false;
                         try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
 

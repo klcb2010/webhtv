@@ -1014,9 +1014,20 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             if (name == null) name = "";
             mBinding.name.setText(name);
             App.post(mR4, 10000);
-            // 豆瓣等 msearch 直达：强制静默多站搜索（不依赖「自动换源」开关）
-            if (getId() != null && getId().startsWith("msearch:")) checkSearch(true);
-            else checkSearch(false);
+            // 豆瓣等 msearch：开启「播放直达」才静默搜源，否则进搜索页
+            if (getId() != null && getId().startsWith("msearch:")) {
+                if (com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
+                    checkSearch(true);
+                } else {
+                    String q = name;
+                    try {
+                        com.fongmi.android.tv.ui.activity.SearchActivity.start(this, q);
+                    } catch (Throwable ignored) {}
+                    try { finish(); } catch (Throwable ignored) {}
+                }
+            } else {
+                checkSearch(false);
+            }
         }
     }
 
@@ -5562,7 +5573,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void checkSearch(boolean force) {
-        boolean msearch = getId() != null && getId().startsWith("msearch:");
+        boolean msearch = getId() != null && getId().startsWith("msearch:")
+                && com.fongmi.android.tv.setting.Setting.isPlayDirect();
         if (!force && !msearch && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.getItemCount() == 0) initSearch(mBinding.name.getText().toString(), true);
         else if (isAutoMode() || force || msearch) nextSite();
@@ -5594,6 +5606,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
         SiteHealthStore.sortSites(sites);
+        // 仅播放直达(msearch)：随机最多 N 站；普通搜索不截断
+        boolean limitDirect = (getId() != null && getId().startsWith("msearch:"))
+                || (isAutoMode() && com.fongmi.android.tv.setting.Setting.isPlayDirect());
+        if (limitDirect) {
+            int lim = com.fongmi.android.tv.setting.Setting.getPlayDirectSearchLimit();
+            if (lim > 0 && sites.size() > lim) {
+                java.util.Collections.shuffle(sites);
+                sites = new ArrayList<>(sites.subList(0, lim));
+            }
+        }
         mViewModel.searchContent(sites, keyword, true);
     }
 
@@ -5606,7 +5628,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (!isInitAuto() && !items.isEmpty()) {
             showQuickSearchDialog(items);
         }
-        if (isInitAuto() && (PlayerSetting.isAutoChange() || (getId() != null && getId().startsWith("msearch:")))) nextSite();
+        if (isInitAuto() && (PlayerSetting.isAutoChange() || ((getId() != null && getId().startsWith("msearch:")) && com.fongmi.android.tv.setting.Setting.isPlayDirect()))) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }

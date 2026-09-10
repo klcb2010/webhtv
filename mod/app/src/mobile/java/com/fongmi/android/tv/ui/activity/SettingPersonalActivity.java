@@ -60,6 +60,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         try { mBinding.homePush.setOnClickListener(this::setHomePush); } catch (Throwable ignored) {}
+        try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
 
@@ -95,6 +96,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         try { mBinding.homePushText.setText(getSwitch(Setting.isHomePush())); } catch (Throwable ignored) {}
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
@@ -180,6 +182,12 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putHomePush(!Setting.isHomePush());
         refreshTexts();
     }
+    private void setPlayDirect(View view) {
+        Setting.putPlayDirect(!Setting.isPlayDirect());
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
     private String recommendSourceLabel() {
         int src = Setting.getRecommendSource();
         if (src == Setting.RECOMMEND_AI) return getString(R.string.setting_recommend_ai);
