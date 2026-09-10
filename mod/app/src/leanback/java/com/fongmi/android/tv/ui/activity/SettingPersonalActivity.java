@@ -47,9 +47,6 @@ public class SettingPersonalActivity extends BaseActivity {
         setListeners();
     }
 
-        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
-        try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
-
     private void setListeners() {
         // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
@@ -62,6 +59,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
+        try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
 
     private void refreshTexts() {
@@ -95,6 +93,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
             boolean tv = false;
