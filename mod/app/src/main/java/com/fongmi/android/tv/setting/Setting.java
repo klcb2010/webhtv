@@ -802,14 +802,15 @@ public class Setting {
         return getAiConfig().isReady();
     }
 
-    /** 个性推荐来源：0关闭 1AI 2豆瓣 */
+    /** 个性推荐来源：0关闭 1AI 2豆瓣 3自动(豆瓣优先，AI兜底) */
     public static final int RECOMMEND_OFF = 0;
     public static final int RECOMMEND_AI = 1;
     public static final int RECOMMEND_DOUBAN = 2;
+    public static final int RECOMMEND_AUTO = 3;
 
     public static int getRecommendSource() {
         int v = Prefers.getInt("recommend_source", -1);
-        if (v >= 0 && v <= 2) return v;
+        if (v >= 0 && v <= 3) return v;
         // 兼容旧配置：曾开启 AI 推荐则迁移为 AI
         try {
             if (isAiRecommendationEnabled()) return RECOMMEND_AI;
@@ -818,15 +819,15 @@ public class Setting {
     }
 
     public static void putRecommendSource(int source) {
-        if (source < 0 || source > 2) source = RECOMMEND_OFF;
+        if (source < 0 || source > 3) source = RECOMMEND_OFF;
         Prefers.put("recommend_source", source);
-        // 同步旧 AI recommendation 开关，避免别处逻辑冲突
+        // 同步旧 AI recommendation 开关：AI 或自动都可能用到 AI
         try {
-            if (source == RECOMMEND_AI) {
+            if (source == RECOMMEND_AI || source == RECOMMEND_AUTO) {
                 AiConfig c = getAiConfig();
                 c.setRecommendation(true);
                 putAiConfig(c);
-            } else if (source != RECOMMEND_AI) {
+            } else {
                 AiConfig c = getAiConfig();
                 c.setRecommendation(false);
                 putAiConfig(c);

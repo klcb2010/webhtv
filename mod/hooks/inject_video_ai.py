@@ -51,7 +51,9 @@ HOOK = r"""
             hideAiRecommendPanel();
             return;
         }
-        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN) {
+        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN
+                || src == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
+            // 豆瓣 或 自动(先豆瓣)；自动模式在豆瓣空结果时再走 AI
             loadDoubanRecommendations(gen, vod, title, attempt);
         } else {
             loadAiRecommendations(gen, vod, title, attempt);
@@ -59,7 +61,9 @@ HOOK = r"""
     }
 
     private void loadDoubanRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
-        if (com.fongmi.android.tv.setting.Setting.getRecommendSource() != com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN) {
+        int src0 = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (src0 != com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN
+                && src0 != com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
             hideAiRecommendPanel();
             return;
         }
@@ -94,6 +98,10 @@ HOOK = r"""
                 if (gen != mAiRecommendGen || isFinishing()) return;
                 if (result != null && !result.isEmpty()) {
                     bindAiRecommendList(gen, result);
+                } else if (com.fongmi.android.tv.setting.Setting.getRecommendSource()
+                        == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
+                    // 自动：豆瓣无结果 → AI 兜底
+                    loadAiRecommendations(gen, vod, title, 0);
                 } else {
                     hideAiRecommendPanel();
                 }
@@ -102,7 +110,9 @@ HOOK = r"""
     }
 
     private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
-        if (com.fongmi.android.tv.setting.Setting.getRecommendSource() != com.fongmi.android.tv.setting.Setting.RECOMMEND_AI) {
+        int srcAi = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (srcAi != com.fongmi.android.tv.setting.Setting.RECOMMEND_AI
+                && srcAi != com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
             hideAiRecommendPanel();
             return;
         }
