@@ -60,6 +60,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
         try { mBinding.homePush.setOnClickListener(this::setHomePush); } catch (Throwable ignored) {}
+        try { mBinding.playCache.setOnClickListener(this::setPlayCache); } catch (Throwable ignored) {}
         try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -96,6 +97,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
         try { mBinding.homePushText.setText(getSwitch(Setting.isHomePush())); } catch (Throwable ignored) {}
+        try { mBinding.playCacheText.setText(playCacheLabel()); } catch (Throwable ignored) {}
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -182,6 +184,39 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putHomePush(!Setting.isHomePush());
         refreshTexts();
     }
+
+    private String playCacheLabel() {
+        try {
+            String[] labels = getResources().getStringArray(R.array.select_play_cache);
+            int opt = PlayerSetting.getPlayCacheOption();
+            if (labels != null && opt >= 0 && opt < labels.length) return labels[opt];
+        } catch (Throwable ignored) {}
+        // fallback map
+        int opt = 0;
+        try { opt = PlayerSetting.getPlayCacheOption(); } catch (Throwable ignored) {}
+        switch (opt) {
+            case 1: return "256MB";
+            case 2: return "512MB";
+            case 3: return "1GB";
+            case 4: return "2GB";
+            default: return "128MB";
+        }
+    }
+
+    private void setPlayCache(View view) {
+        int opt = 0;
+        try { opt = PlayerSetting.getPlayCacheOption(); } catch (Throwable ignored) {}
+        int size = 5;
+        try {
+            String[] labels = getResources().getStringArray(R.array.select_play_cache);
+            if (labels != null && labels.length > 0) size = labels.length;
+        } catch (Throwable ignored) {}
+        opt = (opt + 1) % size;
+        try { PlayerSetting.putPlayCacheOption(opt); } catch (Throwable ignored) {}
+        try { mBinding.playCacheText.setText(playCacheLabel()); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
     private void setPlayDirect(View view) {
         Setting.putPlayDirect(!Setting.isPlayDirect());
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}

@@ -102,4 +102,12 @@
     <string name="setting_recommend_douban">豆瓣</string>
     <string name="setting_recommend_auto">自动</string>
     <string name="setting_play_direct">播放直达</string>
+    <string name="setting_play_cache">最大缓存</string>
+    <string-array name="select_play_cache">
+        <item>128MB</item>
+        <item>256MB</item>
+        <item>512MB</item>
+        <item>1GB</item>
+        <item>2GB</item>
+    </string-array>
 </resources>
