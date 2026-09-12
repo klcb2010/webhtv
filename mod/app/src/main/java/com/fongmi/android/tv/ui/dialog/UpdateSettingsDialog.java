@@ -23,7 +23,9 @@ import com.fongmi.android.tv.update.UpdateUrl;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.tabs.TabLayout;
+import com.fongmi.android.tv.ui.dialog.ChoiceDialog;
 
 public final class UpdateSettingsDialog {
 
@@ -77,15 +79,16 @@ public final class UpdateSettingsDialog {
     }
 
 
-    /** 加速镜像列表：底部 左保存 右取消 */
-    private static void showProxyList(FragmentActivity activity, String title, CharSequence[] labels, int selected, ChoiceDialog.OnChoice onSave) {
+    /** 加速镜像列表：底部 左保存 右取消；TV 焦点/选中高亮 */
+    private static void showProxyList(FragmentActivity activity, String title, CharSequence[] labels, int selected, java.util.function.IntConsumer onSave) {
         final int[] pending = new int[]{Math.max(0, selected)};
         android.widget.LinearLayout root = new android.widget.LinearLayout(activity);
         root.setOrientation(android.widget.LinearLayout.VERTICAL);
         root.setPadding(ResUtil.dp2px(20), ResUtil.dp2px(16), ResUtil.dp2px(20), ResUtil.dp2px(12));
 
+        String currentLabel = (selected >= 0 && selected < labels.length) ? String.valueOf(labels[selected]) : "";
         com.google.android.material.textview.MaterialTextView titleView = new com.google.android.material.textview.MaterialTextView(activity);
-        titleView.setText(title);
+        titleView.setText(title + (currentLabel.isEmpty() ? "" : ("  ·  当前：" + currentLabel)));
         titleView.setTextSize(18);
         titleView.setTextColor(android.graphics.Color.parseColor("#202124"));
         titleView.setPadding(0, 0, 0, ResUtil.dp2px(12));
@@ -98,16 +101,22 @@ public final class UpdateSettingsDialog {
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
             com.google.android.material.button.MaterialButton btn = new com.google.android.material.button.MaterialButton(activity);
-            btn.setText(labels[i]);
+            btn.setAllCaps(false);
             btn.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
-            styleProxyListItem(btn, index == pending[0]);
+            btn.setFocusable(true);
+            btn.setFocusableInTouchMode(true);
+            styleProxyListItem(btn, labels[index], index == pending[0], false);
+            btn.setOnFocusChangeListener((v, hasFocus) -> styleProxyListItem(btn, labels[index], index == pending[0], hasFocus));
             btn.setOnClickListener(v -> {
                 pending[0] = index;
-                for (int j = 0; j < itemBtns.length; j++) styleProxyListItem(itemBtns[j], j == pending[0]);
+                titleView.setText(title + "  ·  当前：" + labels[index]);
+                for (int j = 0; j < itemBtns.length; j++) {
+                    styleProxyListItem(itemBtns[j], labels[j], j == pending[0], itemBtns[j].hasFocus());
+                }
             });
             itemBtns[i] = btn;
             android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(46));
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(48));
             lp.bottomMargin = ResUtil.dp2px(8);
             list.addView(btn, lp);
         }
@@ -117,53 +126,86 @@ public final class UpdateSettingsDialog {
 
         android.widget.LinearLayout actions = new android.widget.LinearLayout(activity);
         actions.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
         actions.setPadding(0, ResUtil.dp2px(12), 0, 0);
-
         com.google.android.material.button.MaterialButton saveBtn = new com.google.android.material.button.MaterialButton(activity);
         saveBtn.setText(R.string.update_settings_save);
+        saveBtn.setAllCaps(false);
+        styleActionButton(saveBtn, true);
         com.google.android.material.button.MaterialButton cancelBtn = new com.google.android.material.button.MaterialButton(activity);
         try {
             cancelBtn.setText(R.string.dialog_negative);
         } catch (Throwable e) {
             cancelBtn.setText("取消");
         }
-        android.widget.LinearLayout.LayoutParams half = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(44), 1f);
-        half.setMarginEnd(ResUtil.dp2px(8));
-        android.widget.LinearLayout.LayoutParams half2 = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(44), 1f);
-        half2.setMarginStart(ResUtil.dp2px(8));
-        // 左保存 右取消
+        cancelBtn.setAllCaps(false);
+        styleActionButton(cancelBtn, false);
+        android.widget.LinearLayout.LayoutParams half = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(48), 1f);
+        android.widget.LinearLayout.LayoutParams half2 = new android.widget.LinearLayout.LayoutParams(0, ResUtil.dp2px(48), 1f);
+        half2.setMarginStart(ResUtil.dp2px(12));
         actions.addView(saveBtn, half);
         actions.addView(cancelBtn, half2);
         root.addView(actions);
 
-        Dialog listDialog = LightDialog.create(activity, null, root, 0.55f, 0.88f, 520);
-        listDialog.setCanceledOnTouchOutside(false);
+        final androidx.appcompat.app.AlertDialog listDialog = new MaterialAlertDialogBuilder(activity)
+                .setView(root)
+                .setCancelable(true)
+                .create();
         saveBtn.setOnClickListener(v -> {
-            if (onSave != null) onSave.onChoice(pending[0]);
+            onSave.accept(pending[0]);
             listDialog.dismiss();
         });
         cancelBtn.setOnClickListener(v -> listDialog.dismiss());
+        listDialog.setOnShowListener(d -> {
+            android.view.Window window = listDialog.getWindow();
+            if (window != null) {
+                window.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+                android.view.WindowManager.LayoutParams params = window.getAttributes();
+                params.width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.72f);
+                window.setAttributes(params);
+            }
+            int focusIdx = Math.max(0, Math.min(pending[0], itemBtns.length - 1));
+            if (itemBtns.length > 0) itemBtns[focusIdx].requestFocus();
+        });
         listDialog.show();
-        Window window = listDialog.getWindow();
-        if (window != null) {
-            WindowManager.LayoutParams params = window.getAttributes();
-            params.width = (int) (ResUtil.getScreenWidth(activity) * (ResUtil.isLand(activity) ? 0.55f : 0.88f));
-            params.height = WindowManager.LayoutParams.WRAP_CONTENT;
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            window.setAttributes(params);
-            window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
-        }
     }
 
-    private static void styleProxyListItem(com.google.android.material.button.MaterialButton btn, boolean selected) {
+    private static void styleProxyListItem(com.google.android.material.button.MaterialButton btn, CharSequence label, boolean selected, boolean focused) {
         if (btn == null) return;
-        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                android.graphics.Color.parseColor(selected ? "#E8F0FE" : "#F1F3F4")));
-        btn.setTextColor(android.graphics.Color.parseColor(selected ? "#1A73E8" : "#202124"));
-        try { btn.setElevation(0); } catch (Throwable ignored) {}
+        String text = String.valueOf(label == null ? "" : label);
+        if (selected && !text.startsWith("✓ ")) text = "✓  " + text;
+        if (!selected && text.startsWith("✓ ")) text = text.substring(2).trim();
+        btn.setText(text);
+        int bg;
+        int fg;
+        if (focused) {
+            bg = android.graphics.Color.parseColor("#1A73E8");
+            fg = android.graphics.Color.WHITE;
+        } else if (selected) {
+            bg = android.graphics.Color.parseColor("#D2E3FC");
+            fg = android.graphics.Color.parseColor("#174EA6");
+        } else {
+            bg = android.graphics.Color.parseColor("#F1F3F4");
+            fg = android.graphics.Color.parseColor("#202124");
+        }
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bg));
+        btn.setTextColor(fg);
+        try { btn.setElevation(focused || selected ? ResUtil.dp2px(2) : 0); } catch (Throwable ignored) {}
     }
 
+    private static void styleActionButton(com.google.android.material.button.MaterialButton btn, boolean primary) {
+        btn.setFocusable(true);
+        btn.setFocusableInTouchMode(true);
+        int normal = primary ? android.graphics.Color.parseColor("#1A73E8") : android.graphics.Color.parseColor("#E8EAED");
+        int focused = primary ? android.graphics.Color.parseColor("#174EA6") : android.graphics.Color.parseColor("#1A73E8");
+        int textNormal = primary ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#202124");
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(normal));
+        btn.setTextColor(textNormal);
+        btn.setOnFocusChangeListener((v, hasFocus) -> {
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(hasFocus ? focused : normal));
+            btn.setTextColor(hasFocus || primary ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#202124"));
+            try { btn.setElevation(hasFocus ? ResUtil.dp2px(4) : 0); } catch (Throwable ignored) {}
+        });
+    }
 
     private static void chooseGithub(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         GithubProxy.Preset[] presets = GithubProxy.presets();

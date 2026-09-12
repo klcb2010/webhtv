@@ -110,4 +110,5 @@
         <item>1GB</item>
         <item>2GB</item>
     </string-array>
+    <string name="danmaku">嗷呜弹幕</string>
 </resources>

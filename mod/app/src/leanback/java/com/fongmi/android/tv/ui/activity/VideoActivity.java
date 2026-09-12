@@ -828,7 +828,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setVideoView() {
-        mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
+        // 弹幕/嗷呜弹幕：由 PlayerButtonSetting 控制，禁止强制 VISIBLE
+        if (!PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
+            mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
+        } else {
+            mBinding.control.action.danmaku.setVisibility(View.GONE);
+        }
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         mBinding.control.action.karaoke.setVisibility(View.GONE);
         updateImmersiveAudioAction();
@@ -859,6 +864,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         addActionButton(PlayerButtonSetting.DANMAKU, mBinding.control.action.danmaku);
         addActionButton(PlayerButtonSetting.TITLE, mBinding.control.action.title);
         addActionButton(PlayerButtonSetting.REPEAT, mBinding.control.action.repeat);
+        try { addActionButton(PlayerButtonSetting.TIMER, mBinding.control.action.timer); } catch (Throwable ignored) {}
+        try { addActionButton(PlayerButtonSetting.PAN_DIAGNOSTIC, mBinding.control.action.panDiagnostic); } catch (Throwable ignored) {}
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
         placePanDiagnosticAction();
         updatePanDiagnosticAction();
@@ -885,8 +892,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updatePanDiagnosticAction() {
-        if (mBinding == null) return;
-        mBinding.control.action.panDiagnostic.setVisibility(isFullscreen() && canRunPanDiagnostic() ? View.VISIBLE : View.GONE);
+        boolean show = isFullscreen() && canRunPanDiagnostic()
+                && !PlayerButtonSetting.isHidden(PlayerButtonSetting.PAN_DIAGNOSTIC);
+        mBinding.control.action.panDiagnostic.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private boolean canRunPanDiagnostic() {
