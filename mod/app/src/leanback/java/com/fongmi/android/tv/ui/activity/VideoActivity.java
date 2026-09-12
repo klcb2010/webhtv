@@ -867,8 +867,21 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         try { addActionButton(PlayerButtonSetting.TIMER, mBinding.control.action.timer); } catch (Throwable ignored) {}
         try { addActionButton(PlayerButtonSetting.PAN_DIAGNOSTIC, mBinding.control.action.panDiagnostic); } catch (Throwable ignored) {}
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
+        PlayerButtonSetting.forceHidden(mActionButtons);
         placePanDiagnosticAction();
         updatePanDiagnosticAction();
+        // 最终强制：隐藏项绝不再显示（嗷呜弹幕=DANMAKU）
+        if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
+            mBinding.control.action.danmaku.setVisibility(View.GONE);
+        }
+        try {
+            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.TIMER))
+                mBinding.control.action.timer.setVisibility(View.GONE);
+        } catch (Throwable ignored) {}
+        try {
+            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.PAN_DIAGNOSTIC))
+                mBinding.control.action.panDiagnostic.setVisibility(View.GONE);
+        } catch (Throwable ignored) {}
     }
 
     private void addActionButton(String id, View view) {
@@ -876,10 +889,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void applyActionButtonVisibility() {
-        if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
+        if (mActionButtons != null) PlayerButtonSetting.forceHidden(mActionButtons);
         mBinding.control.action.cast.setVisibility(isFullscreen() ? View.GONE : View.VISIBLE);
         updateImmersiveAudioAction();
         updatePanDiagnosticAction();
+        if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
+            mBinding.control.action.danmaku.setVisibility(View.GONE);
+        }
+        try {
+            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.TIMER))
+                mBinding.control.action.timer.setVisibility(View.GONE);
+        } catch (Throwable ignored) {}
     }
 
     private void placePanDiagnosticAction() {

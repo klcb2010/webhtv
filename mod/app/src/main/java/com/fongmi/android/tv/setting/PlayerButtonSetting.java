@@ -145,10 +145,21 @@ public class PlayerButtonSetting {
     }
 
     public static void applyVisibility(Map<String, View> views) {
+        if (views == null) return;
         Set<String> hidden = getHidden();
         for (Map.Entry<String, View> entry : views.entrySet()) {
-            if (hidden.contains(entry.getKey())) entry.getValue().setVisibility(View.GONE);
+            View view = entry.getValue();
+            if (view == null) continue;
+            if (hidden.contains(entry.getKey())) {
+                view.setVisibility(View.GONE);
+            }
         }
+    }
+
+    /** 对已登记按钮强制再应用一次隐藏（避免后续逻辑又 setVisible） */
+    public static void forceHidden(Map<String, View> views) {
+        applyVisibility(views);
+    }
     }
 
     private static List<String> getOrder() {

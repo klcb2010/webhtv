@@ -130,7 +130,7 @@ public final class UpdateSettingsDialog {
         com.google.android.material.button.MaterialButton saveBtn = new com.google.android.material.button.MaterialButton(activity);
         saveBtn.setText(R.string.update_settings_save);
         saveBtn.setAllCaps(false);
-        styleActionButton(saveBtn, true);
+        styleActionButton(saveBtn, false);
         com.google.android.material.button.MaterialButton cancelBtn = new com.google.android.material.button.MaterialButton(activity);
         try {
             cancelBtn.setText(R.string.dialog_negative);
@@ -175,34 +175,36 @@ public final class UpdateSettingsDialog {
         if (selected && !text.startsWith("✓ ")) text = "✓  " + text;
         if (!selected && text.startsWith("✓ ")) text = text.substring(2).trim();
         btn.setText(text);
-        int bg;
-        int fg;
+        // 当前项：紫字/黑字高对比；焦点：蓝底白字
         if (focused) {
-            bg = android.graphics.Color.parseColor("#1A73E8");
-            fg = android.graphics.Color.WHITE;
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1A73E8")));
+            btn.setTextColor(android.graphics.Color.WHITE);
+            try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else if (selected) {
-            bg = android.graphics.Color.parseColor("#D2E3FC");
-            fg = android.graphics.Color.parseColor("#174EA6");
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EDE7F6")));
+            btn.setTextColor(android.graphics.Color.parseColor("#6A1B9A")); // 紫色，当前加速源清晰可见
+            try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else {
-            bg = android.graphics.Color.parseColor("#F1F3F4");
-            fg = android.graphics.Color.parseColor("#202124");
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F3F4")));
+            btn.setTextColor(android.graphics.Color.parseColor("#202124"));
+            try { btn.setTypeface(null, android.graphics.Typeface.NORMAL); } catch (Throwable ignored) {}
         }
-        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bg));
-        btn.setTextColor(fg);
-        try { btn.setElevation(focused || selected ? ResUtil.dp2px(2) : 0); } catch (Throwable ignored) {}
+        try { btn.setElevation(focused ? ResUtil.dp2px(3) : 0); } catch (Throwable ignored) {}
     }
 
+    /** 保存/取消样式一致：默认灰底，仅获焦时高亮 */
     private static void styleActionButton(com.google.android.material.button.MaterialButton btn, boolean primary) {
         btn.setFocusable(true);
         btn.setFocusableInTouchMode(true);
-        int normal = primary ? android.graphics.Color.parseColor("#1A73E8") : android.graphics.Color.parseColor("#E8EAED");
-        int focused = primary ? android.graphics.Color.parseColor("#174EA6") : android.graphics.Color.parseColor("#1A73E8");
-        int textNormal = primary ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#202124");
-        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(normal));
-        btn.setTextColor(textNormal);
+        final int normalBg = android.graphics.Color.parseColor("#E8EAED");
+        final int focusBg = android.graphics.Color.parseColor("#1A73E8");
+        final int normalFg = android.graphics.Color.parseColor("#202124");
+        final int focusFg = android.graphics.Color.WHITE;
+        btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(normalBg));
+        btn.setTextColor(normalFg);
         btn.setOnFocusChangeListener((v, hasFocus) -> {
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(hasFocus ? focused : normal));
-            btn.setTextColor(hasFocus || primary ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#202124"));
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(hasFocus ? focusBg : normalBg));
+            btn.setTextColor(hasFocus ? focusFg : normalFg);
             try { btn.setElevation(hasFocus ? ResUtil.dp2px(4) : 0); } catch (Throwable ignored) {}
         });
     }
@@ -295,7 +297,9 @@ public final class UpdateSettingsDialog {
 
     private static void renderGithub(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         GithubProxy.Preset preset = GithubProxy.find(state.githubProxy);
-        binding.githubProxy.setText(activity.getString(R.string.update_github_proxy_value, label(activity, preset.label, preset.id)));
+        String ghLabel = label(activity, preset.label, preset.id);
+        binding.githubProxy.setText(activity.getString(R.string.update_github_proxy_value, ghLabel));
+        try { binding.githubProxy.setTextColor(android.graphics.Color.parseColor("#6A1B9A")); } catch (Throwable ignored) {}
         boolean custom = GithubProxy.CUSTOM.equals(preset.id);
         binding.githubCustomLayout.setVisibility(custom ? View.VISIBLE : View.GONE);
         binding.githubModeGroup.setVisibility(custom ? View.VISIBLE : View.GONE);

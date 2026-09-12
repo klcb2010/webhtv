@@ -963,7 +963,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setVideoView() {
-        mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
+        if (!PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
+            mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
+        } else {
+            mBinding.control.action.danmaku.setVisibility(View.GONE);
+        }
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         setupActionButtons();
         mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
@@ -998,6 +1002,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         addActionButton(PlayerButtonSetting.NEXT, mBinding.control.action.next);
         addActionButton(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes);
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
+        PlayerButtonSetting.forceHidden(mActionButtons);
     }
 
     private void addActionButton(String id, View view) {
