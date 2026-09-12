@@ -160,7 +160,6 @@ public class PlayerButtonSetting {
     public static void forceHidden(Map<String, View> views) {
         applyVisibility(views);
     }
-    }
 
     private static List<String> getOrder() {
         LinkedHashSet<String> ids = new LinkedHashSet<>();
