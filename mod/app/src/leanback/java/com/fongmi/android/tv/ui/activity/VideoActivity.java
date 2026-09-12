@@ -970,6 +970,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void getDetail(Vod item) {
+        mPanDrillDepth = 0;
         revealManualSearch = false;
         if (!isAutoMode()) mViewModel.stopSearch();
         saveHistory();
@@ -987,6 +988,114 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         getDetail();
     }
 
+
+    /** 播放直达：网盘多级文件夹自动下钻深度 */
+    private int mPanDrillDepth = 0;
+
+    private boolean shouldAutoDrillPan() {
+        try {
+            if (getId() != null && getId().startsWith("msearch:") && com.fongmi.android.tv.setting.Setting.isPlayDirect()) return true;
+            if (isAutoMode() || isInitAuto()) return true;
+            return com.fongmi.android.tv.setting.Setting.isPlayDirect();
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private Vod pickDetailVod(java.util.List<Vod> list) {
+        if (list == null || list.isEmpty()) return new Vod();
+        for (Vod v : list) {
+            if (v == null) continue;
+            try {
+                if (!v.isFolder()) return v;
+            } catch (Throwable ignored) {
+                return v;
+            }
+        }
+        return list.get(0);
+    }
+
+    private boolean hasPlayableEpisode(Vod item) {
+        if (item == null || item.getFlags() == null) return false;
+        for (Flag f : item.getFlags()) {
+            if (f != null && f.getEpisodes() != null && !f.getEpisodes().isEmpty()) return true;
+        }
+        return false;
+    }
+
+    private boolean looksLikePanNode(Vod item) {
+        if (item == null) return false;
+        try {
+            if (item.isFolder()) return true;
+        } catch (Throwable ignored) {}
+        String id = item.getId();
+        if (id == null) id = "";
+        String low = id.toLowerCase();
+        if (low.startsWith("pws:")) return true;
+        if (low.contains("quark") || low.contains("ucpan") || low.contains("alipan") || low.contains("aliyundrive")) return true;
+        String name = item.getName() == null ? "" : item.getName();
+        if (name.contains("网盘") || name.contains("夸克") || name.contains("UC") || name.contains("百度") || name.contains("阿里")) return true;
+        String remarks = item.getRemarks() == null ? "" : item.getRemarks();
+        if (remarks.contains("网盘") || remarks.contains("夸克")) return true;
+        return false;
+    }
+
+    private boolean tryDrillPanFolder(Vod item, Result parent) {
+        if (!shouldAutoDrillPan()) return false;
+        if (mPanDrillDepth >= 4) return false;
+        if (item == null) return false;
+
+        boolean multiFolder = false;
+        if (parent != null && parent.getList() != null && parent.getList().size() > 1) {
+            int folderCount = 0;
+            for (Vod v : parent.getList()) {
+                try {
+                    if (v != null && v.isFolder()) folderCount++;
+                } catch (Throwable ignored) {}
+            }
+            multiFolder = folderCount >= 1;
+        }
+
+        boolean needDrill = false;
+        try {
+            if (item.isFolder()) needDrill = true;
+        } catch (Throwable ignored) {}
+        if (!hasPlayableEpisode(item) && looksLikePanNode(item)) needDrill = true;
+        if (multiFolder && !hasPlayableEpisode(item)) needDrill = true;
+        if (!needDrill) return false;
+
+        Vod target = item;
+        if (parent != null && parent.getList() != null && !parent.getList().isEmpty()) {
+            target = pickDetailVod(parent.getList());
+        }
+        return drillIntoPanNode(target);
+    }
+
+    private boolean drillIntoPanNode(Vod item) {
+        if (item == null) return false;
+        String id = item.getId();
+        if (id == null || id.isEmpty()) return false;
+        mPanDrillDepth++;
+        try {
+            getIntent().putExtra("id", id);
+            if (item.getName() != null && !item.getName().isEmpty()) getIntent().putExtra("name", item.getName());
+            if (item.getPic() != null && !item.getPic().isEmpty()) getIntent().putExtra("pic", item.getPic());
+            try {
+                if (mBinding != null && mBinding.swipeLayout != null) mBinding.swipeLayout.setRefreshing(true);
+            } catch (Throwable ignored) {}
+            try {
+                if (mBinding != null && mBinding.name != null && item.getName() != null) mBinding.name.setText(item.getName());
+            } catch (Throwable ignored) {}
+            SpiderDebug.log("video-flow", "pan-drill depth=%d key=%s id=%s name=%s", mPanDrillDepth, getKey(), id, item.getName());
+            mViewModel.detailContent(getKey(), id);
+            return true;
+        } catch (Throwable e) {
+            mPanDrillDepth = Math.max(0, mPanDrillDepth - 1);
+            return false;
+        }
+    }
+
+
     private void setDetail(Result result) {
         long cost = System.currentTimeMillis() - detailStartTime;
         SpiderDebug.log("video-flow", "detail finish cost=%dms empty=%s msg=%s", cost, result.getList().isEmpty(), result.getMsg());
@@ -996,9 +1105,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             SpiderDebug.log("video-flow", "detail pending service key=%s id=%s", getKey(), getId());
             return;
         }
-        if (result.getList().isEmpty()) setEmpty(result.hasMsg());
-        else setDetail(result.getVod());
-        Notify.show(result.getMsg());
+        if (result.getList().isEmpty()) {
+            setEmpty(result.hasMsg());
+        } else {
+            Vod pick = pickDetailVod(result.getList());
+            if (tryDrillPanFolder(pick, result)) {
+                try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
+                return;
+            }
+            setDetail(pick);
+        }
+        try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
     }
 
     private void setEmpty(boolean finish) {
@@ -1036,6 +1153,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setDetail(Vod item) {
+        if (tryDrillPanFolder(item, null)) return;
         item.checkPic(getPic());
         item.checkName(getName());
         item.checkContent(getContent());
