@@ -7,8 +7,6 @@
 
 # 默影视 https://github.com/Silent1566/webhtv
 
-
-# 移植或新增功能开关如下
 - 首页最近观看 -TV端
 - 默认加载点播 -TV端
 - 锁定首页源 -TV端
