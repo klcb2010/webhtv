@@ -58,7 +58,7 @@ public final class AboutDialog {
         dialog.show();
         configureWindow(activity, dialog);
         styleAboutActions(binding);
-        binding.confirm.requestFocus();
+        try { binding.checkUpdate.requestFocus(); } catch (Throwable e) { binding.confirm.requestFocus(); }
     }
 
 

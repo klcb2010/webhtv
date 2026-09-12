@@ -870,10 +870,22 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         PlayerButtonSetting.forceHidden(mActionButtons);
         placePanDiagnosticAction();
         updatePanDiagnosticAction();
-        // 最终强制：隐藏项绝不再显示（嗷呜弹幕=DANMAKU）
-        if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
-            mBinding.control.action.danmaku.setVisibility(View.GONE);
-        }
+        // 最终强制：隐藏项绝不再显示
+        forceHideConfiguredActionButtons();
+    }
+
+    /** 隐藏播放按钮配置中关闭的项；含无 id 的「嗷呜弹幕」自定义 TextView */
+    private void forceHideConfiguredActionButtons() {
+        try {
+            if (mActionButtons != null) PlayerButtonSetting.forceHidden(mActionButtons);
+        } catch (Throwable ignored) {}
+        try {
+            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
+                mBinding.control.action.danmaku.setVisibility(View.GONE);
+                hideDanmakuLikeViews(mBinding.control.action.container);
+                try { hideDanmakuLikeViews(mBinding.control.getRoot()); } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
         try {
             if (PlayerButtonSetting.isHidden(PlayerButtonSetting.TIMER))
                 mBinding.control.action.timer.setVisibility(View.GONE);
@@ -884,22 +896,30 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         } catch (Throwable ignored) {}
     }
 
+    private void hideDanmakuLikeViews(View root) {
+        if (root == null) return;
+        if (root instanceof android.widget.TextView) {
+            CharSequence cs = ((android.widget.TextView) root).getText();
+            String t = cs == null ? "" : cs.toString();
+            if (t.contains("弹幕") || t.contains("嗷呜") || t.toLowerCase().contains("danmaku")) {
+                root.setVisibility(View.GONE);
+            }
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) root;
+            for (int i = 0; i < g.getChildCount(); i++) hideDanmakuLikeViews(g.getChildAt(i));
+        }
+    }
+
     private void addActionButton(String id, View view) {
         mActionButtons.put(id, view);
     }
 
     private void applyActionButtonVisibility() {
-        if (mActionButtons != null) PlayerButtonSetting.forceHidden(mActionButtons);
         mBinding.control.action.cast.setVisibility(isFullscreen() ? View.GONE : View.VISIBLE);
         updateImmersiveAudioAction();
         updatePanDiagnosticAction();
-        if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
-            mBinding.control.action.danmaku.setVisibility(View.GONE);
-        }
-        try {
-            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.TIMER))
-                mBinding.control.action.timer.setVisibility(View.GONE);
-        } catch (Throwable ignored) {}
+        forceHideConfiguredActionButtons();
     }
 
     private void placePanDiagnosticAction() {
@@ -3563,6 +3583,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setPlayParamsState();
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
         if (mOsd != null) mOsd.setControlsVisible(true);
+        forceHideConfiguredActionButtons();
         view.requestFocus();
         setR1Callback();
     }
