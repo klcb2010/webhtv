@@ -273,33 +273,6 @@
                 android:textSize="18sp" />
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/playCache"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:orientation="horizontal"
-            android:padding="8dp">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/setting_play_cache"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/playCacheText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/white"
-                android:textSize="16sp" />
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/playDirect"
             android:layout_width="match_parent"

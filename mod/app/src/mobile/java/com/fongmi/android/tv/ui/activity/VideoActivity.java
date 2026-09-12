@@ -1108,15 +1108,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private Vod pickDetailVod(java.util.List<Vod> list) {
         if (list == null || list.isEmpty()) return new Vod();
+        Vod firstOk = null;
         for (Vod v : list) {
-            if (v == null) continue;
+            if (v == null || isBadPanDrillTarget(v)) continue;
             try {
                 if (!v.isFolder()) return v;
             } catch (Throwable ignored) {
                 return v;
             }
+            if (firstOk == null) firstOk = v;
         }
-        return list.get(0);
+        return firstOk != null ? firstOk : list.get(0);
     }
 
     private boolean hasPlayableEpisode(Vod item) {
@@ -1124,6 +1126,23 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         for (Flag f : item.getFlags()) {
             if (f != null && f.getEpisodes() != null && !f.getEpisodes().isEmpty()) return true;
         }
+        return false;
+    }
+
+
+    private boolean isBadPanDrillTarget(Vod item) {
+        if (item == null) return true;
+        String id = item.getId() == null ? "" : item.getId().trim();
+        String name = item.getName() == null ? "" : item.getName().trim();
+        String lowId = id.toLowerCase();
+        String lowName = name.toLowerCase();
+        if (id.isEmpty()) return true;
+        if (lowId.equals("pws_tip") || lowId.endsWith("_tip") || lowId.contains("pws_tip")) return true;
+        if (lowName.contains("404") || lowName.contains("not found") || lowName.contains("error")) return true;
+        if (lowName.startsWith("http") && lowName.contains(" ")) return true;
+        if (name.equals("null") || name.equals("undefined")) return true;
+        // tip / notice only
+        if ("提示".equals(name) || "notice".equals(lowName) || "tip".equals(lowName)) return true;
         return false;
     }
 
@@ -1148,6 +1167,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (!shouldAutoDrillPan()) return false;
         if (mPanDrillDepth >= 4) return false;
         if (item == null) return false;
+        if (isBadPanDrillTarget(item)) return false;
 
         boolean multiFolder = false;
         if (parent != null && parent.getList() != null && parent.getList().size() > 1) {
@@ -1176,7 +1196,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private boolean drillIntoPanNode(Vod item) {
-        if (item == null) return false;
+        if (item == null || isBadPanDrillTarget(item)) return false;
         String id = item.getId();
         if (id == null || id.isEmpty()) return false;
         mPanDrillDepth++;

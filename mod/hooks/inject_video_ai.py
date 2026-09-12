@@ -116,9 +116,8 @@ HOOK = r"""
             hideAiRecommendPanel();
             return;
         }
-        // 自动模式下若 AI 未配置就绪，静默结束（豆瓣已失败）
-        if (srcAi == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO
-                && !com.fongmi.android.tv.setting.Setting.isAiRecommendReady()) {
+        // AI 未配置就绪时静默结束，避免空请求/异常干扰播放
+        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendReady()) {
             hideAiRecommendPanel();
             return;
         }
