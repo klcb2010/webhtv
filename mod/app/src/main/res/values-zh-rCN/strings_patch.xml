@@ -61,7 +61,7 @@
 <string name="ai_recommend_retry_action">点击重试</string>
 <string name="setting_personal">个性设置</string>
 <string name="setting_auto_backup">自动备份</string>
-<string name="setting_episode_history">集数历史</string>
+<string name="setting_episode_history">播放进度</string>
 <string name="setting_global_history">全局历史</string>
 <string name="setting_play_back_to_detail">返回详情</string>
 <string name="setting_search_thread">搜索线程</string>
@@ -103,7 +103,7 @@
     <string name="setting_recommend_auto">自动</string>
     <string name="setting_play_direct">播放直达</string>
     <string name="setting_play_cache">最大缓存</string>
-    <string-array name="select_play_cache">
+        <string-array name="select_play_cache">
         <item>128MB</item>
         <item>256MB</item>
         <item>512MB</item>

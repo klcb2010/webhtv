@@ -143,11 +143,13 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setSearchThread(View view) {
-        int[] options = new int[]{1, 2, 4, 8, 16};
+        int[] options = new int[]{8, 16, 20, 32, 48, 64};
         int cur = Setting.getSearchThread();
         int idx = 0;
         for (int i = 0; i < options.length; i++) if (options[i] == cur) { idx = i; break; }
-        Setting.putSearchThread(options[(idx + 1) % options.length]);
+        int next = options[(idx + 1) % options.length];
+        Setting.putSearchThread(next);
+        try { com.fongmi.android.tv.utils.Task.newSearchExecutor(next); } catch (Throwable ignored) {}
         refreshTexts();
     }
 
@@ -185,13 +187,15 @@ public class SettingPersonalActivity extends BaseActivity {
         refreshTexts();
     }
 
+
+
+
     private String playCacheLabel() {
         try {
             String[] labels = getResources().getStringArray(R.array.select_play_cache);
             int opt = PlayerSetting.getPlayCacheOption();
             if (labels != null && opt >= 0 && opt < labels.length) return labels[opt];
         } catch (Throwable ignored) {}
-        // fallback map
         int opt = 0;
         try { opt = PlayerSetting.getPlayCacheOption(); } catch (Throwable ignored) {}
         switch (opt) {
@@ -211,7 +215,7 @@ public class SettingPersonalActivity extends BaseActivity {
             String[] labels = getResources().getStringArray(R.array.select_play_cache);
             if (labels != null && labels.length > 0) size = labels.length;
         } catch (Throwable ignored) {}
-        opt = (opt + 1) % size;
+        opt = (opt + 1) % Math.max(1, size);
         try { PlayerSetting.putPlayCacheOption(opt); } catch (Throwable ignored) {}
         try { mBinding.playCacheText.setText(playCacheLabel()); } catch (Throwable ignored) {}
         try { refreshTexts(); } catch (Throwable ignored) {}

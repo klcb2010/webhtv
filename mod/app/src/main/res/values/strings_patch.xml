@@ -61,7 +61,7 @@
 <string name="ai_recommend_retry_action">Tap to retry</string>
 <string name="setting_personal">Personal</string>
 <string name="setting_auto_backup">Auto backup</string>
-<string name="setting_episode_history">Episode history</string>
+<string name="setting_episode_history">Playback progress</string>
 <string name="setting_global_history">Global history</string>
 <string name="setting_play_back_to_detail">Back to detail</string>
 <string name="setting_search_thread">Search threads</string>
@@ -103,7 +103,7 @@
     <string name="setting_recommend_auto">Auto</string>
     <string name="setting_play_direct">Play Direct</string>
     <string name="setting_play_cache">Max Cache</string>
-    <string-array name="select_play_cache">
+        <string-array name="select_play_cache">
         <item>128MB</item>
         <item>256MB</item>
         <item>512MB</item>

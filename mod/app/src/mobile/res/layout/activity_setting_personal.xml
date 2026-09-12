@@ -301,9 +301,6 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
 
 
-        
-
-
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/playCache"
             android:layout_width="match_parent"
