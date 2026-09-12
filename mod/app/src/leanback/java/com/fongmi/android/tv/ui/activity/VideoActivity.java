@@ -1081,7 +1081,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             if (item.getName() != null && !item.getName().isEmpty()) getIntent().putExtra("name", item.getName());
             if (item.getPic() != null && !item.getPic().isEmpty()) getIntent().putExtra("pic", item.getPic());
             try {
-                if (mBinding != null && mBinding.swipeLayout != null) mBinding.swipeLayout.setRefreshing(true);
             } catch (Throwable ignored) {}
             try {
                 if (mBinding != null && mBinding.name != null && item.getName() != null) mBinding.name.setText(item.getName());

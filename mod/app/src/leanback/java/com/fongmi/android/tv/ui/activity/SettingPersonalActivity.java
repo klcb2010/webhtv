@@ -211,6 +211,18 @@ public class SettingPersonalActivity extends BaseActivity {
         } catch (Throwable ignored) {}
         opt = (opt + 1) % Math.max(1, size);
         try { PlayerSetting.putPlayCacheOption(opt); } catch (Throwable ignored) {}
+        // EXO 实际磁盘占用主要来自「磁盘预加载配额」，与 HLS play_cache 对齐，避免只改 128 却涨到 512+
+        try {
+            int mb = 128;
+            switch (opt) {
+                case 1: mb = 256; break;
+                case 2: mb = 512; break;
+                case 3: mb = 1024; break;
+                case 4: mb = 2048; break;
+                default: mb = 128; break;
+            }
+            com.fongmi.android.tv.setting.PreloadSetting.putPreloadSizeMb(mb);
+        } catch (Throwable ignored) {}
         try { mBinding.playCacheText.setText(playCacheLabel()); } catch (Throwable ignored) {}
         try { refreshTexts(); } catch (Throwable ignored) {}
     }
