@@ -16,10 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 播放栏按钮配置。在上游基础上增加：定时、链路诊断。
- * 弹幕（界面上可能显示为「嗷呜弹幕」）统一走 DANMAKU。
- */
 public class PlayerButtonSetting {
 
     public static final String PLAYER = "player";
@@ -72,32 +68,59 @@ public class PlayerButtonSetting {
             new Item(FULLSCREEN, R.string.play_fullscreen),
             new Item(CHANGE, R.string.play_change),
             new Item(TIMER, R.string.play_timer),
-            new Item(PAN_DIAGNOSTIC, R.string.pan_diagnostic_entry)
-    );
+            new Item(PAN_DIAGNOSTIC, R.string.pan_diagnostic_entry));
 
     public static List<Item> getItems() {
         List<Item> items = new ArrayList<>();
+        List<String> order = getOrder();
         Set<String> hidden = getHidden();
-        for (String id : getOrder()) {
+        for (String id : order) {
             Item item = find(id);
             if (item != null) items.add(item.withVisible(!hidden.contains(id)));
         }
         return items;
     }
 
-    public static void setItems(List<Item> items) {
-        List<String> order = new ArrayList<>();
-        Set<String> hidden = new HashSet<>();
-        for (Item item : items) {
-            order.add(item.id());
-            if (!item.visible()) hidden.add(item.id());
-        }
-        Prefers.put(ORDER, join(order));
-        Prefers.put(HIDDEN, join(hidden));
+    public static int getVisibleCount() {
+        int count = 0;
+        for (Item item : getItems()) if (item.visible()) count++;
+        return count;
+    }
+
+    public static int getTotalCount() {
+        return DEFAULT.size();
+    }
+
+    public static boolean isVisible(String id) {
+        return !getHidden().contains(id);
     }
 
     public static boolean isHidden(String id) {
         return getHidden().contains(id);
+    }
+
+    public static void putVisible(String id, boolean visible) {
+        Set<String> hidden = getHidden();
+        if (visible) hidden.remove(id);
+        else hidden.add(id);
+        Prefers.put(HIDDEN, join(hidden));
+    }
+
+    public static void move(String id, int offset) {
+        List<String> order = getOrder();
+        int from = order.indexOf(id);
+        int to = from + offset;
+        if (from < 0 || to < 0 || to >= order.size()) return;
+        order.remove(from);
+        order.add(to, id);
+        Prefers.put(ORDER, join(order));
+    }
+
+    public static void putOrder(List<String> ids) {
+        LinkedHashSet<String> order = new LinkedHashSet<>();
+        for (String id : ids) if (contains(id)) order.add(id);
+        for (Item item : DEFAULT) order.add(item.id());
+        Prefers.put(ORDER, join(order));
     }
 
     public static void reset() {
