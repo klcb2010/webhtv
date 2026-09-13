@@ -49,6 +49,12 @@ public final class AboutDialog {
                 UpdateSettingsDialog.show(activity);
             });
             binding.updateSettings.setVisibility(android.view.View.VISIBLE);
+            // 手机：禁止抢焦，一次点击即关闭并打开设置
+            if (!Util.isLeanback()) {
+                binding.updateSettings.setFocusable(false);
+                binding.updateSettings.setFocusableInTouchMode(false);
+                binding.updateSettings.setClickable(true);
+            }
         } catch (Throwable e) {
             try {
                 binding.updateSettings.setVisibility(android.view.View.GONE);
@@ -67,14 +73,6 @@ public final class AboutDialog {
 
 
     /** 检查更新 / 我已悉知 / 齿轮：统一获焦高亮 */
-    private static boolean isTvMode() {
-        try {
-            String mode = BuildConfig.FLAVOR_mode;
-            return mode != null && mode.toLowerCase().contains("leanback");
-        } catch (Throwable e) {
-            return false;
-        }
-    }
 
     private static void styleAboutActions(DialogAboutBinding binding) {
         try {

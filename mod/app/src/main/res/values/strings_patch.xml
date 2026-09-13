@@ -111,4 +111,6 @@
         <item>2GB</item>
     </string-array>
     <string name="danmaku">Danmaku</string>
+    <string name="about_check_update">Check</string>
+    <string name="about_acknowledge">Got it</string>
 </resources>

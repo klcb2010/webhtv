@@ -183,8 +183,9 @@ public final class UpdateSettingsDialog {
             btn.setTextColor(android.graphics.Color.WHITE);
             try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else if (selected) {
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EDE7F6")));
-            btn.setTextColor(android.graphics.Color.parseColor("#6A1B9A")); // 紫色，当前加速源清晰可见
+            // 选中：淡蓝底 + 深蓝字
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E8F0FE")));
+            btn.setTextColor(android.graphics.Color.parseColor("#0B57D0"));
             try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else {
             btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F3F4")));

@@ -98,9 +98,10 @@
             android:minHeight="44dp"
             android:nextFocusRight="@id/confirm"
             android:text="@string/about_check_update"
-            android:textColor="@color/dialog_tonal_button_text"
-            android:textSize="14sp"
-            app:backgroundTint="@color/dialog_tonal_button_bg"
+            android:textColor="#202124"
+            android:textSize="13sp"
+            android:maxLines="1"
+            app:backgroundTint="#E8EAED"
             app:cornerRadius="8dp" />
 
         <com.google.android.material.button.MaterialButton
@@ -113,9 +114,10 @@
             android:nextFocusLeft="@id/checkUpdate"
             android:nextFocusRight="@id/updateSettings"
             android:text="@string/about_acknowledge"
-            android:textColor="@color/dialog_primary_button_text"
-            android:textSize="14sp"
-            app:backgroundTint="@color/dialog_primary_button_bg"
+            android:textColor="#202124"
+            android:textSize="13sp"
+            android:maxLines="1"
+            app:backgroundTint="#E8EAED"
             app:cornerRadius="8dp" />
 
         <androidx.appcompat.widget.AppCompatImageButton
@@ -125,6 +127,9 @@
             android:layout_marginStart="10dp"
             android:background="@drawable/selector_dialog_step_button"
             android:contentDescription="@string/update_settings"
+            android:focusable="false"
+            android:focusableInTouchMode="false"
+            android:clickable="true"
             android:nextFocusLeft="@id/confirm"
             android:padding="10dp"
             android:src="@drawable/ic_remote_settings"
