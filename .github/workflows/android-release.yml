@@ -957,16 +957,14 @@ jobs:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
         run: |
           set -e
-
           PRERELEASE_FLAG=""
-
           if [ "${{ inputs.prerelease }}" = "true" ] \
             || [ "${{ steps.meta.outputs.channel }}" = "beta" ]; then
-
             PRERELEASE_FLAG="--prerelease"
           fi
 
           NOTES="${RELEASE_NOTES:-手动触发 GitHub Actions 构建发布。}"
+          TARGET_SHA="$(git rev-parse HEAD)"
 
           echo "=========================================="
           echo "创建 GitHub Release"
@@ -975,13 +973,12 @@ jobs:
           echo "Tag: ${{ steps.meta.outputs.tag }}"
           echo "Title: ${{ steps.meta.outputs.title }}"
           echo "Channel: ${{ steps.meta.outputs.channel }}"
+          echo "Target SHA: $TARGET_SHA"
           echo "=========================================="
 
           gh release create \
             "${{ steps.meta.outputs.tag }}" \
             --repo "${GITHUB_REPOSITORY}" \
-            TARGET_SHA="$(git rev-parse HEAD)"
-            gh release create ... \
             --target "$TARGET_SHA" \
             --title "${{ steps.meta.outputs.title }}" \
             --notes "$NOTES" \
@@ -993,4 +990,3 @@ jobs:
           echo "=========================================="
           echo "✅ GitHub Release 创建成功"
           echo "=========================================="
-
