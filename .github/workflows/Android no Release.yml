@@ -483,15 +483,6 @@ jobs:
 
       # ============================================================
       # Decide whether to build
-      #
-      # 注意：
-      # 现在不再查询「本仓库」GitHub Release。
-      # 因为当前流程完全使用 Actions Artifact。
-      #
-      # 构建条件：
-      # 1. schedule：本轮必须成功同步上游 Release
-      # 2. workflow_dispatch + force_build=true：强制构建
-      # 3. 普通手动执行：直接构建
       # ============================================================
       - name: Decide whether to build
         id: should_build
@@ -520,10 +511,6 @@ jobs:
 
           echo "=========================================="
 
-          # --------------------------------------------------------
-          # 定时任务：
-          # 只有本轮成功同步上游已发布版本才构建
-          # --------------------------------------------------------
           if [ "$EVENT" = "schedule" ]; then
 
             if [ "$SYNCED" != "true" ]; then
@@ -545,9 +532,6 @@ jobs:
             exit 0
           fi
 
-          # --------------------------------------------------------
-          # 手动 force_build
-          # --------------------------------------------------------
           if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
 
             echo ""
@@ -559,12 +543,6 @@ jobs:
             exit 0
           fi
 
-          # --------------------------------------------------------
-          # 普通 workflow_dispatch
-          #
-          # 不再查询本仓库 Release。
-          # 每次手动运行都直接构建。
-          # --------------------------------------------------------
           if [ "$EVENT" = "workflow_dispatch" ]; then
 
             echo ""
@@ -576,9 +554,6 @@ jobs:
             exit 0
           fi
 
-          # --------------------------------------------------------
-          # 兜底
-          # --------------------------------------------------------
           echo ""
           echo "其他触发方式 → 构建"
 
@@ -1070,13 +1045,6 @@ jobs:
 
       # ============================================================
       # Generate update manifests
-      #
-      # 不再生成：
-      # releases/download/<tag>/<apk>
-      #
-      # 因为现在不创建 GitHub Release。
-      #
-      # apk 字段保存 APK 文件名。
       # ============================================================
       - name: Generate update manifests
         if: steps.should_build.outputs.build == 'true'
@@ -1112,13 +1080,8 @@ jobs:
                   "desc": f"{tag} - ${{ steps.meta.outputs.short_sha }}",
                   "channel": "${{ steps.meta.outputs.channel }}",
                   "code": int("${{ steps.meta.outputs.version_code }}"),
-
-                  # 当前不创建 GitHub Release。
-                  # 保存 APK 文件名，不生成死链。
                   "apk": filename,
-
                   "size": len(content),
-
                   "sha256": hashlib.sha256(
                       content
                   ).hexdigest(),
@@ -1141,6 +1104,7 @@ jobs:
                   )
 
                   fh.write("\n")
+          PY
 
           echo=""
 
@@ -1152,12 +1116,8 @@ jobs:
 
       # ============================================================
       # GitHub Release
-      #
-      # 已彻底关闭。
-      # 不调用 gh release create。
-      # 不创建 GitHub Release。
-      # 不创建 GitHub Release Asset。
       # ============================================================
+      # 已关闭，不创建 GitHub Release。
 
       # ============================================================
       # Sync to CNB
@@ -1177,9 +1137,6 @@ jobs:
 
       # ============================================================
       # Upload workflow artifacts
-      #
-      # 这里才是现在真正的「发布产物」。
-      # GitHub Actions 会把 dist/ 整体打成 ZIP。
       # ============================================================
       - name: Upload workflow artifacts
         if: steps.should_build.outputs.build == 'true'
@@ -1228,7 +1185,6 @@ jobs:
           echo "下载地址已写入 GitHub Actions 日志"
           echo "=========================================="
 
-          # 同时写入 GitHub Step Summary
           {
             echo "## ✅ Actions Artifact 上传成功"
             echo ""
