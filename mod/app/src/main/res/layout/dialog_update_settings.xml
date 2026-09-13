@@ -34,8 +34,9 @@
             android:contentDescription="@string/lut_close"
             android:padding="10dp"
             android:src="@drawable/ic_dialog_close"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
             app:tint="#5F6368" />
-
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.core.widget.NestedScrollView
@@ -65,10 +66,10 @@
                 android:layout_marginTop="6dp"
                 android:background="@android:color/white"
                 app:tabGravity="fill"
-                app:tabIndicator="@null"
+                app:tabIndicatorHeight="0dp"
                 app:tabMode="fixed"
                 app:tabRippleColor="@android:color/transparent"
-                app:tabSelectedTextColor="#FFFFFF"
+                app:tabSelectedTextColor="#0B57D0"
                 app:tabTextColor="#5F6368" />
 
             <androidx.appcompat.widget.LinearLayoutCompat
@@ -104,7 +105,6 @@
                         android:layout_height="wrap_content"
                         android:inputType="textUri"
                         android:maxLines="1" />
-
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
@@ -133,9 +133,7 @@
                         android:layout_weight="1"
                         android:text="@string/update_proxy_mode_strip"
                         android:textSize="12sp" />
-
                 </com.google.android.material.button.MaterialButtonToggleGroup>
-
             </androidx.appcompat.widget.LinearLayoutCompat>
 
             <androidx.appcompat.widget.LinearLayoutCompat
@@ -170,13 +168,9 @@
                         android:layout_height="wrap_content"
                         android:inputType="textUri"
                         android:maxLines="1" />
-
                 </com.google.android.material.textfield.TextInputLayout>
-
             </androidx.appcompat.widget.LinearLayoutCompat>
-
         </androidx.appcompat.widget.LinearLayoutCompat>
-
     </androidx.core.widget.NestedScrollView>
 
     <com.google.android.material.button.MaterialButton
@@ -189,5 +183,4 @@
         android:text="@string/update_settings_save"
         android:textSize="14sp"
         app:cornerRadius="8dp" />
-
 </androidx.appcompat.widget.LinearLayoutCompat>

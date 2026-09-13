@@ -163,8 +163,10 @@ public final class UpdateSettingsDialog {
                 params.width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.72f);
                 window.setAttributes(params);
             }
-            int focusIdx = Math.max(0, Math.min(pending[0], itemBtns.length - 1));
-            if (itemBtns.length > 0) itemBtns[focusIdx].requestFocus();
+            if (Util.isLeanback() && itemBtns.length > 0) {
+                int focusIdx = Math.max(0, Math.min(pending[0], itemBtns.length - 1));
+                itemBtns[focusIdx].requestFocus();
+            }
         });
         listDialog.show();
     }
@@ -175,9 +177,9 @@ public final class UpdateSettingsDialog {
         if (selected && !text.startsWith("✓ ")) text = "✓  " + text;
         if (!selected && text.startsWith("✓ ")) text = text.substring(2).trim();
         btn.setText(text);
-        // 当前项：紫字/黑字高对比；焦点：蓝底白字
-        if (focused) {
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1A73E8")));
+        // 当前项：紫字；TV 获焦：深蓝底白字；手机忽略焦点高亮
+        if (focused && Util.isLeanback()) {
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#0B57D0")));
             btn.setTextColor(android.graphics.Color.WHITE);
             try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else if (selected) {
@@ -192,16 +194,24 @@ public final class UpdateSettingsDialog {
         try { btn.setElevation(focused ? ResUtil.dp2px(3) : 0); } catch (Throwable ignored) {}
     }
 
-    /** 保存/取消样式一致：默认灰底，仅获焦时高亮 */
+    /** 保存/取消：手机端普通按钮；TV 端默认灰底，仅获焦时深蓝高亮 */
     private static void styleActionButton(com.google.android.material.button.MaterialButton btn, boolean primary) {
-        btn.setFocusable(true);
-        btn.setFocusableInTouchMode(true);
         final int normalBg = android.graphics.Color.parseColor("#E8EAED");
-        final int focusBg = android.graphics.Color.parseColor("#1A73E8");
+        final int focusBg = android.graphics.Color.parseColor("#0B57D0");
         final int normalFg = android.graphics.Color.parseColor("#202124");
         final int focusFg = android.graphics.Color.WHITE;
         btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(normalBg));
         btn.setTextColor(normalFg);
+        if (!Util.isLeanback()) {
+            // 手机：不抢焦点、不加获焦高亮
+            btn.setFocusable(false);
+            btn.setFocusableInTouchMode(false);
+            btn.setOnFocusChangeListener(null);
+            try { btn.setElevation(0); } catch (Throwable ignored) {}
+            return;
+        }
+        btn.setFocusable(true);
+        btn.setFocusableInTouchMode(true);
         btn.setOnFocusChangeListener((v, hasFocus) -> {
             btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(hasFocus ? focusBg : normalBg));
             btn.setTextColor(hasFocus ? focusFg : normalFg);
@@ -383,6 +393,23 @@ public final class UpdateSettingsDialog {
         try { styleProxyField(binding.githubProxy); } catch (Throwable ignored) {}
         try { styleProxyField(binding.ociMirror); } catch (Throwable ignored) {}
         tvFocusable(binding.close);
+
+        // 关闭按钮获焦：深蓝底 + 白色图标
+        try {
+            final View close = binding.close;
+            final int bgN = Color.TRANSPARENT;
+            final int bgF = Color.parseColor("#0B57D0");
+            close.setOnFocusChangeListener((v, hasFocus) -> {
+                try {
+                    android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+                    d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                    d.setColor(hasFocus ? bgF : bgN);
+                    v.setBackground(d);
+                    if (v instanceof android.widget.ImageView)
+                        ((android.widget.ImageView) v).setColorFilter(hasFocus ? Color.WHITE : Color.parseColor("#5F6368"));
+                } catch (Throwable ignored) {}
+            });
+        } catch (Throwable ignored) {}
         try { if (binding.save.getVisibility() == View.VISIBLE) tvFocusable(binding.save); } catch (Throwable ignored) {}
         binding.close.setOnKeyListener((view, keyCode, event) -> event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN && focusSelectedTab(binding));
         binding.save.setOnKeyListener((view, keyCode, event) -> event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP && focusLastControl(binding, state));
