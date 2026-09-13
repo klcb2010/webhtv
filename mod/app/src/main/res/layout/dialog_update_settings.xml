@@ -63,11 +63,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:layout_marginTop="6dp"
+                android:background="@android:color/white"
                 app:tabGravity="fill"
-                app:tabIndicatorColor="#1A73E8"
+                app:tabIndicator="@null"
                 app:tabMode="fixed"
                 app:tabRippleColor="@android:color/transparent"
-                app:tabSelectedTextColor="#1A73E8"
+                app:tabSelectedTextColor="#FFFFFF"
                 app:tabTextColor="#5F6368" />
 
             <androidx.appcompat.widget.LinearLayoutCompat
@@ -78,60 +79,60 @@
                 android:visibility="gone">
 
                 <com.google.android.material.button.MaterialButton
-                android:id="@+id/githubProxy"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="10dp"
-                android:gravity="center_vertical|start"
-                android:maxLines="1"
-                android:textSize="14sp"
-                tools:text="GitHub proxy · GitHub" />
+                    android:id="@+id/githubProxy"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical|start"
+                    android:maxLines="1"
+                    android:textSize="14sp"
+                    tools:text="GitHub proxy · GitHub" />
 
                 <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/githubCustomLayout"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="@string/update_custom_url"
-                android:visibility="gone">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/githubCustom"
+                    android:id="@+id/githubCustomLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textUri"
-                    android:maxLines="1" />
+                    android:layout_marginTop="8dp"
+                    android:hint="@string/update_custom_url"
+                    android:visibility="gone">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/githubCustom"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:maxLines="1" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/githubModeGroup"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="8dp"
-                android:visibility="gone"
-                app:selectionRequired="true"
-                app:singleSelection="true">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/githubModeFull"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
+                    android:id="@+id/githubModeGroup"
+                    android:layout_width="match_parent"
                     android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:text="@string/update_proxy_mode_full"
-                    android:textSize="12sp" />
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/githubModeStrip"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:text="@string/update_proxy_mode_strip"
-                    android:textSize="12sp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/githubModeFull"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="@string/update_proxy_mode_full"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/githubModeStrip"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:text="@string/update_proxy_mode_strip"
+                        android:textSize="12sp" />
 
                 </com.google.android.material.button.MaterialButtonToggleGroup>
 
@@ -144,31 +145,31 @@
                 android:orientation="vertical">
 
                 <com.google.android.material.button.MaterialButton
-                android:id="@+id/ociMirror"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="10dp"
-                android:gravity="center_vertical|start"
-                android:maxLines="1"
-                android:textSize="14sp"
-                tools:text="OCI mirror · dockerproxy.net" />
+                    android:id="@+id/ociMirror"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical|start"
+                    android:maxLines="1"
+                    android:textSize="14sp"
+                    tools:text="OCI mirror · dockerproxy.net" />
 
                 <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/ociCustomLayout"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="@string/update_custom_url"
-                android:visibility="gone">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/ociCustom"
+                    android:id="@+id/ociCustomLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textUri"
-                    android:maxLines="1" />
+                    android:layout_marginTop="8dp"
+                    android:hint="@string/update_custom_url"
+                    android:visibility="gone">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/ociCustom"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:maxLines="1" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
