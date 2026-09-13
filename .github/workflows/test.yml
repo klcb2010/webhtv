@@ -1,10 +1,8 @@
-name: Android  no  Release
+name: Android no Release
 on:
-  schedule:
-    # 每天6小时检查是否需要打包
-    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
+
       release_tag:
         description: "Release tag, blank = v<versionName>-yyyyMMddHHmm or v<versionName>-beta-yyyyMMddHHmm"
         required: false
