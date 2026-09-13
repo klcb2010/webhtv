@@ -43,7 +43,6 @@ public final class UpdateSettingsDialog {
 
         State state = State.load();
 
-        // LightDialog 默认 factor/maxDp 为 0 会把窗口宽度算成 0，保存按钮像“消失”
         Dialog dialog = LightDialog.create(
                 activity,
                 null,
@@ -53,7 +52,7 @@ public final class UpdateSettingsDialog {
                 640
         );
 
-        setupTabs(activity, binding, state);
+        setupTabs(binding, state);
         bind(activity, dialog, binding, state);
         render(activity, binding, state);
 
@@ -100,12 +99,9 @@ public final class UpdateSettingsDialog {
                         state
                 )
         );
-
-        // 保存改到「加速镜像列表」底部；主设置页不再放保存
     }
 
     private static void setupTabs(
-            FragmentActivity activity,
             DialogUpdateSettingsBinding binding,
             State state
     ) {
@@ -130,17 +126,6 @@ public final class UpdateSettingsDialog {
                         .setText(R.string.update_source_github),
                 false
         );
-
-        /*
-         * OCI / Github 这一行：
-         *
-         * 未选中：纯白背景 + 深灰字
-         * 选中：深蓝背景 + 白字
-         *
-         * 手机和 TV 都生效。
-         * 这里不使用焦点作为判断条件。
-         */
-        styleSourceTabs(binding);
 
         binding.sourceTabs.addOnTabSelectedListener(
                 new TabLayout.OnTabSelectedListener() {
@@ -187,12 +172,12 @@ public final class UpdateSettingsDialog {
     }
 
     /**
-     * OCI / Github 顶部 Tab 样式。
+     * 顶部 OCI / Github Tab：
      *
-     * 未选中：纯白
-     * 选中：深蓝 + 白字
+     * 未选中：纯白背景 + 灰色文字
+     * 选中：深蓝背景 + 白色文字
      *
-     * 手机端、TV 端都使用。
+     * 手机和 TV 都使用。
      * 不依赖焦点。
      */
     private static void styleSourceTabs(
@@ -240,10 +225,6 @@ public final class UpdateSettingsDialog {
 
                 tab.setBackground(background);
 
-                /*
-                 * TabLayout 内部的文字 View。
-                 * 找到后直接设置文字颜色。
-                 */
                 setTabTextColor(
                         tab,
                         selected
@@ -251,9 +232,6 @@ public final class UpdateSettingsDialog {
                                 : Color.parseColor("#5F6368")
                 );
 
-                /*
-                 * Tab 之间留一点间距，避免两个深蓝区域粘在一起。
-                 */
                 ViewGroup.LayoutParams params =
                         tab.getLayoutParams();
 
@@ -272,19 +250,17 @@ public final class UpdateSettingsDialog {
             }
 
             /*
-             * 已经使用整块背景，不再需要 Material TabLayout
-             * 默认的蓝色 indicator。
+             * 这里必须是 null。
+             *
+             * 不能写：
+             * ColorDrawable.TRANSPARENT
+             *
+             * 因为 TRANSPARENT 属于 Color。
              */
-            binding.sourceTabs.setSelectedTabIndicator(
-                    android.graphics.drawable.ColorDrawable
-                            .TRANSPARENT
-            );
+            binding.sourceTabs.setSelectedTabIndicator(null);
         });
     }
 
-    /**
-     * 设置 Tab 内部文字颜色。
-     */
     private static void setTabTextColor(
             View tab,
             int color
@@ -314,7 +290,6 @@ public final class UpdateSettingsDialog {
         }
     }
 
-    /** 加速镜像列表：底部 左保存 右取消；TV 焦点/选中高亮 */
     private static void showProxyList(
             FragmentActivity activity,
             String title,
@@ -344,9 +319,7 @@ public final class UpdateSettingsDialog {
         String currentLabel =
                 (selected >= 0
                         && selected < labels.length)
-                        ? String.valueOf(
-                        labels[selected]
-                )
+                        ? String.valueOf(labels[selected])
                         : "";
 
         com.google.android.material.textview.MaterialTextView titleView =
@@ -573,7 +546,7 @@ public final class UpdateSettingsDialog {
         );
 
         listDialog.setOnShowListener(d -> {
-            android.view.Window window =
+            Window window =
                     listDialog.getWindow();
 
             if (window != null) {
@@ -581,7 +554,7 @@ public final class UpdateSettingsDialog {
                         new ColorDrawable(Color.WHITE)
                 );
 
-                android.view.WindowManager.LayoutParams params =
+                WindowManager.LayoutParams params =
                         window.getAttributes();
 
                 params.width =
@@ -619,7 +592,9 @@ public final class UpdateSettingsDialog {
             boolean selected,
             boolean focused
     ) {
-        if (btn == null) return;
+        if (btn == null) {
+            return;
+        }
 
         String text =
                 String.valueOf(
@@ -640,7 +615,6 @@ public final class UpdateSettingsDialog {
 
         btn.setText(text);
 
-        // 当前项：紫字/黑字高对比；焦点：蓝底白字
         if (focused) {
 
             btn.setBackgroundTintList(
@@ -712,7 +686,6 @@ public final class UpdateSettingsDialog {
         }
     }
 
-    /** 保存/取消样式一致：默认灰底，仅获焦时高亮 */
     private static void styleActionButton(
             com.google.android.material.button.MaterialButton btn,
             boolean primary
@@ -738,7 +711,9 @@ public final class UpdateSettingsDialog {
                 )
         );
 
-        btn.setTextColor(normalFg);
+        btn.setTextColor(
+                normalFg
+        );
 
         btn.setOnFocusChangeListener(
                 (v, hasFocus) -> {
@@ -1087,10 +1062,6 @@ public final class UpdateSettingsDialog {
                         : View.VISIBLE
         );
 
-        /*
-         * 只有 TV 才重新配置焦点。
-         * Tab 的背景/选中样式本身不依赖这里。
-         */
         if (Util.isLeanback()) {
             binding.sourceTabs.post(
                     () -> configureTvFocus(
@@ -1127,10 +1098,6 @@ public final class UpdateSettingsDialog {
                 )
         );
 
-        /*
-         * 这个是下面的“当前代理：xxxx”框。
-         * 保持原来的 TV 焦点逻辑，不动。
-         */
         if (Util.isLeanback()) {
             styleProxyField(
                     binding.githubProxy
@@ -1176,10 +1143,6 @@ public final class UpdateSettingsDialog {
                 )
         );
 
-        /*
-         * 这个是下面的“当前 OCI：xxxx”框。
-         * 保持原来的 TV 焦点逻辑，不动。
-         */
         if (Util.isLeanback()) {
             styleProxyField(
                     binding.ociMirror
@@ -1210,7 +1173,9 @@ public final class UpdateSettingsDialog {
         Window window =
                 dialog.getWindow();
 
-        if (window == null) return;
+        if (window == null) {
+            return;
+        }
 
         WindowManager.LayoutParams params =
                 window.getAttributes();
@@ -1257,11 +1222,6 @@ public final class UpdateSettingsDialog {
         );
     }
 
-    /**
-     * TV 专用焦点配置。
-     *
-     * 手机端直接 return，不做任何焦点处理。
-     */
     private static void configureTvFocus(
             DialogUpdateSettingsBinding binding,
             State state
@@ -1270,7 +1230,6 @@ public final class UpdateSettingsDialog {
             return;
         }
 
-        // 下面“当前代理 / 当前 OCI”框的 TV 焦点样式
         styleProxyField(
                 binding.githubProxy
         );
@@ -1345,14 +1304,6 @@ public final class UpdateSettingsDialog {
         );
     }
 
-    /**
-     * TV 端“当前代理 / 当前 OCI”选择框。
-     *
-     * 未获得焦点：纯白背景 + 黑字
-     * 获得焦点：深蓝背景 + 白字
-     *
-     * 手机端不会调用。
-     */
     private static void styleProxyField(
             com.google.android.material.button.MaterialButton btn
     ) {
@@ -1459,9 +1410,9 @@ public final class UpdateSettingsDialog {
             tvFocusable(tab);
 
             /*
-             * 保留 TV 原来的焦点选择器。
-             * 选中 Tab 的深蓝背景由 styleSourceTabs()
-             * 负责，不再让这里覆盖它。
+             * 不设置 selector 背景。
+             * 顶部 OCI / Github 的背景完全由
+             * styleSourceTabs() 控制。
              */
             tab.setOnKeyListener(
                     (view, keyCode, event) -> {
@@ -1525,11 +1476,12 @@ public final class UpdateSettingsDialog {
         }
 
         int position =
-                Math.max(
-                        TAB_OCI,
-                        binding.sourceTabs
-                                .getSelectedTabPosition()
-                );
+                binding.sourceTabs
+                        .getSelectedTabPosition();
+
+        if (position < TAB_OCI) {
+            position = TAB_OCI;
+        }
 
         if (position >= tabs.getChildCount()) {
             position = TAB_OCI;
@@ -1598,9 +1550,6 @@ public final class UpdateSettingsDialog {
                 .requestFocus();
     }
 
-    /**
-     * 仅 TV 使用。
-     */
     private static void tvFocusable(
             View view
     ) {
