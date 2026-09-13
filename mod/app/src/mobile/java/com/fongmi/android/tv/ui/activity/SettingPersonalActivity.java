@@ -50,6 +50,7 @@ public class SettingPersonalActivity extends BaseActivity {
     private void setListeners() {
         // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -71,6 +72,7 @@ public class SettingPersonalActivity extends BaseActivity {
         // autoChange hidden
         }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
+        try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
@@ -122,6 +124,12 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putAutoBackup(!Setting.isAutoBackup());
         refreshTexts();
     }
+
+    private void setAutoCheckUpdate(View view) {
+        Setting.putAutoCheckUpdate(!Setting.isAutoCheckUpdate());
+        refreshTexts();
+    }
+
 
     private void setEpisodeHistory(View view) {
         Setting.putEpisodeHistory(!Setting.isEpisodeHistory());

@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.LiveConfig;
@@ -160,6 +161,19 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         App.post(this::initConfig, 80);
         App.post(() -> PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this)), 1800);
         App.post(() -> DLNARendererService.start(this), 2500);
+        scheduleAutoCheckUpdate();
+    }
+
+    private void scheduleAutoCheckUpdate() {
+        try {
+            if (!Setting.isAutoCheckUpdate()) return;
+            App.post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    Updater.create().start(this);
+                } catch (Throwable ignored) {}
+            }, 3500);
+        } catch (Throwable ignored) {}
     }
 
     private void runAfterFirstFrame(Runnable runnable) {

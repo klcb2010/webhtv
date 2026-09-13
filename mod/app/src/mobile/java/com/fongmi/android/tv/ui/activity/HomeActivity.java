@@ -17,6 +17,7 @@ import androidx.core.graphics.drawable.IconCompat;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
@@ -102,6 +103,19 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
         initFragment(savedInstanceState);
         initConfig();
+        scheduleAutoCheckUpdate();
+    }
+
+    private void scheduleAutoCheckUpdate() {
+        try {
+            if (!Setting.isAutoCheckUpdate()) return;
+            App.post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    Updater.create().start(this);
+                } catch (Throwable ignored) {}
+            }, 2500);
+        } catch (Throwable ignored) {}
     }
 
     @Override

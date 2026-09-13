@@ -16,6 +16,9 @@ public final class GithubProxy {
             new Preset("ghfile_geekertao", "ghfile.geekertao.top", "https://ghfile.geekertao.top", MODE_FULL_URL),
             new Preset("ghfast", "ghfast.top", "https://ghfast.top", MODE_FULL_URL),
             new Preset("gh_chjina", "gh.chjina.com", "https://gh.chjina.com", MODE_FULL_URL),
+            new Preset("blfrp", "blfrp.cn", "https://blfrp.cn", MODE_FULL_URL),
+            new Preset("wget_la", "wget.la", "https://wget.la", MODE_FULL_URL),
+            new Preset("hk_gh_proxy", "hk.gh-proxy.org", "https://hk.gh-proxy.org", MODE_FULL_URL),
             new Preset(CUSTOM, "Custom", "", MODE_FULL_URL),
     };
 

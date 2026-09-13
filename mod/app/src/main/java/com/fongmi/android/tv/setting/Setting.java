@@ -887,6 +887,15 @@ public class Setting {
         Prefers.put("auto_backup", autoBackup);
     }
 
+    public static boolean isAutoCheckUpdate() {
+        return Prefers.getBoolean("auto_check_update", false);
+    }
+
+    public static void putAutoCheckUpdate(boolean value) {
+        Prefers.put("auto_check_update", value);
+    }
+
+
     public static boolean isHomeSiteLock() {
         return Prefers.getBoolean("home_site_lock", false);
     }
@@ -964,10 +973,6 @@ public class Setting {
     public static String getUpdateGithubProxy() {
         try {
             String id = Prefers.getString("update_github_proxy", GithubProxy.DIRECT);
-            if (id != null && id.toLowerCase().contains("ghfast")) {
-                Prefers.put("update_github_proxy", GithubProxy.DIRECT);
-                id = GithubProxy.DIRECT;
-            }
             return GithubProxy.find(id).id;
         } catch (Throwable e) {
             return "direct";
