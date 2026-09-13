@@ -16,6 +16,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.DialogAboutBinding;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 
 /**
  * 关于弹窗：检查更新 + 我已知 + 齿轮(更新设置，含 GitHub/OCI 加速)。
@@ -57,12 +58,24 @@ public final class AboutDialog {
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
         configureWindow(activity, dialog);
-        styleAboutActions(binding);
-        try { binding.checkUpdate.requestFocus(); } catch (Throwable e) { binding.confirm.requestFocus(); }
+        // 仅 TV(leanback) 需要遥控器焦点样式；手机端不处理
+        if (Util.isLeanback()) {
+            styleAboutActions(binding);
+            try { binding.checkUpdate.requestFocus(); } catch (Throwable e) { binding.confirm.requestFocus(); }
+        }
     }
 
 
     /** 检查更新 / 我已悉知 / 齿轮：统一获焦高亮 */
+    private static boolean isTvMode() {
+        try {
+            String mode = BuildConfig.FLAVOR_mode;
+            return mode != null && mode.toLowerCase().contains("leanback");
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
     private static void styleAboutActions(DialogAboutBinding binding) {
         try {
             unifyFocusButton(binding.checkUpdate);

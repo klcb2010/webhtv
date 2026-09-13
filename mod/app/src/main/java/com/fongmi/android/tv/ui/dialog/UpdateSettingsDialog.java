@@ -299,7 +299,7 @@ public final class UpdateSettingsDialog {
         GithubProxy.Preset preset = GithubProxy.find(state.githubProxy);
         String ghLabel = label(activity, preset.label, preset.id);
         binding.githubProxy.setText(activity.getString(R.string.update_github_proxy_value, ghLabel));
-        try { binding.githubProxy.setTextColor(android.graphics.Color.parseColor("#6A1B9A")); } catch (Throwable ignored) {}
+        if (Util.isLeanback()) styleProxyField(binding.githubProxy);
         boolean custom = GithubProxy.CUSTOM.equals(preset.id);
         binding.githubCustomLayout.setVisibility(custom ? View.VISIBLE : View.GONE);
         binding.githubModeGroup.setVisibility(custom ? View.VISIBLE : View.GONE);
@@ -308,6 +308,7 @@ public final class UpdateSettingsDialog {
     private static void renderOci(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         OciMirror.Preset preset = OciMirror.find(state.ociMirror);
         binding.ociMirror.setText(activity.getString(R.string.update_oci_mirror_value, label(activity, preset.label, preset.id)));
+        if (Util.isLeanback()) styleProxyField(binding.ociMirror);
         binding.ociCustomLayout.setVisibility(OciMirror.CUSTOM.equals(preset.id) ? View.VISIBLE : View.GONE);
     }
 
@@ -333,6 +334,8 @@ public final class UpdateSettingsDialog {
 
     private static void configureTvFocus(DialogUpdateSettingsBinding binding, State state) {
         if (!Util.isLeanback()) return;
+        try { styleProxyField(binding.githubProxy); } catch (Throwable ignored) {}
+        try { styleProxyField(binding.ociMirror); } catch (Throwable ignored) {}
         tvFocusable(binding.close);
         try { if (binding.save.getVisibility() == View.VISIBLE) tvFocusable(binding.save); } catch (Throwable ignored) {}
         binding.close.setOnKeyListener((view, keyCode, event) -> event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN && focusSelectedTab(binding));
