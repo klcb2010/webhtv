@@ -836,7 +836,7 @@ jobs:
           if manual:
               parts.append(manual)
           else:
-              parts.append("基于上游同步构建的 mod 版本发布。")
+              parts.append("基于鱼壳同步构建的魔改版")
 
           if up_body:
               parts.append("")
