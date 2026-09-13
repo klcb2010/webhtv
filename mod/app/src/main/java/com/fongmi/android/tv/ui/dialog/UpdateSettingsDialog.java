@@ -47,6 +47,15 @@ public final class UpdateSettingsDialog {
         dialog.show();
         configureWindow(activity, dialog);
         configureTvFocus(binding, state);
+        // 手机：关闭叉不抢焦，一次点击即关闭
+        if (!Util.isLeanback()) {
+            try {
+                binding.close.setFocusable(false);
+                binding.close.setFocusableInTouchMode(false);
+                binding.close.setClickable(true);
+                binding.close.setOnFocusChangeListener(null);
+            } catch (Throwable ignored) {}
+        }
     }
 
     private static void bind(FragmentActivity activity, Dialog dialog, DialogUpdateSettingsBinding binding, State state) {
@@ -98,20 +107,30 @@ public final class UpdateSettingsDialog {
         android.widget.LinearLayout list = new android.widget.LinearLayout(activity);
         list.setOrientation(android.widget.LinearLayout.VERTICAL);
         final com.google.android.material.button.MaterialButton[] itemBtns = new com.google.android.material.button.MaterialButton[labels.length];
+        final boolean tv = Util.isLeanback();
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
             com.google.android.material.button.MaterialButton btn = new com.google.android.material.button.MaterialButton(activity);
             btn.setAllCaps(false);
             btn.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
-            btn.setFocusable(true);
-            btn.setFocusableInTouchMode(true);
+            btn.setClickable(true);
+            if (tv) {
+                btn.setFocusable(true);
+                btn.setFocusableInTouchMode(true);
+                btn.setOnFocusChangeListener((v, hasFocus) -> styleProxyListItem(btn, labels[index], index == pending[0], hasFocus));
+            } else {
+                // 手机：禁止抢焦，一次点击即选中并打钩
+                btn.setFocusable(false);
+                btn.setFocusableInTouchMode(false);
+                btn.setOnFocusChangeListener(null);
+            }
             styleProxyListItem(btn, labels[index], index == pending[0], false);
-            btn.setOnFocusChangeListener((v, hasFocus) -> styleProxyListItem(btn, labels[index], index == pending[0], hasFocus));
             btn.setOnClickListener(v -> {
                 pending[0] = index;
                 titleView.setText(title + "  ·  当前：" + labels[index]);
                 for (int j = 0; j < itemBtns.length; j++) {
-                    styleProxyListItem(itemBtns[j], labels[j], j == pending[0], itemBtns[j].hasFocus());
+                    // 手机始终传 focused=false，避免焦点样式干扰选中淡蓝
+                    styleProxyListItem(itemBtns[j], labels[j], j == pending[0], tv && itemBtns[j].hasFocus());
                 }
             });
             itemBtns[i] = btn;
@@ -177,22 +196,32 @@ public final class UpdateSettingsDialog {
         if (selected && !text.startsWith("✓ ")) text = "✓  " + text;
         if (!selected && text.startsWith("✓ ")) text = text.substring(2).trim();
         btn.setText(text);
-        // 当前项：紫字；TV 获焦：深蓝底白字；手机忽略焦点高亮
-        if (focused && Util.isLeanback()) {
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#0B57D0")));
-            btn.setTextColor(android.graphics.Color.WHITE);
-            try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+        // 手机端完全忽略焦点样式；TV 获焦才用深蓝
+        boolean tvFocus = focused && Util.isLeanback();
+        int bg;
+        int fg;
+        if (tvFocus) {
+            bg = android.graphics.Color.parseColor("#0B57D0");
+            fg = android.graphics.Color.WHITE;
         } else if (selected) {
-            // 选中：淡蓝底 + 深蓝字
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E8F0FE")));
-            btn.setTextColor(android.graphics.Color.parseColor("#202124")); // 选中也用黑色字
-            try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
+            bg = android.graphics.Color.parseColor("#E8F0FE"); // 淡蓝
+            fg = android.graphics.Color.parseColor("#202124"); // 黑字
         } else {
-            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F3F4")));
-            btn.setTextColor(android.graphics.Color.parseColor("#202124"));
-            try { btn.setTypeface(null, android.graphics.Typeface.NORMAL); } catch (Throwable ignored) {}
+            bg = android.graphics.Color.parseColor("#F1F3F4");
+            fg = android.graphics.Color.parseColor("#202124");
         }
-        try { btn.setElevation(focused ? ResUtil.dp2px(3) : 0); } catch (Throwable ignored) {}
+        try {
+            btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bg));
+            btn.setBackgroundTintMode(android.graphics.PorterDuff.Mode.SRC_IN);
+            btn.setRippleColor(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#330B57D0")));
+            btn.setStrokeWidth(0);
+            btn.setStrokeColor(android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT));
+        } catch (Throwable e) {
+            try { btn.setBackgroundColor(bg); } catch (Throwable ignored) {}
+        }
+        btn.setTextColor(fg);
+        try { btn.setTypeface(null, selected || tvFocus ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL); } catch (Throwable ignored) {}
+        try { btn.setElevation(tvFocus ? ResUtil.dp2px(3) : 0); } catch (Throwable ignored) {}
     }
 
     /** 保存/取消：手机端普通按钮；TV 端默认灰底，仅获焦时深蓝高亮 */

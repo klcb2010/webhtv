@@ -34,8 +34,9 @@
             android:contentDescription="@string/lut_close"
             android:padding="10dp"
             android:src="@drawable/ic_dialog_close"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
+            android:focusable="false"
+            android:focusableInTouchMode="false"
+            android:clickable="true"
             app:tint="#5F6368" />
     </androidx.appcompat.widget.LinearLayoutCompat>
 
