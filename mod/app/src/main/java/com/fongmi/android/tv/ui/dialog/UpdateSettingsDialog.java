@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.dialog;
 import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -25,7 +26,6 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.tabs.TabLayout;
-import com.fongmi.android.tv.ui.dialog.ChoiceDialog;
 
 public final class UpdateSettingsDialog {
 
@@ -36,11 +36,22 @@ public final class UpdateSettingsDialog {
     }
 
     public static void show(FragmentActivity activity) {
-        DialogUpdateSettingsBinding binding = DialogUpdateSettingsBinding.inflate(LayoutInflater.from(activity));
+        DialogUpdateSettingsBinding binding =
+                DialogUpdateSettingsBinding.inflate(
+                        LayoutInflater.from(activity)
+                );
+
         State state = State.load();
 
         // LightDialog 默认 factor/maxDp 为 0 会把窗口宽度算成 0，保存按钮像“消失”
-        Dialog dialog = LightDialog.create(activity, null, binding.getRoot(), 0.62f, 0.92f, 640);
+        Dialog dialog = LightDialog.create(
+                activity,
+                null,
+                binding.getRoot(),
+                0.62f,
+                0.92f,
+                640
+        );
 
         setupTabs(activity, binding, state);
         bind(activity, dialog, binding, state);
@@ -53,63 +64,254 @@ public final class UpdateSettingsDialog {
         configureTvFocus(binding, state);
     }
 
-    private static void bind(FragmentActivity activity, Dialog dialog, DialogUpdateSettingsBinding binding, State state) {
-        binding.close.setOnClickListener(view -> dialog.dismiss());
+    private static void bind(
+            FragmentActivity activity,
+            Dialog dialog,
+            DialogUpdateSettingsBinding binding,
+            State state
+    ) {
+        binding.close.setOnClickListener(
+                view -> dialog.dismiss()
+        );
 
-        binding.githubModeGroup.addOnButtonCheckedListener((group, id, checked) -> {
-            if (checked) {
-                state.githubMode = id == R.id.githubModeStrip
-                        ? GithubProxy.MODE_STRIP_SCHEME
-                        : GithubProxy.MODE_FULL_URL;
-            }
-        });
+        binding.githubModeGroup.addOnButtonCheckedListener(
+                (group, id, checked) -> {
+                    if (checked) {
+                        state.githubMode =
+                                id == R.id.githubModeStrip
+                                        ? GithubProxy.MODE_STRIP_SCHEME
+                                        : GithubProxy.MODE_FULL_URL;
+                    }
+                }
+        );
 
-        binding.githubProxy.setOnClickListener(view -> chooseGithub(activity, binding, state));
-        binding.ociMirror.setOnClickListener(view -> chooseOci(activity, binding, state));
+        binding.githubProxy.setOnClickListener(
+                view -> chooseGithub(
+                        activity,
+                        binding,
+                        state
+                )
+        );
+
+        binding.ociMirror.setOnClickListener(
+                view -> chooseOci(
+                        activity,
+                        binding,
+                        state
+                )
+        );
 
         // 保存改到「加速镜像列表」底部；主设置页不再放保存
     }
 
-    private static void setupTabs(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
-        binding.sourceTabs.setTabMode(TabLayout.MODE_FIXED);
-        binding.sourceTabs.setTabGravity(TabLayout.GRAVITY_FILL);
+    private static void setupTabs(
+            FragmentActivity activity,
+            DialogUpdateSettingsBinding binding,
+            State state
+    ) {
+        binding.sourceTabs.setTabMode(
+                TabLayout.MODE_FIXED
+        );
+
+        binding.sourceTabs.setTabGravity(
+                TabLayout.GRAVITY_FILL
+        );
 
         binding.sourceTabs.addTab(
-                binding.sourceTabs.newTab().setText(R.string.update_source_oci),
+                binding.sourceTabs
+                        .newTab()
+                        .setText(R.string.update_source_oci),
                 false
         );
 
         binding.sourceTabs.addTab(
-                binding.sourceTabs.newTab().setText(R.string.update_source_github),
+                binding.sourceTabs
+                        .newTab()
+                        .setText(R.string.update_source_github),
                 false
         );
 
-        binding.sourceTabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
-            @Override
-            public void onTabSelected(TabLayout.Tab tab) {
-                state.source = tab.getPosition() == TAB_GITHUB
-                        ? UpdateSource.GITHUB
-                        : UpdateSource.OCI;
+        /*
+         * OCI / Github 这一行：
+         *
+         * 未选中：纯白背景 + 深灰字
+         * 选中：深蓝背景 + 白字
+         *
+         * 手机和 TV 都生效。
+         * 这里不使用焦点作为判断条件。
+         */
+        styleSourceTabs(binding);
 
-                renderSource(binding, state);
-            }
+        binding.sourceTabs.addOnTabSelectedListener(
+                new TabLayout.OnTabSelectedListener() {
 
-            @Override
-            public void onTabUnselected(TabLayout.Tab tab) {
-            }
+                    @Override
+                    public void onTabSelected(
+                            TabLayout.Tab tab
+                    ) {
+                        state.source =
+                                tab.getPosition() == TAB_GITHUB
+                                        ? UpdateSource.GITHUB
+                                        : UpdateSource.OCI;
 
-            @Override
-            public void onTabReselected(TabLayout.Tab tab) {
-            }
-        });
+                        styleSourceTabs(binding);
+                        renderSource(binding, state);
+                    }
 
-        int position = UpdateSource.GITHUB.equals(state.source)
-                ? TAB_GITHUB
-                : TAB_OCI;
+                    @Override
+                    public void onTabUnselected(
+                            TabLayout.Tab tab
+                    ) {
+                        styleSourceTabs(binding);
+                    }
+
+                    @Override
+                    public void onTabReselected(
+                            TabLayout.Tab tab
+                    ) {
+                        styleSourceTabs(binding);
+                    }
+                }
+        );
+
+        int position =
+                UpdateSource.GITHUB.equals(state.source)
+                        ? TAB_GITHUB
+                        : TAB_OCI;
 
         binding.sourceTabs.selectTab(
                 binding.sourceTabs.getTabAt(position)
         );
+
+        styleSourceTabs(binding);
+    }
+
+    /**
+     * OCI / Github 顶部 Tab 样式。
+     *
+     * 未选中：纯白
+     * 选中：深蓝 + 白字
+     *
+     * 手机端、TV 端都使用。
+     * 不依赖焦点。
+     */
+    private static void styleSourceTabs(
+            DialogUpdateSettingsBinding binding
+    ) {
+        binding.sourceTabs.post(() -> {
+
+            View strip =
+                    binding.sourceTabs.getChildAt(0);
+
+            if (!(strip instanceof ViewGroup tabs)) {
+                return;
+            }
+
+            int selectedPosition =
+                    binding.sourceTabs
+                            .getSelectedTabPosition();
+
+            for (int i = 0;
+                 i < tabs.getChildCount();
+                 i++) {
+
+                View tab =
+                        tabs.getChildAt(i);
+
+                boolean selected =
+                        i == selectedPosition;
+
+                GradientDrawable background =
+                        new GradientDrawable();
+
+                background.setShape(
+                        GradientDrawable.RECTANGLE
+                );
+
+                background.setColor(
+                        selected
+                                ? Color.parseColor("#1A237E")
+                                : Color.WHITE
+                );
+
+                background.setCornerRadius(
+                        ResUtil.dp2px(8)
+                );
+
+                tab.setBackground(background);
+
+                /*
+                 * TabLayout 内部的文字 View。
+                 * 找到后直接设置文字颜色。
+                 */
+                setTabTextColor(
+                        tab,
+                        selected
+                                ? Color.WHITE
+                                : Color.parseColor("#5F6368")
+                );
+
+                /*
+                 * Tab 之间留一点间距，避免两个深蓝区域粘在一起。
+                 */
+                ViewGroup.LayoutParams params =
+                        tab.getLayoutParams();
+
+                if (params instanceof ViewGroup.MarginLayoutParams marginParams) {
+                    marginParams.setMargins(
+                            ResUtil.dp2px(2),
+                            ResUtil.dp2px(2),
+                            ResUtil.dp2px(2),
+                            ResUtil.dp2px(2)
+                    );
+
+                    tab.setLayoutParams(
+                            marginParams
+                    );
+                }
+            }
+
+            /*
+             * 已经使用整块背景，不再需要 Material TabLayout
+             * 默认的蓝色 indicator。
+             */
+            binding.sourceTabs.setSelectedTabIndicator(
+                    android.graphics.drawable.ColorDrawable
+                            .TRANSPARENT
+            );
+        });
+    }
+
+    /**
+     * 设置 Tab 内部文字颜色。
+     */
+    private static void setTabTextColor(
+            View tab,
+            int color
+    ) {
+        if (!(tab instanceof ViewGroup group)) {
+            return;
+        }
+
+        for (int i = 0;
+             i < group.getChildCount();
+             i++) {
+
+            View child =
+                    group.getChildAt(i);
+
+            if (child instanceof android.widget.TextView) {
+                ((android.widget.TextView) child)
+                        .setTextColor(color);
+            }
+
+            if (child instanceof ViewGroup) {
+                setTabTextColor(
+                        child,
+                        color
+                );
+            }
+        }
     }
 
     /** 加速镜像列表：底部 左保存 右取消；TV 焦点/选中高亮 */
@@ -120,12 +322,17 @@ public final class UpdateSettingsDialog {
             int selected,
             java.util.function.IntConsumer onSave
     ) {
-        final int[] pending = new int[]{Math.max(0, selected)};
+        final int[] pending =
+                new int[]{
+                        Math.max(0, selected)
+                };
 
         android.widget.LinearLayout root =
                 new android.widget.LinearLayout(activity);
 
-        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setOrientation(
+                android.widget.LinearLayout.VERTICAL
+        );
 
         root.setPadding(
                 ResUtil.dp2px(20),
@@ -135,12 +342,17 @@ public final class UpdateSettingsDialog {
         );
 
         String currentLabel =
-                (selected >= 0 && selected < labels.length)
-                        ? String.valueOf(labels[selected])
+                (selected >= 0
+                        && selected < labels.length)
+                        ? String.valueOf(
+                        labels[selected]
+                )
                         : "";
 
         com.google.android.material.textview.MaterialTextView titleView =
-                new com.google.android.material.textview.MaterialTextView(activity);
+                new com.google.android.material.textview.MaterialTextView(
+                        activity
+                );
 
         titleView.setText(
                 title + (
@@ -151,8 +363,9 @@ public final class UpdateSettingsDialog {
         );
 
         titleView.setTextSize(18);
+
         titleView.setTextColor(
-                android.graphics.Color.parseColor("#202124")
+                Color.parseColor("#202124")
         );
 
         titleView.setPadding(
@@ -170,22 +383,31 @@ public final class UpdateSettingsDialog {
         android.widget.LinearLayout list =
                 new android.widget.LinearLayout(activity);
 
-        list.setOrientation(android.widget.LinearLayout.VERTICAL);
+        list.setOrientation(
+                android.widget.LinearLayout.VERTICAL
+        );
 
         final com.google.android.material.button.MaterialButton[] itemBtns =
-                new com.google.android.material.button.MaterialButton[labels.length];
+                new com.google.android.material.button.MaterialButton[
+                        labels.length
+                        ];
 
-        for (int i = 0; i < labels.length; i++) {
+        for (int i = 0;
+             i < labels.length;
+             i++) {
+
             final int index = i;
 
             com.google.android.material.button.MaterialButton btn =
-                    new com.google.android.material.button.MaterialButton(activity);
+                    new com.google.android.material.button.MaterialButton(
+                            activity
+                    );
 
             btn.setAllCaps(false);
 
             btn.setGravity(
-                    android.view.Gravity.CENTER_VERTICAL
-                            | android.view.Gravity.START
+                    Gravity.CENTER_VERTICAL
+                            | Gravity.START
             );
 
             btn.setFocusable(true);
@@ -215,7 +437,10 @@ public final class UpdateSettingsDialog {
                         title + "  ·  当前：" + labels[index]
                 );
 
-                for (int j = 0; j < itemBtns.length; j++) {
+                for (int j = 0;
+                     j < itemBtns.length;
+                     j++) {
+
                     styleProxyListItem(
                             itemBtns[j],
                             labels[j],
@@ -229,13 +454,17 @@ public final class UpdateSettingsDialog {
 
             android.widget.LinearLayout.LayoutParams lp =
                     new android.widget.LinearLayout.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
                             ResUtil.dp2px(48)
                     );
 
-            lp.bottomMargin = ResUtil.dp2px(8);
+            lp.bottomMargin =
+                    ResUtil.dp2px(8);
 
-            list.addView(btn, lp);
+            list.addView(
+                    btn,
+                    lp
+            );
         }
 
         scroll.addView(list);
@@ -243,7 +472,7 @@ public final class UpdateSettingsDialog {
         root.addView(
                 scroll,
                 new android.widget.LinearLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
                         ResUtil.dp2px(280)
                 )
         );
@@ -263,23 +492,40 @@ public final class UpdateSettingsDialog {
         );
 
         com.google.android.material.button.MaterialButton saveBtn =
-                new com.google.android.material.button.MaterialButton(activity);
+                new com.google.android.material.button.MaterialButton(
+                        activity
+                );
 
-        saveBtn.setText(R.string.update_settings_save);
+        saveBtn.setText(
+                R.string.update_settings_save
+        );
+
         saveBtn.setAllCaps(false);
-        styleActionButton(saveBtn, false);
+
+        styleActionButton(
+                saveBtn,
+                false
+        );
 
         com.google.android.material.button.MaterialButton cancelBtn =
-                new com.google.android.material.button.MaterialButton(activity);
+                new com.google.android.material.button.MaterialButton(
+                        activity
+                );
 
         try {
-            cancelBtn.setText(R.string.dialog_negative);
+            cancelBtn.setText(
+                    R.string.dialog_negative
+            );
         } catch (Throwable e) {
             cancelBtn.setText("取消");
         }
 
         cancelBtn.setAllCaps(false);
-        styleActionButton(cancelBtn, false);
+
+        styleActionButton(
+                cancelBtn,
+                false
+        );
 
         android.widget.LinearLayout.LayoutParams half =
                 new android.widget.LinearLayout.LayoutParams(
@@ -295,10 +541,19 @@ public final class UpdateSettingsDialog {
                         1f
                 );
 
-        half2.setMarginStart(ResUtil.dp2px(12));
+        half2.setMarginStart(
+                ResUtil.dp2px(12)
+        );
 
-        actions.addView(saveBtn, half);
-        actions.addView(cancelBtn, half2);
+        actions.addView(
+                saveBtn,
+                half
+        );
+
+        actions.addView(
+                cancelBtn,
+                half2
+        );
 
         root.addView(actions);
 
@@ -313,10 +568,13 @@ public final class UpdateSettingsDialog {
             listDialog.dismiss();
         });
 
-        cancelBtn.setOnClickListener(v -> listDialog.dismiss());
+        cancelBtn.setOnClickListener(
+                v -> listDialog.dismiss()
+        );
 
         listDialog.setOnShowListener(d -> {
-            android.view.Window window = listDialog.getWindow();
+            android.view.Window window =
+                    listDialog.getWindow();
 
             if (window != null) {
                 window.setBackgroundDrawable(
@@ -326,25 +584,29 @@ public final class UpdateSettingsDialog {
                 android.view.WindowManager.LayoutParams params =
                         window.getAttributes();
 
-                params.width = (int) (
-                        activity.getResources()
-                                .getDisplayMetrics()
-                                .widthPixels * 0.72f
-                );
+                params.width =
+                        (int) (
+                                activity.getResources()
+                                        .getDisplayMetrics()
+                                        .widthPixels
+                                        * 0.72f
+                        );
 
                 window.setAttributes(params);
             }
 
-            int focusIdx = Math.max(
-                    0,
-                    Math.min(
-                            pending[0],
-                            itemBtns.length - 1
-                    )
-            );
+            int focusIdx =
+                    Math.max(
+                            0,
+                            Math.min(
+                                    pending[0],
+                                    itemBtns.length - 1
+                            )
+                    );
 
             if (itemBtns.length > 0) {
-                itemBtns[focusIdx].requestFocus();
+                itemBtns[focusIdx]
+                        .requestFocus();
             }
         });
 
@@ -359,15 +621,20 @@ public final class UpdateSettingsDialog {
     ) {
         if (btn == null) return;
 
-        String text = String.valueOf(
-                label == null ? "" : label
-        );
+        String text =
+                String.valueOf(
+                        label == null
+                                ? ""
+                                : label
+                );
 
-        if (selected && !text.startsWith("✓ ")) {
+        if (selected
+                && !text.startsWith("✓ ")) {
             text = "✓  " + text;
         }
 
-        if (!selected && text.startsWith("✓ ")) {
+        if (!selected
+                && text.startsWith("✓ ")) {
             text = text.substring(2).trim();
         }
 
@@ -375,14 +642,15 @@ public final class UpdateSettingsDialog {
 
         // 当前项：紫字/黑字高对比；焦点：蓝底白字
         if (focused) {
+
             btn.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(
-                            android.graphics.Color.parseColor("#1A73E8")
+                            Color.parseColor("#1A73E8")
                     )
             );
 
             btn.setTextColor(
-                    android.graphics.Color.WHITE
+                    Color.WHITE
             );
 
             try {
@@ -394,14 +662,15 @@ public final class UpdateSettingsDialog {
             }
 
         } else if (selected) {
+
             btn.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(
-                            android.graphics.Color.parseColor("#EDE7F6")
+                            Color.parseColor("#EDE7F6")
                     )
             );
 
             btn.setTextColor(
-                    android.graphics.Color.parseColor("#6A1B9A")
+                    Color.parseColor("#6A1B9A")
             );
 
             try {
@@ -413,14 +682,15 @@ public final class UpdateSettingsDialog {
             }
 
         } else {
+
             btn.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(
-                            android.graphics.Color.parseColor("#F1F3F4")
+                            Color.parseColor("#F1F3F4")
                     )
             );
 
             btn.setTextColor(
-                    android.graphics.Color.parseColor("#202124")
+                    Color.parseColor("#202124")
             );
 
             try {
@@ -451,16 +721,16 @@ public final class UpdateSettingsDialog {
         btn.setFocusableInTouchMode(true);
 
         final int normalBg =
-                android.graphics.Color.parseColor("#E8EAED");
+                Color.parseColor("#E8EAED");
 
         final int focusBg =
-                android.graphics.Color.parseColor("#1A73E8");
+                Color.parseColor("#1A73E8");
 
         final int normalFg =
-                android.graphics.Color.parseColor("#202124");
+                Color.parseColor("#202124");
 
         final int focusFg =
-                android.graphics.Color.WHITE;
+                Color.WHITE;
 
         btn.setBackgroundTintList(
                 android.content.res.ColorStateList.valueOf(
@@ -470,30 +740,33 @@ public final class UpdateSettingsDialog {
 
         btn.setTextColor(normalFg);
 
-        btn.setOnFocusChangeListener((v, hasFocus) -> {
-            btn.setBackgroundTintList(
-                    android.content.res.ColorStateList.valueOf(
+        btn.setOnFocusChangeListener(
+                (v, hasFocus) -> {
+
+                    btn.setBackgroundTintList(
+                            android.content.res.ColorStateList.valueOf(
+                                    hasFocus
+                                            ? focusBg
+                                            : normalBg
+                            )
+                    );
+
+                    btn.setTextColor(
                             hasFocus
-                                    ? focusBg
-                                    : normalBg
-                    )
-            );
+                                    ? focusFg
+                                    : normalFg
+                    );
 
-            btn.setTextColor(
-                    hasFocus
-                            ? focusFg
-                            : normalFg
-            );
-
-            try {
-                btn.setElevation(
-                        hasFocus
-                                ? ResUtil.dp2px(4)
-                                : 0
-                );
-            } catch (Throwable ignored) {
-            }
-        });
+                    try {
+                        btn.setElevation(
+                                hasFocus
+                                        ? ResUtil.dp2px(4)
+                                        : 0
+                        );
+                    } catch (Throwable ignored) {
+                    }
+                }
+        );
     }
 
     private static void chooseGithub(
@@ -509,14 +782,20 @@ public final class UpdateSettingsDialog {
 
         int selected = 0;
 
-        for (int i = 0; i < presets.length; i++) {
-            labels[i] = label(
-                    activity,
-                    presets[i].label,
-                    presets[i].id
-            );
+        for (int i = 0;
+             i < presets.length;
+             i++) {
 
-            if (presets[i].id.equals(state.githubProxy)) {
+            labels[i] =
+                    label(
+                            activity,
+                            presets[i].label,
+                            presets[i].id
+                    );
+
+            if (presets[i].id.equals(
+                    state.githubProxy
+            )) {
                 selected = i;
             }
         }
@@ -529,6 +808,7 @@ public final class UpdateSettingsDialog {
                 labels,
                 selected,
                 which -> {
+
                     state.githubProxy =
                             presets[which].id;
 
@@ -574,14 +854,20 @@ public final class UpdateSettingsDialog {
 
         int selected = 0;
 
-        for (int i = 0; i < presets.length; i++) {
-            labels[i] = label(
-                    activity,
-                    presets[i].label,
-                    presets[i].id
-            );
+        for (int i = 0;
+             i < presets.length;
+             i++) {
 
-            if (presets[i].id.equals(state.ociMirror)) {
+            labels[i] =
+                    label(
+                            activity,
+                            presets[i].label,
+                            presets[i].id
+                    );
+
+            if (presets[i].id.equals(
+                    state.ociMirror
+            )) {
                 selected = i;
             }
         }
@@ -594,6 +880,7 @@ public final class UpdateSettingsDialog {
                 labels,
                 selected,
                 which -> {
+
                     state.ociMirror =
                             presets[which].id;
 
@@ -629,6 +916,7 @@ public final class UpdateSettingsDialog {
     ) {
         if (GithubProxy.DIRECT.equals(id)
                 || OciMirror.DIRECT.equals(id)) {
+
             return activity.getString(
                     R.string.update_proxy_direct
             );
@@ -636,6 +924,7 @@ public final class UpdateSettingsDialog {
 
         if (GithubProxy.CUSTOM.equals(id)
                 || OciMirror.CUSTOM.equals(id)) {
+
             return activity.getString(
                     R.string.update_proxy_custom
             );
@@ -651,52 +940,85 @@ public final class UpdateSettingsDialog {
             State state
     ) {
         state.githubCustom =
-                text(binding.githubCustom.getText());
+                text(
+                        binding.githubCustom.getText()
+                );
 
         state.ociCustom =
-                text(binding.ociCustom.getText());
+                text(
+                        binding.ociCustom.getText()
+                );
 
         binding.githubCustomLayout.setError(null);
         binding.ociCustomLayout.setError(null);
 
         try {
             if (UpdateSource.GITHUB.equals(state.source)
-                    && GithubProxy.CUSTOM.equals(state.githubProxy)) {
+                    && GithubProxy.CUSTOM.equals(
+                    state.githubProxy
+            )) {
+
                 UpdateUrl.requireHttpsOrigin(
                         state.githubCustom
                 );
             }
+
         } catch (Exception e) {
+
             binding.githubCustomLayout.setError(
                     activity.getString(
                             R.string.update_proxy_invalid
                     )
             );
+
             return;
         }
 
         try {
             if (UpdateSource.OCI.equals(state.source)
-                    && OciMirror.CUSTOM.equals(state.ociMirror)) {
+                    && OciMirror.CUSTOM.equals(
+                    state.ociMirror
+            )) {
+
                 UpdateUrl.requireHttpsOrigin(
                         state.ociCustom
                 );
             }
+
         } catch (Exception e) {
+
             binding.ociCustomLayout.setError(
                     activity.getString(
                             R.string.update_proxy_invalid
                     )
             );
+
             return;
         }
 
-        Setting.putUpdateSource(state.source);
-        Setting.putUpdateGithubProxy(state.githubProxy);
-        Setting.putUpdateGithubProxyUrl(state.githubCustom);
-        Setting.putUpdateGithubProxyMode(state.githubMode);
-        Setting.putUpdateOciMirror(state.ociMirror);
-        Setting.putUpdateOciMirrorUrl(state.ociCustom);
+        Setting.putUpdateSource(
+                state.source
+        );
+
+        Setting.putUpdateGithubProxy(
+                state.githubProxy
+        );
+
+        Setting.putUpdateGithubProxyUrl(
+                state.githubCustom
+        );
+
+        Setting.putUpdateGithubProxyMode(
+                state.githubMode
+        );
+
+        Setting.putUpdateOciMirror(
+                state.ociMirror
+        );
+
+        Setting.putUpdateOciMirrorUrl(
+                state.ociCustom
+        );
 
         dialog.dismiss();
 
@@ -749,7 +1071,9 @@ public final class UpdateSettingsDialog {
             State state
     ) {
         boolean github =
-                UpdateSource.GITHUB.equals(state.source);
+                UpdateSource.GITHUB.equals(
+                        state.source
+                );
 
         binding.githubPanel.setVisibility(
                 github
@@ -763,7 +1087,10 @@ public final class UpdateSettingsDialog {
                         : View.VISIBLE
         );
 
-        // 只有 TV 才重新配置焦点
+        /*
+         * 只有 TV 才重新配置焦点。
+         * Tab 的背景/选中样式本身不依赖这里。
+         */
         if (Util.isLeanback()) {
             binding.sourceTabs.post(
                     () -> configureTvFocus(
@@ -772,6 +1099,8 @@ public final class UpdateSettingsDialog {
                     )
             );
         }
+
+        styleSourceTabs(binding);
     }
 
     private static void renderGithub(
@@ -798,7 +1127,10 @@ public final class UpdateSettingsDialog {
                 )
         );
 
-        // 仅 TV：设置焦点状态样式
+        /*
+         * 这个是下面的“当前代理：xxxx”框。
+         * 保持原来的 TV 焦点逻辑，不动。
+         */
         if (Util.isLeanback()) {
             styleProxyField(
                     binding.githubProxy
@@ -844,7 +1176,10 @@ public final class UpdateSettingsDialog {
                 )
         );
 
-        // 仅 TV：设置焦点状态样式
+        /*
+         * 这个是下面的“当前 OCI：xxxx”框。
+         * 保持原来的 TV 焦点逻辑，不动。
+         */
         if (Util.isLeanback()) {
             styleProxyField(
                     binding.ociMirror
@@ -860,7 +1195,9 @@ public final class UpdateSettingsDialog {
         );
     }
 
-    private static String text(CharSequence value) {
+    private static String text(
+            CharSequence value
+    ) {
         return value == null
                 ? ""
                 : value.toString().trim();
@@ -893,10 +1230,13 @@ public final class UpdateSettingsDialog {
         }
 
         params.width = w;
+
         params.height =
                 WindowManager.LayoutParams.WRAP_CONTENT;
 
-        params.gravity = Gravity.CENTER;
+        params.gravity =
+                Gravity.CENTER;
+
         params.dimAmount = 0.58f;
 
         window.setBackgroundDrawable(
@@ -930,7 +1270,7 @@ public final class UpdateSettingsDialog {
             return;
         }
 
-        // 只有 TV 才给代理选择框增加焦点样式和焦点能力
+        // 下面“当前代理 / 当前 OCI”框的 TV 焦点样式
         styleProxyField(
                 binding.githubProxy
         );
@@ -946,6 +1286,7 @@ public final class UpdateSettingsDialog {
         try {
             if (binding.save.getVisibility()
                     == View.VISIBLE) {
+
                 tvFocusable(
                         binding.save
                 );
@@ -1005,13 +1346,12 @@ public final class UpdateSettingsDialog {
     }
 
     /**
-     * TV 端代理/镜像选择框：
+     * TV 端“当前代理 / 当前 OCI”选择框。
      *
      * 未获得焦点：纯白背景 + 黑字
      * 获得焦点：深蓝背景 + 白字
      *
-     * 此方法只有 Util.isLeanback() 时才会被调用，
-     * 手机端不会执行这里的任何焦点代码。
+     * 手机端不会调用。
      */
     private static void styleProxyField(
             com.google.android.material.button.MaterialButton btn
@@ -1034,7 +1374,6 @@ public final class UpdateSettingsDialog {
         final int focusFg =
                 Color.WHITE;
 
-        // TV 默认状态：纯白
         btn.setBackgroundTintList(
                 android.content.res.ColorStateList.valueOf(
                         normalBg
@@ -1047,6 +1386,7 @@ public final class UpdateSettingsDialog {
 
         btn.setOnFocusChangeListener(
                 (v, hasFocus) -> {
+
                     btn.setBackgroundTintList(
                             android.content.res.ColorStateList.valueOf(
                                     hasFocus
@@ -1072,8 +1412,8 @@ public final class UpdateSettingsDialog {
                 }
         );
 
-        // 如果调用时已经有焦点，立即应用焦点状态
         if (btn.hasFocus()) {
+
             btn.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(
                             focusBg
@@ -1097,7 +1437,8 @@ public final class UpdateSettingsDialog {
             DialogUpdateSettingsBinding binding,
             State state
     ) {
-        if (binding.sourceTabs.getChildCount() == 0) {
+        if (binding.sourceTabs.getChildCount()
+                == 0) {
             return;
         }
 
@@ -1117,12 +1458,14 @@ public final class UpdateSettingsDialog {
 
             tvFocusable(tab);
 
-            tab.setBackgroundResource(
-                    R.drawable.selector_mpv_tab_focus
-            );
-
+            /*
+             * 保留 TV 原来的焦点选择器。
+             * 选中 Tab 的深蓝背景由 styleSourceTabs()
+             * 负责，不再让这里覆盖它。
+             */
             tab.setOnKeyListener(
                     (view, keyCode, event) -> {
+
                         if (event.getAction()
                                 != KeyEvent.ACTION_DOWN) {
                             return false;
@@ -1130,11 +1473,14 @@ public final class UpdateSettingsDialog {
 
                         if (keyCode
                                 == KeyEvent.KEYCODE_DPAD_UP) {
-                            return binding.close.requestFocus();
+
+                            return binding.close
+                                    .requestFocus();
                         }
 
                         if (keyCode
                                 == KeyEvent.KEYCODE_DPAD_DOWN) {
+
                             return focusPrimary(
                                     binding,
                                     state
@@ -1145,6 +1491,8 @@ public final class UpdateSettingsDialog {
                     }
             );
         }
+
+        styleSourceTabs(binding);
     }
 
     private static boolean focusFromPrimary(
@@ -1197,7 +1545,9 @@ public final class UpdateSettingsDialog {
             State state
     ) {
         return (
-                UpdateSource.GITHUB.equals(state.source)
+                UpdateSource.GITHUB.equals(
+                        state.source
+                )
                         ? binding.githubProxy
                         : binding.ociMirror
         ).requestFocus();
@@ -1207,11 +1557,14 @@ public final class UpdateSettingsDialog {
             DialogUpdateSettingsBinding binding,
             State state
     ) {
-        if (UpdateSource.GITHUB.equals(state.source)) {
+        if (UpdateSource.GITHUB.equals(
+                state.source
+        )) {
 
             if (GithubProxy.CUSTOM.equals(
                     state.githubProxy
             )) {
+
                 int checked =
                         binding.githubModeGroup
                                 .getCheckedButtonId();
@@ -1220,29 +1573,37 @@ public final class UpdateSettingsDialog {
                         checked == View.NO_ID
                                 ? binding.githubModeFull
                                 : binding.githubModeGroup
-                                .findViewById(checked);
+                                .findViewById(
+                                        checked
+                                );
 
                 if (mode != null) {
                     return mode.requestFocus();
                 }
             }
 
-            return binding.githubProxy.requestFocus();
+            return binding.githubProxy
+                    .requestFocus();
         }
 
         if (OciMirror.CUSTOM.equals(
                 state.ociMirror
         )) {
-            return binding.ociCustom.requestFocus();
+
+            return binding.ociCustom
+                    .requestFocus();
         }
 
-        return binding.ociMirror.requestFocus();
+        return binding.ociMirror
+                .requestFocus();
     }
 
     /**
      * 仅 TV 使用。
      */
-    private static void tvFocusable(View view) {
+    private static void tvFocusable(
+            View view
+    ) {
         view.setFocusable(true);
         view.setFocusableInTouchMode(true);
     }
@@ -1257,7 +1618,8 @@ public final class UpdateSettingsDialog {
         private String ociCustom;
 
         private static State load() {
-            State state = new State();
+            State state =
+                    new State();
 
             state.source =
                     Setting.getUpdateSource();
@@ -1281,3 +1643,4 @@ public final class UpdateSettingsDialog {
         }
     }
 }
+
