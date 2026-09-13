@@ -172,7 +172,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                     if (isFinishing()) return;
                     Updater.create().start(this);
                 } catch (Throwable ignored) {}
-            }, 3500);
+            }, 10000);
         } catch (Throwable ignored) {}
     }
 
