@@ -56,7 +56,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/update_settings_source"
-                android:textColor="#5F6368"
+                android:textColor="#202124"
                 android:textSize="13sp" />
 
             <com.google.android.material.tabs.TabLayout
@@ -69,8 +69,8 @@
                 app:tabIndicatorHeight="0dp"
                 app:tabMode="fixed"
                 app:tabRippleColor="@android:color/transparent"
-                app:tabSelectedTextColor="#0B57D0"
-                app:tabTextColor="#5F6368" />
+                app:tabSelectedTextColor="#202124"
+                app:tabTextColor="#202124" />
 
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/githubPanel"

@@ -185,7 +185,7 @@ public final class UpdateSettingsDialog {
         } else if (selected) {
             // 选中：淡蓝底 + 深蓝字
             btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E8F0FE")));
-            btn.setTextColor(android.graphics.Color.parseColor("#0B57D0"));
+            btn.setTextColor(android.graphics.Color.parseColor("#202124")); // 选中也用黑色字
             try { btn.setTypeface(null, android.graphics.Typeface.BOLD); } catch (Throwable ignored) {}
         } else {
             btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F3F4")));
@@ -310,6 +310,7 @@ public final class UpdateSettingsDialog {
         GithubProxy.Preset preset = GithubProxy.find(state.githubProxy);
         String ghLabel = label(activity, preset.label, preset.id);
         binding.githubProxy.setText(activity.getString(R.string.update_github_proxy_value, ghLabel));
+        try { binding.githubProxy.setTextColor(Color.parseColor("#202124")); } catch (Throwable ignored) {}
         if (Util.isLeanback()) styleProxyField(binding.githubProxy);
         boolean custom = GithubProxy.CUSTOM.equals(preset.id);
         binding.githubCustomLayout.setVisibility(custom ? View.VISIBLE : View.GONE);
@@ -319,6 +320,7 @@ public final class UpdateSettingsDialog {
     private static void renderOci(FragmentActivity activity, DialogUpdateSettingsBinding binding, State state) {
         OciMirror.Preset preset = OciMirror.find(state.ociMirror);
         binding.ociMirror.setText(activity.getString(R.string.update_oci_mirror_value, label(activity, preset.label, preset.id)));
+        try { binding.ociMirror.setTextColor(Color.parseColor("#202124")); } catch (Throwable ignored) {}
         if (Util.isLeanback()) styleProxyField(binding.ociMirror);
         binding.ociCustomLayout.setVisibility(OciMirror.CUSTOM.equals(preset.id) ? View.VISIBLE : View.GONE);
     }

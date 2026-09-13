@@ -29,6 +29,8 @@ public final class AboutDialog {
 
     public static void show(FragmentActivity activity, Runnable updateAction) {
         DialogAboutBinding binding = DialogAboutBinding.inflate(LayoutInflater.from(activity));
+        try { binding.version.setTextColor(android.graphics.Color.parseColor("#202124")); } catch (Throwable ignored) {}
+        try { binding.channel.setTextColor(android.graphics.Color.parseColor("#202124")); } catch (Throwable ignored) {}
         binding.version.setText(activity.getString(
                 R.string.about_version,
                 AppVersion.fullName(),
@@ -96,10 +98,10 @@ public final class AboutDialog {
             sel.addState(new int[]{}, normal);
             gear.setBackground(sel);
             if (gear instanceof android.widget.ImageView) {
-                ((android.widget.ImageView) gear).setColorFilter(android.graphics.Color.parseColor("#174EA6"));
+                ((android.widget.ImageView) gear).setColorFilter(android.graphics.Color.parseColor("#202124"));
                 gear.setOnFocusChangeListener((v, hasFocus) -> {
                     ((android.widget.ImageView) gear).setColorFilter(
-                            hasFocus ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#174EA6"));
+                            hasFocus ? android.graphics.Color.WHITE : android.graphics.Color.parseColor("#202124"));
                 });
             }
         } catch (Throwable ignored) {}
@@ -125,7 +127,7 @@ public final class AboutDialog {
                 int[] fg = new int[]{
                         android.graphics.Color.WHITE,
                         android.graphics.Color.WHITE,
-                        android.graphics.Color.parseColor("#174EA6")
+                        android.graphics.Color.parseColor("#202124")
                 };
                 btn.setBackgroundTintList(new android.content.res.ColorStateList(states, bg));
                 btn.setTextColor(new android.content.res.ColorStateList(states, fg));

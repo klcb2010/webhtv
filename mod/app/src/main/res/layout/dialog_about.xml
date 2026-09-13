@@ -38,7 +38,7 @@
             android:paddingTop="5dp"
             android:paddingEnd="10dp"
             android:paddingBottom="5dp"
-            android:textColor="#174EA6"
+            android:textColor="#202124"
             android:textSize="12sp"
             android:textStyle="bold"
             android:text="@string/about_free_badge" />
@@ -50,7 +50,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:textColor="#5F6368"
+        android:textColor="#202124"
         android:textSize="13sp"
         tools:text="版本 versionName (versionCode) · mobile/arm64" />
 
@@ -76,7 +76,7 @@
             android:layout_height="wrap_content"
             android:lineSpacingExtra="5dp"
             android:text="@string/about_disclaimer"
-            android:textColor="#303134"
+            android:textColor="#202124"
             android:textSize="14sp" />
 
     </androidx.core.widget.NestedScrollView>
