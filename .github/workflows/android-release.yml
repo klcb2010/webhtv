@@ -588,10 +588,12 @@ jobs:
       - name: Install Android packages
         if: steps.should_build.outputs.build == 'true'
         run: |
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
-            "platform-tools" \
-            "platforms;android-37.0" \
-            "build-tools;37.0.0"
+          "cmdline-tools;latest" \
+          "platform-tools" \
+          "platforms;android-35" \
+          "build-tools;35.0.0"
 
       # ============================================================
       # WebSocket Danmaku tests
