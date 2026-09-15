@@ -117,6 +117,16 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         Task.execute(() -> doInBackground(activity, forceCheck));
     }
 
+    /** 个性设置「自动查新」：不受 putUpdate(false) 影响，有更新才弹窗 */
+    public void startAuto(FragmentActivity activity) {
+        bind(activity);
+        if (downloading) {
+            restoreDialog(activity);
+            return;
+        }
+        Task.execute(() -> doInBackground(activity, false));
+    }
+
     public void resume(FragmentActivity activity) {
         bind(activity);
         restoreDialog(activity);

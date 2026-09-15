@@ -113,7 +113,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             App.post(() -> {
                 try {
                     if (isFinishing()) return;
-                    Updater.create().start(this);
+                    Updater.create().startAuto(this);
                 } catch (Throwable ignored) {}
             }, 5000);
         } catch (Throwable ignored) {}
