@@ -114,4 +114,6 @@
     <string name="about_check_update">Check</string>
     <string name="about_acknowledge">Got it</string>
     <string name="setting_auto_check_update">Auto check update</string>
+    <string name="setting_exit_clear_cache">Exit clear cache</string>
+    <string name="setting_exit_clear_cache_off">Off</string>
 </resources>

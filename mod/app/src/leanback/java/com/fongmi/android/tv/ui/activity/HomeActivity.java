@@ -52,6 +52,7 @@ import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.service.DLNARendererService;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.AutoBackupPolicy;
+import com.fongmi.android.tv.setting.ExitClearCachePolicy;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.BaseDiffCallback;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
@@ -172,7 +173,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                     if (isFinishing()) return;
                     Updater.create().start(this);
                 } catch (Throwable ignored) {}
-            }, 5000);
+            }, 10000);
         } catch (Throwable ignored) {}
     }
 
@@ -865,6 +866,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         DLNARendererService.stop(this);
         LiveConfig.get().clear();
         VodConfig.get().clear();
+        if (ExitClearCachePolicy.shouldRun(isFinishing(), isChangingConfigurations())) {
+            ExitClearCachePolicy.runAsync();
+        }
         if (AutoBackupPolicy.shouldRun(Setting.isAutoBackup(), Setting.hasFileAccess(), isFinishing(), isChangingConfigurations())) {
             AppDatabase.backup();
         }

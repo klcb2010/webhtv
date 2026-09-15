@@ -895,6 +895,19 @@ public class Setting {
         Prefers.put("auto_check_update", value);
     }
 
+    /** 退出时清理缓存阈值：0=不清理，6/8/10 表示缓存达到该 GB 数才清理 */
+    public static int getExitClearCacheGb() {
+        int v = Prefers.getInt("exit_clear_cache_gb", 0);
+        if (v != 0 && v != 6 && v != 8 && v != 10) return 0;
+        return v;
+    }
+
+    public static void putExitClearCacheGb(int gb) {
+        if (gb != 0 && gb != 6 && gb != 8 && gb != 10) gb = 0;
+        Prefers.put("exit_clear_cache_gb", gb);
+    }
+
+
 
     public static boolean isHomeSiteLock() {
         return Prefers.getBoolean("home_site_lock", false);

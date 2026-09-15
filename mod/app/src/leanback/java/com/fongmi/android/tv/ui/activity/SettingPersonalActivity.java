@@ -51,6 +51,7 @@ public class SettingPersonalActivity extends BaseActivity {
         // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -72,6 +73,7 @@ public class SettingPersonalActivity extends BaseActivity {
         }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
         try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
@@ -127,6 +129,26 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putAutoCheckUpdate(!Setting.isAutoCheckUpdate());
         refreshTexts();
     }
+
+    private String exitClearCacheLabel() {
+        int gb = Setting.getExitClearCacheGb();
+        if (gb <= 0) {
+            try { return getString(R.string.setting_exit_clear_cache_off); } catch (Throwable e) { return getSwitch(false); }
+        }
+        return gb + "G";
+    }
+
+    private void setExitClearCache(View view) {
+        int cur = Setting.getExitClearCacheGb();
+        int next;
+        if (cur <= 0) next = 6;
+        else if (cur == 6) next = 8;
+        else if (cur == 8) next = 10;
+        else next = 0;
+        Setting.putExitClearCacheGb(next);
+        refreshTexts();
+    }
+
 
 
     private void setEpisodeHistory(View view) {
