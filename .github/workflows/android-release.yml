@@ -583,17 +583,21 @@ jobs:
       # ============================================================
       - name: Set up Android SDK
         if: steps.should_build.outputs.build == 'true'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # 空字符串 = 不装默认的 tools（已废弃，会报 Failed to find package 'tools'）
+          packages: ''
 
       - name: Install Android packages
         if: steps.should_build.outputs.build == 'true'
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
+          set -e
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          # 不要写 tools
           sdkmanager \
-          "cmdline-tools;latest" \
-          "platform-tools" \
-          "platforms;android-35" \
-          "build-tools;35.0.0"
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       # ============================================================
       # WebSocket Danmaku tests
