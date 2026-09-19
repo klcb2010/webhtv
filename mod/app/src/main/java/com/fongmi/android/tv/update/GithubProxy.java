@@ -14,7 +14,6 @@ public final class GithubProxy {
             new Preset("cdn_crashmc", "cdn.crashmc.com", "https://cdn.crashmc.com", MODE_FULL_URL),
             new Preset("git_yylx", "git.yylx.win", "https://git.yylx.win", MODE_FULL_URL),
             new Preset("ghfile_geekertao", "ghfile.geekertao.top", "https://ghfile.geekertao.top", MODE_FULL_URL),
-            new Preset("ghfast", "ghfast.top", "https://ghfast.top", MODE_FULL_URL),
             new Preset("gh_chjina", "gh.chjina.com", "https://gh.chjina.com", MODE_FULL_URL),
             new Preset("blfrp", "blfrp.cn", "https://blfrp.cn", MODE_FULL_URL),
             new Preset("wget_la", "wget.la", "https://wget.la", MODE_FULL_URL),
