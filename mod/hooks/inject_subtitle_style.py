@@ -6,6 +6,34 @@ from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 
+EXO_CAPTION_STYLE = r"""
+public static CaptionStyleCompat getCaptionStyle() {
+        if (PlayerSetting.isCaption()) {
+            return CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle());
+        }
+        int fg = Setting.getSubtitleColorArgb();
+        android.graphics.Typeface tf = null;
+        try {
+            tf = Setting.getSubtitleTypeface();
+        } catch (Throwable ignored) {
+        }
+        return new CaptionStyleCompat(fg, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, tf);
+    }
+""".strip()
+
+MPV_DEFAULT_STYLE = r"""
+private CaptionStyle defaultCaptionStyle() {
+        int fg = Color.YELLOW;
+        String font = "cursive";
+        try {
+            fg = Setting.getSubtitleColorArgb();
+            font = Setting.getSubtitleFontFamily();
+        } catch (Throwable ignored) {
+        }
+        return new CaptionStyle(font, false, false, fg, Color.BLACK, Color.TRANSPARENT, "outline-and-shadow", 3.0, 0.0);
+    }
+""".strip()
+
 
 def patch_exo(path: Path) -> None:
     if not path.exists():
@@ -26,23 +54,8 @@ def patch_exo(path: Path) -> None:
         r"public static CaptionStyleCompat getCaptionStyle\(\)\s*\{[^}]*\}",
         re.S,
     )
-    repl = (
-        "public static CaptionStyleCompat getCaptionStyle() {\n"
-        "        if (PlayerSetting.isCaption()) {\n"
-        "            return CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle());\n"
-        "        }\n"
-        "        int fg = Setting.getSubtitleColorArgb();
-        android.graphics.Typeface tf = null;
-        try {
-            tf = Setting.getSubtitleTypeface();
-        } catch (Throwable ignored) {
-        }
-        // 黑描边固定 EDGE_TYPE_OUTLINE + Color.BLACK
-        return new CaptionStyleCompat(fg, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, tf);\n"
-        "    }"
-    )
     if pat.search(t):
-        t = pat.sub(repl, t, count=1)
+        t = pat.sub(EXO_CAPTION_STYLE, t, count=1)
     else:
         print("[mod] WARN: getCaptionStyle not found")
     if t != orig:
@@ -73,20 +86,8 @@ def patch_mpv_player(path: Path) -> None:
         r"private CaptionStyle defaultCaptionStyle\(\)\s*\{\s*return new CaptionStyle\([^;]+;\s*\}",
         re.S,
     )
-    repl = (
-        "private CaptionStyle defaultCaptionStyle() {\n"
-        "        int fg = Color.YELLOW;\n"
-        "        String font = \"cursive\";\n"
-        "        try {\n"
-        "            fg = Setting.getSubtitleColorArgb();\n"
-        "            font = Setting.getSubtitleFontFamily();\n"
-        "        } catch (Throwable ignored) {\n"
-        "        }\n"
-        "        return new CaptionStyle(font, false, false, fg, Color.BLACK, Color.TRANSPARENT, \"outline-and-shadow\", 3.0, 0.0);\n"
-        "    }"
-    )
     if pat.search(t):
-        t = pat.sub(repl, t, count=1)
+        t = pat.sub(MPV_DEFAULT_STYLE, t, count=1)
     else:
         print("[mod] WARN: defaultCaptionStyle not found")
     if t != orig:
