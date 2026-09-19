@@ -938,39 +938,46 @@ public class Setting {
         putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
     }
 
-    /** 字幕字体：0楷体(默认) 1黑体 2宋体；描边固定黑色由播放器样式提供 */
+    /** 字幕字体：0楷体(默认) 1黑体 2宋体 3仿宋 4等宽；描边固定黑色 */
     public static int getSubtitleFontIndex() {
         int v = Prefers.getInt("subtitle_font_index", 0);
-        if (v < 0 || v > 2) return 0;
+        if (v < 0 || v > 4) return 0;
         return v;
     }
 
     public static void putSubtitleFontIndex(int index) {
-        if (index < 0 || index > 2) index = 0;
+        if (index < 0 || index > 4) index = 0;
         Prefers.put("subtitle_font_index", index);
     }
 
     public static void cycleSubtitleFont() {
-        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % 3);
+        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % 5);
     }
 
     /**
      * MPV sub-font / fontconfig 族名。
-     * 楷体优先 cursive/KaiTi；缺字时系统会回退。
+     * 楷体 cursive；黑体 sans；宋体 serif；仿宋 serif 斜体名；等宽 monospace。
      */
     public static String getSubtitleFontFamily() {
         int i = getSubtitleFontIndex();
         if (i == 1) return "sans-serif";
         if (i == 2) return "serif";
-        return "cursive"; // 楷体
+        if (i == 3) return "serif"; // 仿宋接近宋体族，设备有 FangSong 时仍靠 Typeface 侧
+        if (i == 4) return "monospace";
+        return "cursive";
     }
 
-    /** Exo Typeface：楷体→CURSIVE，黑体→SANS，宋体→SERIF */
     public static android.graphics.Typeface getSubtitleTypeface() {
         int i = getSubtitleFontIndex();
         try {
             if (i == 1) return android.graphics.Typeface.SANS_SERIF;
             if (i == 2) return android.graphics.Typeface.SERIF;
+            if (i == 3) {
+                android.graphics.Typeface fang = android.graphics.Typeface.create("serif", android.graphics.Typeface.ITALIC);
+                if (fang != null) return fang;
+                return android.graphics.Typeface.SERIF;
+            }
+            if (i == 4) return android.graphics.Typeface.MONOSPACE;
             android.graphics.Typeface kai = android.graphics.Typeface.create("cursive", android.graphics.Typeface.NORMAL);
             if (kai != null) return kai;
         } catch (Throwable ignored) {
@@ -981,13 +988,21 @@ public class Setting {
     public static String getSubtitleFontLabel(boolean zh) {
         int i = getSubtitleFontIndex();
         if (zh) {
-            if (i == 1) return "黑体";
-            if (i == 2) return "宋体";
-            return "楷体";
+            switch (i) {
+                case 1: return "黑体";
+                case 2: return "宋体";
+                case 3: return "仿宋";
+                case 4: return "等宽";
+                default: return "楷体";
+            }
         }
-        if (i == 1) return "Heiti";
-        if (i == 2) return "Song";
-        return "Kai";
+        switch (i) {
+            case 1: return "Heiti";
+            case 2: return "Song";
+            case 3: return "FangSong";
+            case 4: return "Mono";
+            default: return "Kai";
+        }
     }
 
     public static int getExitClearCacheGb() {
