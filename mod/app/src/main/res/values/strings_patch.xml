@@ -118,4 +118,5 @@
     <string name="setting_exit_clear_cache_off">Off</string>
     <string name="setting_subtitle_color">Subtitle color</string>
     <string name="setting_subtitle_font">Subtitle font</string>
+    <string name="setting_global_toast">Global toast</string>
 </resources>

@@ -879,6 +879,16 @@ public class Setting {
         Prefers.put("subtitle_assrt_token", token == null ? "" : token.trim());
     }
 
+
+    /** 全局吐司，默认开启 */
+    public static boolean isGlobalToast() {
+        return Prefers.getBoolean("global_toast", true);
+    }
+
+    public static void putGlobalToast(boolean value) {
+        Prefers.put("global_toast", value);
+    }
+
     public static boolean isAutoBackup() {
         return Prefers.getBoolean("auto_backup", false);
     }

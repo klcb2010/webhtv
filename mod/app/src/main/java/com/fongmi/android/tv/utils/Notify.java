@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.databinding.ViewProgressBinding;
+import com.fongmi.android.tv.setting.Setting;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class Notify {
@@ -52,6 +53,10 @@ public class Notify {
     }
 
     public static void show(String text) {
+        try {
+            if (!Setting.isGlobalToast()) return;
+        } catch (Throwable ignored) {
+        }
         if (!TextUtils.isEmpty(text)) get().makeText(text);
     }
 

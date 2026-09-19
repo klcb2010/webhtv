@@ -50,6 +50,7 @@ public class SettingPersonalActivity extends BaseActivity {
     private void setListeners() {
         // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        try { mBinding.globalToast.setOnClickListener(this::setGlobalToast); } catch (Throwable ignored) {}
         try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
         try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
         try { mBinding.subtitleColor.setOnClickListener(this::setSubtitleColor); } catch (Throwable ignored) {}
@@ -74,6 +75,7 @@ public class SettingPersonalActivity extends BaseActivity {
         // autoChange hidden
         }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
+        try { mBinding.globalToastText.setText(getSwitch(Setting.isGlobalToast())); } catch (Throwable ignored) {}
         try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
         try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
         try { mBinding.subtitleColorText.setText(subtitleColorLabel()); } catch (Throwable ignored) {}
@@ -128,6 +130,12 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putAutoBackup(!Setting.isAutoBackup());
         refreshTexts();
     }
+
+    private void setGlobalToast(View view) {
+        Setting.putGlobalToast(!Setting.isGlobalToast());
+        refreshTexts();
+    }
+
 
     private void setAutoCheckUpdate(View view) {
         Setting.putAutoCheckUpdate(!Setting.isAutoCheckUpdate());

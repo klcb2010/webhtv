@@ -118,4 +118,5 @@
     <string name="setting_exit_clear_cache_off">关</string>
     <string name="setting_subtitle_color">字幕颜色</string>
     <string name="setting_subtitle_font">字幕字体</string>
+    <string name="setting_global_toast">全局吐司</string>
 </resources>
