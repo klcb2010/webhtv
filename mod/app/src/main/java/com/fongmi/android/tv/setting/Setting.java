@@ -896,6 +896,100 @@ public class Setting {
     }
 
     /** 退出时清理缓存阈值：0=不清理，6/8/10 表示缓存达到该 GB 数才清理 */
+
+    /** 字幕颜色：0黄 1白 2青 3绿 4红 5橙 6粉，默认黄 */
+    private static final int[] SUBTITLE_COLORS = new int[]{
+            0xFFFFFF00,
+            0xFFFFFFFF,
+            0xFF00FFFF,
+            0xFF00FF00,
+            0xFFFF4444,
+            0xFFFF9800,
+            0xFFFF80AB
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS = new String[]{
+            "黄", "白", "青", "绿", "红", "橙", "粉"
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS_EN = new String[]{
+            "Yellow", "White", "Cyan", "Green", "Red", "Orange", "Pink"
+    };
+
+    public static int getSubtitleColorIndex() {
+        int v = Prefers.getInt("subtitle_color_index", 0);
+        if (v < 0 || v >= SUBTITLE_COLORS.length) return 0;
+        return v;
+    }
+
+    public static void putSubtitleColorIndex(int index) {
+        if (index < 0 || index >= SUBTITLE_COLORS.length) index = 0;
+        Prefers.put("subtitle_color_index", index);
+    }
+
+    public static int getSubtitleColorArgb() {
+        return SUBTITLE_COLORS[getSubtitleColorIndex()];
+    }
+
+    public static String getSubtitleColorLabel(boolean zh) {
+        int i = getSubtitleColorIndex();
+        return zh ? SUBTITLE_COLOR_LABELS[i] : SUBTITLE_COLOR_LABELS_EN[i];
+    }
+
+    public static void cycleSubtitleColor() {
+        putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
+    }
+
+    /** 字幕字体：0楷体(默认) 1黑体 2宋体；描边固定黑色由播放器样式提供 */
+    public static int getSubtitleFontIndex() {
+        int v = Prefers.getInt("subtitle_font_index", 0);
+        if (v < 0 || v > 2) return 0;
+        return v;
+    }
+
+    public static void putSubtitleFontIndex(int index) {
+        if (index < 0 || index > 2) index = 0;
+        Prefers.put("subtitle_font_index", index);
+    }
+
+    public static void cycleSubtitleFont() {
+        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % 3);
+    }
+
+    /**
+     * MPV sub-font / fontconfig 族名。
+     * 楷体优先 cursive/KaiTi；缺字时系统会回退。
+     */
+    public static String getSubtitleFontFamily() {
+        int i = getSubtitleFontIndex();
+        if (i == 1) return "sans-serif";
+        if (i == 2) return "serif";
+        return "cursive"; // 楷体
+    }
+
+    /** Exo Typeface：楷体→CURSIVE，黑体→SANS，宋体→SERIF */
+    public static android.graphics.Typeface getSubtitleTypeface() {
+        int i = getSubtitleFontIndex();
+        try {
+            if (i == 1) return android.graphics.Typeface.SANS_SERIF;
+            if (i == 2) return android.graphics.Typeface.SERIF;
+            android.graphics.Typeface kai = android.graphics.Typeface.create("cursive", android.graphics.Typeface.NORMAL);
+            if (kai != null) return kai;
+        } catch (Throwable ignored) {
+        }
+        return android.graphics.Typeface.SERIF;
+    }
+
+    public static String getSubtitleFontLabel(boolean zh) {
+        int i = getSubtitleFontIndex();
+        if (zh) {
+            if (i == 1) return "黑体";
+            if (i == 2) return "宋体";
+            return "楷体";
+        }
+        if (i == 1) return "Heiti";
+        if (i == 2) return "Song";
+        return "Kai";
+    }
+
     public static int getExitClearCacheGb() {
         int v = Prefers.getInt("exit_clear_cache_gb", 0);
         if (v != 0 && v != 6 && v != 8 && v != 10) return 0;

@@ -111,4 +111,7 @@ run_hook "$MOD/hooks/inject_home_push.py"
 run_hook "$MOD/hooks/fix_update_setting_stubs.py"
 run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
+if [[ -f "$MOD/hooks/inject_subtitle_style.py" ]]; then
+  python3 "$MOD/hooks/inject_subtitle_style.py" "$ROOT"
+fi
 echo "[mod] done"

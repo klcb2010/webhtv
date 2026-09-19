@@ -52,6 +52,8 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
         try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
         try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColor.setOnClickListener(this::setSubtitleColor); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFont.setOnClickListener(this::setSubtitleFont); } catch (Throwable ignored) {}
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -74,6 +76,8 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
         try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
         try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColorText.setText(subtitleColorLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
@@ -148,6 +152,35 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putExitClearCacheGb(next);
         refreshTexts();
     }
+
+    private String subtitleColorLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleColorLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleColorLabel(true);
+        }
+    }
+
+    private String subtitleFontLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleFontLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleFontLabel(true);
+        }
+    }
+
+    private void setSubtitleColor(View view) {
+        Setting.cycleSubtitleColor();
+        refreshTexts();
+    }
+
+    private void setSubtitleFont(View view) {
+        Setting.cycleSubtitleFont();
+        refreshTexts();
+    }
+
 
 
 
