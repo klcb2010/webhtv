@@ -113,7 +113,7 @@
     <string name="danmaku">嗷呜弹幕</string>
     <string name="about_check_update">查更新</string>
     <string name="about_acknowledge">已悉知</string>
-    <string name="setting_auto_check_update">自动查新</string>
+    <string name="setting_auto_check_update">自动检查更新</string>
     <string name="setting_exit_clear_cache">退出清理缓存</string>
     <string name="setting_exit_clear_cache_off">关</string>
     <string name="setting_subtitle_color">字幕颜色</string>

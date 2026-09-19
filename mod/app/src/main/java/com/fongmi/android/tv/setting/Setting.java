@@ -938,9 +938,9 @@ public class Setting {
         putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
     }
 
-    /** 字幕字体：0楷体(默认) 1黑体 2宋体 3仿宋 4等宽；描边固定黑色 */
+    /** 字幕字体：0楷体 1黑体(默认) 2宋体 3仿宋 4等宽；描边固定黑色 */
     public static int getSubtitleFontIndex() {
-        int v = Prefers.getInt("subtitle_font_index", 0);
+        int v = Prefers.getInt("subtitle_font_index", 1); // 默认黑体
         if (v < 0 || v > 4) return 0;
         return v;
     }
