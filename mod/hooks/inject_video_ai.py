@@ -241,74 +241,64 @@ HOOK = r"""
                 final String clickTitle = it.title == null ? "" : it.title.trim();
                 tv.setOnClickListener(v -> {
                     if (clickTitle.isEmpty()) return;
+                    final String title = clickTitle;
+                    final String key;
                     try {
-                        final String key = (getKey() == null || getKey().isEmpty()) ? "recommend" : getKey();
-                        final String title = clickTitle;
-                        try { saveHistory(); } catch (Throwable ignored) {}
-                        try { player().stop(); } catch (Throwable ignored) {}
-                        try { player().clear(); } catch (Throwable ignored) {}
-                        try { if (mClock != null) mClock.setCallback(null); } catch (Throwable ignored) {}
-
-                        // 关闭播放直达：只进搜索
-                        if (!com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
-                            try {
-                                com.fongmi.android.tv.ui.activity.SearchActivity.start(this, title);
-                            } catch (Throwable e) {
-                                try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
-                            }
-                            return;
-                        }
-
-                        boolean leanback = false;
-                        try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
-
-                        if (leanback) {
-                            // TV：用官方 start，避免 finish+NEW_TASK 造成 created/destroyed 抖动与空列表竞态
-                            try {
-                                com.fongmi.android.tv.ui.activity.VideoActivity.start(
-                                        this, key, "msearch:" + title, title, "", "");
-                            } catch (Throwable e1) {
-                                try {
-                                    com.fongmi.android.tv.ui.activity.SearchActivity.start(this, title);
-                                } catch (Throwable e2) {
-                                    try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
-                                }
-                            }
-                        } else {
-                            // 手机：singleTop 需 finish 后新开，否则标题/片源不换
-                            try { finish(); } catch (Throwable ignored) {}
-                            com.fongmi.android.tv.App.post(() -> {
-                                try {
-                                    android.content.Intent intent = new android.content.Intent(
-                                            com.fongmi.android.tv.App.get(),
-                                            com.fongmi.android.tv.ui.activity.VideoActivity.class);
-                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                                    intent.putExtra("key", key);
-                                    intent.putExtra("id", "msearch:" + title);
-                                    intent.putExtra("name", title);
-                                    intent.putExtra("pic", "");
-                                    intent.putExtra("mark", "");
-                                    intent.putExtra("collect", false);
-                                    com.fongmi.android.tv.App.get().startActivity(intent);
-                                } catch (Throwable e) {
-                                    try {
-                                        android.app.Activity act = com.fongmi.android.tv.App.activity();
-                                        if (act != null) {
-                                            com.fongmi.android.tv.ui.activity.SearchActivity.start(act, title);
-                                        }
-                                    } catch (Throwable e2) {
-                                        try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
-                                    }
-                                }
-                            }, 80);
-                        }
+                        String k = getKey();
+                        key = (k == null || k.isEmpty()) ? "recommend" : k;
                     } catch (Throwable e) {
-                        try {
-                            com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
-                        } catch (Throwable e2) {
-                            try { com.fongmi.android.tv.utils.Notify.show(clickTitle); } catch (Throwable ignored) {}
-                        }
+                        return;
                     }
+                    try { saveHistory(); } catch (Throwable ignored) {}
+                    try { player().stop(); } catch (Throwable ignored) {}
+                    try { player().clear(); } catch (Throwable ignored) {}
+                    try { if (mClock != null) mClock.setCallback(null); } catch (Throwable ignored) {}
+
+                    // 关闭播放直达：进搜索页
+                    if (!com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
+                        try {
+                            com.fongmi.android.tv.ui.activity.SearchActivity.start(VideoActivity.this, title);
+                        } catch (Throwable e) {
+                            try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                        }
+                        return;
+                    }
+
+                    // 双端统一：先结束当前播放页，再 msearch 打开，避免 singleTop/同页不刷新、TV 无响应
+                    final android.app.Activity host = VideoActivity.this;
+                    try { finish(); } catch (Throwable ignored) {}
+                    com.fongmi.android.tv.App.post(() -> {
+                        android.app.Activity act = null;
+                        try { act = com.fongmi.android.tv.App.activity(); } catch (Throwable ignored) {}
+                        if (act == null) act = host;
+                        try {
+                            if (act != null && !act.isFinishing()) {
+                                com.fongmi.android.tv.ui.activity.VideoActivity.start(
+                                        act, key, "msearch:" + title, title, "", "");
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                        try {
+                            if (act != null && !act.isFinishing()) {
+                                com.fongmi.android.tv.ui.activity.SearchActivity.start(act, title);
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                        try {
+                            android.content.Intent intent = new android.content.Intent(
+                                    com.fongmi.android.tv.App.get(),
+                                    com.fongmi.android.tv.ui.activity.VideoActivity.class);
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                            intent.putExtra("key", key);
+                            intent.putExtra("id", "msearch:" + title);
+                            intent.putExtra("name", title);
+                            intent.putExtra("pic", "");
+                            intent.putExtra("mark", "");
+                            com.fongmi.android.tv.App.get().startActivity(intent);
+                        } catch (Throwable e2) {
+                            try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                        }
+                    }, 150);
                 });
                 mBinding.aiRecommendList.addView(tv);
             }
