@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
+
 import android.annotation.SuppressLint;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
@@ -3948,6 +3950,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     protected void onTracksChanged() {
+        try { AssrtSubtitleMatch.onTracksReady(player()); } catch (Throwable ignored) {}
         refreshLyrics();
         setTrackVisible();
         mClock.setCallback(this);

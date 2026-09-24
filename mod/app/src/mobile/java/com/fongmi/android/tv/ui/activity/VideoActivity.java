@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
+
 import android.annotation.SuppressLint;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
@@ -4605,6 +4607,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         refreshLyrics();
         setTrackVisible();
         mClock.setCallback(this);
+        try { AssrtSubtitleMatch.onTracksReady(player()); } catch (Throwable ignored) {}
     }
 
     private void updateAudioOnlyState() {
