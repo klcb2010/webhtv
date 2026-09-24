@@ -6,8 +6,8 @@ import androidx.media3.common.C;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.History;
-import com.github.catvod.utils.Prefers;
 import com.fongmi.android.tv.utils.Util;
+import com.github.catvod.utils.Prefers;
 
 /**
  * 分集进度：同一部剧按「集」分别记进度，换集不丢其它集进度。
