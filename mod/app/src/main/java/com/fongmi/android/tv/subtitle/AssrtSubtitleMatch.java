@@ -3,6 +3,8 @@ package com.fongmi.android.tv.subtitle;
 import android.app.Activity;
 
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
+import androidx.media3.common.Tracks;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -122,9 +124,11 @@ public final class AssrtSubtitleMatch {
         final String disp = display;
         final String fmt = format;
         final PlayerManager pm = player;
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 400);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 1500);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 3000);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 300);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 800);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 1600);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 3200);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 5000);
     }
 
     private static void persistTextTrackSelection(PlayerManager player, String display, String format) {
@@ -144,14 +148,14 @@ public final class AssrtSubtitleMatch {
         try {
             if (player == null || player.isEmpty()) return;
             persistTextTrackSelection(player, display, format);
+            // 优先：从当前 Tracks 里找出外挂文字轨再 setTrack（名/ mime 与 Exo 一致）
+            if (selectExternalFromCurrentTracks(player, display)) return;
             java.util.ArrayList<Track> list = new java.util.ArrayList<>();
-            Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
+            Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "application/x-subrip" : format);
             track.setKey(player.getKey());
             track.setSelected(true);
             list.add(track);
-            // 同时按文件名再试一次（Exo 外挂轨 label 常是文件名）
             try {
-                // keep single selected text track entry
                 player.setTrack(list);
             } catch (Throwable ignored) {
             }
@@ -159,12 +163,73 @@ public final class AssrtSubtitleMatch {
         }
     }
 
+    /** 在已加载的 Tracks 中选中外挂字幕组（SRT/VTT/SSA 或 id 含 external） */
+    private static boolean selectExternalFromCurrentTracks(PlayerManager player, String display) {
+        try {
+            Tracks tracks = player.getCurrentTracks();
+            if (tracks == null || tracks.isEmpty()) return false;
+            String bestName = null;
+            String bestMime = null;
+            int bestScore = -1;
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+                for (int i = 0; i < group.length; i++) {
+                    Format f = group.getTrackFormat(i);
+                    if (f == null) continue;
+                    int score = scoreExternalFormat(f, display);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMime = f.sampleMimeType;
+                        if (!TextUtils.isEmpty(f.label)) bestName = f.label;
+                        else if (!TextUtils.isEmpty(f.id)) bestName = f.id;
+                        else if (!TextUtils.isEmpty(display)) bestName = display;
+                        else bestName = "sub";
+                    }
+                }
+            }
+            if (bestScore < 10 || TextUtils.isEmpty(bestName)) return false;
+            java.util.ArrayList<Track> list = new java.util.ArrayList<>();
+            Track track = new Track(C.TRACK_TYPE_TEXT, bestName, bestMime == null ? "application/x-subrip" : bestMime);
+            track.setKey(player.getKey());
+            track.setSelected(true);
+            list.add(track);
+            player.setTrack(list);
+            Log.i(TAG, "selectExternal score=" + bestScore + " name=" + bestName + " mime=" + bestMime);
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "selectExternal failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static int scoreExternalFormat(Format f, String display) {
+        int s = 0;
+        String id = f.id == null ? "" : f.id.toLowerCase(Locale.ROOT);
+        String label = f.label == null ? "" : f.label;
+        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
+        if (id.contains("external") || id.startsWith("ext")) s += 50;
+        if (mime.contains("subrip") || mime.contains("vtt") || mime.contains("ssa") || mime.contains("ttml") || mime.contains("application/x-subrip")) s += 30;
+        if ((f.selectionFlags & C.SELECTION_FLAG_FORCED) != 0) s += 20;
+        if ((f.selectionFlags & C.SELECTION_FLAG_DEFAULT) != 0) s += 5;
+        if (!TextUtils.isEmpty(display) && label.contains(display)) s += 25;
+        if (!TextUtils.isEmpty(display) && id.contains(display.toLowerCase(Locale.ROOT))) s += 15;
+        // 内嵌 PGS/VobSub 等位图通常 mime 为 application/pgs 或 image
+        if (mime.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb") || mime.startsWith("image/")) s -= 40;
+        return s;
+    }
+
 
     public static void selectPendingIfAny(PlayerManager player) {
         try {
             if (player == null || player.isEmpty()) return;
-            if (TextUtils.isEmpty(sPendingSelectName)) return;
-            persistAndSelectText(player, sPendingSelectName, sPendingSelectFormat);
+            String name = sPendingSelectName;
+            String fmt = sPendingSelectFormat;
+            if (TextUtils.isEmpty(name)) {
+                // 无 pending 名时仍尝试选外挂轨
+                selectExternalFromCurrentTracks(player, "");
+                return;
+            }
+            persistAndSelectText(player, name, fmt);
         } catch (Throwable ignored) {
         }
     }
