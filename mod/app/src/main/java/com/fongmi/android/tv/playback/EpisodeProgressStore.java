@@ -6,8 +6,10 @@ import androidx.media3.common.C;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.History;
-import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.utils.Prefers;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * 分集进度：同一部剧按「集」分别记进度，换集不丢其它集进度。
@@ -20,9 +22,20 @@ public final class EpisodeProgressStore {
     private EpisodeProgressStore() {
     }
 
+    private static String md5(String s) {
+        try {
+            byte[] d = MessageDigest.getInstance("MD5").digest((s == null ? "" : s).getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(d.length * 2);
+            for (byte b : d) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Throwable e) {
+            return String.valueOf((s == null ? "" : s).hashCode());
+        }
+    }
+
     private static String cacheKey(String historyKey, String episodeUrl, String episodeName) {
         String id = !TextUtils.isEmpty(episodeUrl) ? episodeUrl : (episodeName == null ? "" : episodeName);
-        return PREFIX + Util.md5((historyKey == null ? "" : historyKey) + "\u0001" + id);
+        return PREFIX + md5((historyKey == null ? "" : historyKey) + "\u0001" + id);
     }
 
     public static void save(History history, Episode episode, long position, long duration) {
