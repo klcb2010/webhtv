@@ -118,3 +118,7 @@ if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi
 echo "[mod] done"
+
+if [[ -f "$MOD/hooks/inject_stalled_auto_change.py" ]]; then
+  python3 "$MOD/hooks/inject_stalled_auto_change.py" "$ROOT"
+fi
