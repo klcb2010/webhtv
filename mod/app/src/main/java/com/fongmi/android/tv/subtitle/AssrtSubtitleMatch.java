@@ -224,6 +224,60 @@ public final class AssrtSubtitleMatch {
     }
 
 
+    public static void updateKeyword(String title, String episode) {
+        String k = formatKeyword(title, episode);
+        if (!TextUtils.isEmpty(k)) sLastKeyword = k;
+    }
+
+    public static void updateKeyword(String keyword) {
+        if (!TextUtils.isEmpty(keyword)) sLastKeyword = keyword.trim();
+    }
+
+    public static String lastKeyword() {
+        return sLastKeyword == null ? "" : sLastKeyword;
+    }
+
+    private static void doAutoMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen) {
+        try {
+            Map<String, Item> map = new LinkedHashMap<>();
+            for (String q : buildQueriesFromKeyword(keyword)) {
+                for (Item it : searchAllSources(q)) {
+                    String key = it.provider + ":" + it.id;
+                    if (!map.containsKey(key)) map.put(key, it);
+                }
+            }
+            List<Item> items = new ArrayList<>(map.values());
+            if (items.isEmpty()) {
+                Log.i(TAG, "auto match empty keyword=" + keyword);
+                return;
+            }
+            if (gen != GEN.get()) return;
+            Item hit = pickBest(items);
+            File file = downloadItem(hit);
+            if (file == null || !file.isFile()) {
+                Log.w(TAG, "auto resolve failed " + hit.label());
+                return;
+            }
+            if (gen != GEN.get()) return;
+            final File subFile = file;
+            final Item applied = hit;
+            final String display = displayNameForKeyword(applied, keyword);
+            App.post(() -> {
+                if (gen != GEN.get() || activity.isFinishing()) return;
+                PlayerManager player = playerProvider.get();
+                if (player == null || player.isEmpty()) return;
+                String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
+                if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
+                applyToPlayer(player, subFile, display, applied.lang, format);
+                Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
+                Log.i(TAG, "auto applied " + display + " src=" + applied.label());
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "auto match failed: " + e.getMessage());
+        }
+    }
+
+
     private static String subCacheKey(String historyKey, String episodePart) {
         String k = historyKey == null ? "" : historyKey;
         String e = episodePart == null ? "" : episodePart.trim();
