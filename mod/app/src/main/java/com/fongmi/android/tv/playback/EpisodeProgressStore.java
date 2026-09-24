@@ -6,7 +6,7 @@ import androidx.media3.common.C;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.History;
-import com.fongmi.android.tv.utils.Prefers;
+import com.github.catvod.utils.Prefers;
 import com.fongmi.android.tv.utils.Util;
 
 /**
