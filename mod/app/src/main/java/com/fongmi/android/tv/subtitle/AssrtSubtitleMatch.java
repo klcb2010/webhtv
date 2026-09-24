@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.subtitle;
 
 import android.app.Activity;
+
+import androidx.media3.common.C;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -9,6 +11,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Sub;
+import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.FileUtil;
@@ -95,6 +98,33 @@ public final class AssrtSubtitleMatch {
 
     public static String displayName(Item item) {
         return displayNameForKeyword(item, item == null ? "" : item.name);
+    }
+
+
+    /** 立即挂载外挂字幕：写入 spec + 覆盖「禁用字幕」轨道记忆，避免还要再进字幕菜单点一次 */
+    public static void applyToPlayer(PlayerManager player, File file, String display, String lang, String format) {
+        if (player == null || file == null || !file.isFile()) return;
+        if (TextUtils.isEmpty(format)) {
+            format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+        }
+        if (TextUtils.isEmpty(display)) display = file.getName();
+        Sub sub = Sub.create(display, file.getAbsolutePath(), lang == null ? "" : lang, format);
+        sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+        player.setSub(sub);
+        try {
+            String key = player.getKey();
+            if (!TextUtils.isEmpty(key)) {
+                Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
+                track.setKey(key);
+                track.setSelected(true);
+                track.save();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
+        } catch (Throwable ignored) {
+        }
     }
 
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
@@ -228,9 +258,7 @@ public final class AssrtSubtitleMatch {
             if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
             PlayerManager player = playerProvider == null ? null : playerProvider.get();
             if (player == null || player.isEmpty()) return false;
-            Sub sub = Sub.create(name, file.getAbsolutePath(), lang, format);
-            sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
-            player.setSub(sub);
+            applyToPlayer(player, file, name, lang, format);
             Log.i(TAG, "restored sub " + name + " path=" + file.getAbsolutePath());
             return true;
         } catch (Throwable e) {
@@ -302,10 +330,7 @@ public final class AssrtSubtitleMatch {
                 if (player == null || player.isEmpty()) return;
                 String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
                 if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
-                Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
-                sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
-                player.setSub(sub);
-                try { rememberSub(sLastHistory, sLastEpisode, subFile, display, applied.lang, format); } catch (Throwable ignored) {}
+                applyToPlayer(player, subFile, display, applied.lang, format);
                 Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
                 Log.i(TAG, "auto applied " + display + " src=" + applied.label());
             });

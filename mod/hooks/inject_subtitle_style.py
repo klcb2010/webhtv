@@ -116,3 +116,15 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def patch_mpv_override(path: Path) -> None:
+    if not path.exists():
+        return
+    t = path.read_text(encoding="utf-8")
+    orig = t
+    t = t.replace('public static final String ASS_OVERRIDE = "scale";', 'public static final String ASS_OVERRIDE = "force";')
+    t = t.replace("public static final String ASS_OVERRIDE = \"scale\";", 'public static final String ASS_OVERRIDE = "force";')
+    if t != orig:
+        path.write_text(t, encoding="utf-8")
+        print("[mod] ASS_OVERRIDE force", path)
