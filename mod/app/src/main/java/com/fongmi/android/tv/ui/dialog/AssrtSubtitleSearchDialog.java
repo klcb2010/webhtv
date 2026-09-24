@@ -153,6 +153,9 @@ public final class AssrtSubtitleSearchDialog {
                     Sub sub = Sub.create(display, file.getAbsolutePath(), item.lang, format);
                     sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
                     player.setSub(sub);
+                    try {
+                        AssrtSubtitleMatch.rememberSub(null, null, file, display, item.lang, format);
+                    } catch (Throwable ignored) {}
                     Notify.show(activity.getString(R.string.subtitle_manual_applied, display));
                 });
             } catch (Exception e) {

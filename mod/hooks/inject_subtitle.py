@@ -39,6 +39,9 @@ SHOW = r"""
             }
         } catch (Throwable ignored) {
         }
+        if (title != null && !title.isEmpty()) {
+            title = com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.cleanTitleForSearch(title);
+        }
         return com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.formatKeyword(title, ep);
     }
 """

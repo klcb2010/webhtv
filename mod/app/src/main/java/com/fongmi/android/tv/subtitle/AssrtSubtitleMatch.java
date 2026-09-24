@@ -16,6 +16,7 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
+import com.github.catvod.utils.Prefers;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -35,6 +36,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.HttpUrl;
 import okhttp3.Request;
@@ -55,6 +58,8 @@ public final class AssrtSubtitleMatch {
     private static final AtomicInteger GEN = new AtomicInteger();
     /** 最近一次片名+集数，供手动搜索预填（不依赖对话框入参是否传到） */
     private static volatile String sLastKeyword = "";
+    private static volatile History sLastHistory;
+    private static volatile Episode sLastEpisode;
 
     private AssrtSubtitleMatch() {
     }
@@ -94,27 +99,144 @@ public final class AssrtSubtitleMatch {
 
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         if (activity == null || playerProvider == null) return;
-        if (!Setting.isSubtitleAutoMatchEnabled()) return;
         String title = history != null && history.getVodName() != null ? history.getVodName().trim() : "";
         String ep = episode != null && episode.getName() != null ? episode.getName().trim() : "";
-        if (TextUtils.isEmpty(title) && TextUtils.isEmpty(ep)) return;
+        sLastHistory = history;
+        sLastEpisode = episode;
         final String keyword = formatKeyword(title, ep);
         updateKeyword(keyword);
+        // 历史重进：优先恢复上次选用的外挂字幕文件
         final int gen = GEN.incrementAndGet();
-        // 等播放真正开始后再匹配（避免起播前 player 仍为空）
-        waitPlayingThenMatch(activity, playerProvider, keyword, gen, 0);
+        waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, 0);
     }
 
-    /** 片名 + 集数，例如：金色年代 第一集 */
+    private static void waitPlayingThenRestoreOrMatch(Activity activity, History history, Episode episode, PlayerProvider playerProvider, String keyword, int gen, int attempt) {
+        App.post(() -> {
+            if (gen != GEN.get() || activity.isFinishing()) return;
+            try {
+                PlayerManager player = playerProvider.get();
+                if (player == null || player.isEmpty()) {
+                    if (attempt < 20) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+                    return;
+                }
+                if (tryRestoreSub(activity, history, episode, playerProvider)) {
+                    return;
+                }
+                if (!Setting.isSubtitleAutoMatchEnabled()) return;
+                if (TextUtils.isEmpty(keyword)) return;
+                Task.execute(() -> doAutoMatch(activity, playerProvider, keyword, gen));
+            } catch (Throwable e) {
+                if (attempt < 20) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+            }
+        }, attempt == 0 ? 800 : 500);
+    }
+
+    /**
+     * 从过长片源标题里抽出适合搜字幕的短名。
+     * 例：2026恐怖片《奥德赛》/The.xxx → 奥德赛
+     */
+    public static String cleanTitleForSearch(String title) {
+        if (title == null) return "";
+        String t = title.trim();
+        if (t.isEmpty()) return "";
+        try {
+            Matcher m = Pattern.compile("《([^》]+)》").matcher(t);
+            if (m.find()) {
+                String inside = m.group(1).trim();
+                if (!inside.isEmpty()) return inside;
+            }
+            // 中文名在括号里：xxx（奥德赛）
+            m = Pattern.compile("[（(]([\u4e00-\u9fff]{2,20})[）)]").matcher(t);
+            if (m.find()) return m.group(1).trim();
+        } catch (Throwable ignored) {
+        }
+        // 去掉年份前缀与常见类型词
+        t = t.replaceAll("^\\d{4}\\s*", "");
+        t = t.replaceAll("(?i)^(恐怖片|剧情片|喜剧片|动作片|爱情片|科幻片|悬疑片|战争片|纪录片|综艺|动漫|电影|电视剧)[\\s:：]*", "");
+        // 取 / 或 | 前的中文段
+        int cut = -1;
+        for (char c : new char[]{'/', '|', '\\'}) {
+            int i = t.indexOf(c);
+            if (i > 0 && (cut < 0 || i < cut)) cut = i;
+        }
+        if (cut > 0) t = t.substring(0, cut).trim();
+        // 去掉残留书名号
+        t = t.replace("《", "").replace("》", "").trim();
+        // 若仍很长且含空格，优先连续中文
+        try {
+            Matcher m = Pattern.compile("[\\u4e00-\\u9fff]{2,30}").matcher(t);
+            if (m.find() && t.length() > 20) return m.group().trim();
+        } catch (Throwable ignored) {
+        }
+        return t.trim();
+    }
+
+    /** 片名 + 集数；片名先 clean，避免整串文件名 */
     public static String formatKeyword(String title, String episode) {
-        String t = title == null ? "" : title.trim();
+        String t = cleanTitleForSearch(title);
+        if (TextUtils.isEmpty(t) && title != null) t = title.trim();
         String e = episode == null ? "" : episode.trim();
+        // 集数若是「xxx.mp4」这类文件名则忽略
+        if (!TextUtils.isEmpty(e) && (e.contains(".mp4") || e.contains(".mkv") || e.contains(".ts"))) {
+            e = "";
+        }
         if (!TextUtils.isEmpty(t) && !TextUtils.isEmpty(e)) {
             if (t.contains(e)) return t;
             return t + " " + e;
         }
         if (!TextUtils.isEmpty(t)) return t;
         return e;
+    }
+
+    private static String subCacheKey(History history, Episode episode) {
+        String k = history != null ? String.valueOf(history.getKey()) : "";
+        String e = "";
+        try {
+            if (episode != null && episode.getName() != null) e = episode.getName().trim();
+            else if (history != null && history.getVodRemarks() != null) e = history.getVodRemarks().trim();
+        } catch (Throwable ignored) {
+        }
+        return "ext_sub_" + Util.md5(k + "|" + e);
+    }
+
+    /** 记住当前片+集选用的外挂字幕，历史重进可恢复 */
+    public static void rememberSub(History history, Episode episode, File file, String name, String lang, String format) {
+        try {
+            if (file == null || !file.isFile()) return;
+            if (history == null) history = sLastHistory;
+            if (episode == null) episode = sLastEpisode;
+            String payload = file.getAbsolutePath() + "\u0001"
+                    + (name == null ? "" : name) + "\u0001"
+                    + (lang == null ? "" : lang) + "\u0001"
+                    + (format == null ? "" : format);
+            Prefers.put(subCacheKey(history, episode), payload);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
+        try {
+            String raw = Prefers.getString(subCacheKey(history, episode));
+            if (TextUtils.isEmpty(raw)) return false;
+            String[] parts = raw.split("\u0001", -1);
+            if (parts.length < 1 || TextUtils.isEmpty(parts[0])) return false;
+            File file = new File(parts[0]);
+            if (!file.isFile()) return false;
+            String name = parts.length > 1 ? parts[1] : file.getName();
+            String lang = parts.length > 2 ? parts[2] : "";
+            String format = parts.length > 3 ? parts[3] : "";
+            if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+            PlayerManager player = playerProvider == null ? null : playerProvider.get();
+            if (player == null || player.isEmpty()) return false;
+            Sub sub = Sub.create(name, file.getAbsolutePath(), lang, format);
+            sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
+            player.setSub(sub);
+            Log.i(TAG, "restored sub " + name + " path=" + file.getAbsolutePath());
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "restore sub failed: " + e.getMessage());
+            return false;
+        }
     }
 
     public static void updateKeyword(String title, String episode) {
@@ -183,6 +305,7 @@ public final class AssrtSubtitleMatch {
                 Sub sub = Sub.create(display, subFile.getAbsolutePath(), applied.lang, format);
                 sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
                 player.setSub(sub);
+                try { rememberSub(sLastHistory, sLastEpisode, subFile, display, applied.lang, format); } catch (Throwable ignored) {}
                 Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
                 Log.i(TAG, "auto applied " + display + " src=" + applied.label());
             });
