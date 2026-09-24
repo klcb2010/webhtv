@@ -112,16 +112,19 @@ public final class AssrtSubtitleMatch {
             format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
         }
         if (TextUtils.isEmpty(display)) display = file.getName();
-        Sub sub = Sub.create(display, file.getAbsolutePath(), lang == null ? "" : lang, format);
+        String trackLabel = trackLabelFor(display, format, file.getName());
+        Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
-        persistTextTrackSelection(player, display, format);
+        sPendingSelectName = trackLabel;
+        sPendingSelectFormat = format;
+        persistTextTrackSelection(player, trackLabel, format);
         try {
             rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
         } catch (Throwable ignored) {
         }
         // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
-        final String disp = display;
+        final String disp = trackLabel;
         final String fmt = format;
         final PlayerManager pm = player;
         App.post(() -> persistAndSelectText(pm, disp, fmt), 300);
@@ -188,14 +191,33 @@ public final class AssrtSubtitleMatch {
                 }
             }
             if (bestScore < 10 || TextUtils.isEmpty(bestName)) return false;
-            java.util.ArrayList<Track> list = new java.util.ArrayList<>();
-            Track track = new Track(C.TRACK_TYPE_TEXT, bestName, bestMime == null ? "application/x-subrip" : bestMime);
-            track.setKey(player.getKey());
-            track.setSelected(true);
-            list.add(track);
-            player.setTrack(list);
-            Log.i(TAG, "selectExternal score=" + bestScore + " name=" + bestName + " mime=" + bestMime);
-            return true;
+            // 尝试多个名字：列表里是「奥德赛，SRT」，setTrack 必须对得上
+            java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+            names.add(bestName);
+            if (!TextUtils.isEmpty(display)) {
+                names.add(display);
+                int c = Math.max(display.indexOf('，'), display.indexOf(','));
+                if (c > 0) names.add(display.substring(0, c).trim());
+            }
+            int c2 = Math.max(bestName.indexOf('，'), bestName.indexOf(','));
+            if (c2 > 0) names.add(bestName.substring(0, c2).trim());
+            String mime = bestMime == null ? "application/x-subrip" : bestMime;
+            boolean ok = false;
+            for (String nm : names) {
+                if (TextUtils.isEmpty(nm)) continue;
+                try {
+                    java.util.ArrayList<Track> list = new java.util.ArrayList<>();
+                    Track track = new Track(C.TRACK_TYPE_TEXT, nm, mime);
+                    track.setKey(player.getKey());
+                    track.setSelected(true);
+                    list.add(track);
+                    player.setTrack(list);
+                    ok = true;
+                    Log.i(TAG, "selectExternal score=" + bestScore + " name=" + nm + " mime=" + mime);
+                } catch (Throwable ignored) {
+                }
+            }
+            return ok;
         } catch (Throwable e) {
             Log.w(TAG, "selectExternal failed: " + e.getMessage());
             return false;
@@ -206,15 +228,28 @@ public final class AssrtSubtitleMatch {
         int s = 0;
         String id = f.id == null ? "" : f.id.toLowerCase(Locale.ROOT);
         String label = f.label == null ? "" : f.label;
+        String labelLow = label.toLowerCase(Locale.ROOT);
         String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
         if (id.contains("external") || id.startsWith("ext")) s += 50;
-        if (mime.contains("subrip") || mime.contains("vtt") || mime.contains("ssa") || mime.contains("ttml") || mime.contains("application/x-subrip")) s += 30;
+        if (mime.contains("subrip") || mime.contains("application/x-subrip") || labelLow.contains("srt")) s += 80;
+        if (mime.contains("vtt") || labelLow.contains("vtt")) s += 70;
+        if (mime.contains("ssa") || mime.contains("ass") || labelLow.contains("ass") || labelLow.contains("ssa")) s += 70;
+        if (mime.contains("ttml") || labelLow.contains("ttml")) s += 60;
         if ((f.selectionFlags & C.SELECTION_FLAG_FORCED) != 0) s += 20;
         if ((f.selectionFlags & C.SELECTION_FLAG_DEFAULT) != 0) s += 5;
-        if (!TextUtils.isEmpty(display) && label.contains(display)) s += 25;
-        if (!TextUtils.isEmpty(display) && id.contains(display.toLowerCase(Locale.ROOT))) s += 15;
-        // 内嵌 PGS/VobSub 等位图通常 mime 为 application/pgs 或 image
-        if (mime.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb") || mime.startsWith("image/")) s -= 40;
+        if (!TextUtils.isEmpty(display)) {
+            String d = display.trim();
+            String dBase = d;
+            // display 可能是「奥德赛，SRT」
+            int comma = Math.max(d.indexOf('，'), d.indexOf(','));
+            if (comma > 0) dBase = d.substring(0, comma).trim();
+            if (label.contains(d) || label.contains(dBase)) s += 40;
+            if (labelLow.contains(dBase.toLowerCase(Locale.ROOT))) s += 20;
+        }
+        // 内嵌 PGS 等：大力降权（截图里默认项就是 PGS）
+        if (mime.contains("pgs") || labelLow.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb") || mime.startsWith("image/")) {
+            s -= 100;
+        }
         return s;
     }
 
