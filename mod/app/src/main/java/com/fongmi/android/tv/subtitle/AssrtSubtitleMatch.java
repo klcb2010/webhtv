@@ -63,6 +63,8 @@ public final class AssrtSubtitleMatch {
     private static volatile String sLastKeyword = "";
     private static volatile History sLastHistory;
     private static volatile Episode sLastEpisode;
+    private static volatile String sPendingSelectName;
+    private static volatile String sPendingSelectFormat;
 
     private AssrtSubtitleMatch() {
     }
@@ -101,7 +103,7 @@ public final class AssrtSubtitleMatch {
     }
 
 
-    /** 立即挂载外挂字幕：写入 spec + 覆盖「禁用字幕」轨道记忆，避免还要再进字幕菜单点一次 */
+    /** 立即挂载外挂字幕：写入 spec + 用 player.getKey() 记选中轨（与 restoreTrack 同一把钥匙） */
     public static void applyToPlayer(PlayerManager player, File file, String display, String lang, String format) {
         if (player == null || file == null || !file.isFile()) return;
         if (TextUtils.isEmpty(format)) {
@@ -111,18 +113,58 @@ public final class AssrtSubtitleMatch {
         Sub sub = Sub.create(display, file.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
+        persistTextTrackSelection(player, display, format);
         try {
+            rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
+        } catch (Throwable ignored) {
+        }
+        // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
+        final String disp = display;
+        final String fmt = format;
+        final PlayerManager pm = player;
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 400);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 1500);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 3000);
+    }
+
+    private static void persistTextTrackSelection(PlayerManager player, String display, String format) {
+        try {
+            if (player == null) return;
             String key = player.getKey();
-            if (!TextUtils.isEmpty(key)) {
-                Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
-                track.setKey(key);
-                track.setSelected(true);
-                track.save();
+            if (TextUtils.isEmpty(key)) return;
+            Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
+            track.setKey(key);
+            track.setSelected(true);
+            track.save();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void persistAndSelectText(PlayerManager player, String display, String format) {
+        try {
+            if (player == null || player.isEmpty()) return;
+            persistTextTrackSelection(player, display, format);
+            java.util.ArrayList<Track> list = new java.util.ArrayList<>();
+            Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
+            track.setKey(player.getKey());
+            track.setSelected(true);
+            list.add(track);
+            // 同时按文件名再试一次（Exo 外挂轨 label 常是文件名）
+            try {
+                // keep single selected text track entry
+                player.setTrack(list);
+            } catch (Throwable ignored) {
             }
         } catch (Throwable ignored) {
         }
+    }
+
+
+    public static void selectPendingIfAny(PlayerManager player) {
         try {
-            rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
+            if (player == null || player.isEmpty()) return;
+            if (TextUtils.isEmpty(sPendingSelectName)) return;
+            persistAndSelectText(player, sPendingSelectName, sPendingSelectFormat);
         } catch (Throwable ignored) {
         }
     }
@@ -150,7 +192,9 @@ public final class AssrtSubtitleMatch {
                     return;
                 }
                 // 多试几次：历史刚进时 episode 可能尚未对齐
+                selectPendingIfAny(player);
                 if (tryRestoreSub(activity, history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode, playerProvider)) {
+                    selectPendingIfAny(player);
                     return;
                 }
                 if (attempt < 6) {
@@ -387,6 +431,8 @@ public final class AssrtSubtitleMatch {
                 }
             } catch (Throwable ignored) {
             }
+            sPendingSelectName = name;
+            sPendingSelectFormat = format;
             Log.i(TAG, "attachRememberedSub " + name);
         } catch (Throwable e) {
             Log.w(TAG, "attachRememberedSub failed: " + e.getMessage());
