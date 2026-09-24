@@ -69,6 +69,8 @@ public final class AssrtSubtitleMatch {
     private static volatile String sPendingSelectFormat;
     /** 用户明确选过外挂（或 apply 过文件）时，有内嵌也优先恢复外挂 */
     private static volatile boolean sPreferExternal;
+    private static volatile long sLastForceOkAt;
+    private static volatile boolean sForceSettled;
 
     private AssrtSubtitleMatch() {
     }
@@ -121,6 +123,7 @@ public final class AssrtSubtitleMatch {
         sPendingSelectName = trackLabel;
         sPendingSelectFormat = format;
         sPreferExternal = true;
+        sForceSettled = false;
         persistTextTrackSelection(player, trackLabel, format);
         try {
             rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
@@ -130,11 +133,9 @@ public final class AssrtSubtitleMatch {
         final String disp = trackLabel;
         final String fmt = format;
         final PlayerManager pm = player;
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 300);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 800);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 1600);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 3200);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 5000);
+        // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 600);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 2500);
     }
 
 
@@ -262,6 +263,8 @@ public final class AssrtSubtitleMatch {
             try {
                 if (bestGroup.isTrackSelected(bestIndex)) {
                     Log.i(TAG, "forceSelect already selected");
+                    sForceSettled = true;
+                    sLastForceOkAt = System.currentTimeMillis();
                     return true;
                 }
             } catch (Throwable ignored) {
@@ -278,6 +281,8 @@ public final class AssrtSubtitleMatch {
             String label = chosen.label != null ? chosen.label : String.valueOf(chosen.id);
             persistTextTrackSelection(player, !TextUtils.isEmpty(remembered) ? remembered : label, chosen.sampleMimeType);
             Log.i(TAG, "forceSelect OK score=" + bestScore + " label=" + label + " mime=" + chosen.sampleMimeType);
+            sForceSettled = true;
+            sLastForceOkAt = System.currentTimeMillis();
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "forceSelect failed: " + e.getMessage());
@@ -469,6 +474,8 @@ public final class AssrtSubtitleMatch {
     public static void onTracksReady(PlayerManager player) {
         try {
             if (player == null || player.isEmpty()) return;
+            // 已选中且短时间内不再反复 Override，避免续播拉扯 / reprepare
+            if (sForceSettled && System.currentTimeMillis() - sLastForceOkAt < 8000) return;
             if (!sPreferExternal && loadCachedSubPayload(sLastHistory, sLastEpisode) == null
                     && TextUtils.isEmpty(sPendingSelectName)
                     && TextUtils.isEmpty(loadRememberedTrackName(sLastHistory, sLastEpisode))) {
