@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.Format;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
@@ -155,6 +156,18 @@ public final class AssPrototypeActivity extends Activity implements Player.Liste
             out.put("run", run); out.put("enabled", enabled);
             out.put("startupMs", startupMs); out.put("seekMs", seekMs); out.put("underruns", underruns);
             out.put("positionMs", player.getCurrentPosition()); out.put("playing", player.isPlaying());
+            Format video = player.getVideoFormat();
+            if (video != null) {
+                out.put("videoMime", video.sampleMimeType);
+                out.put("videoWidth", video.width); out.put("videoHeight", video.height);
+                out.put("videoCodecs", video.codecs);
+                out.put("assSdrRgb", AssVideoPolicy.usesSdrRgb(video));
+                if (video.colorInfo != null) {
+                    out.put("videoColorSpace", video.colorInfo.colorSpace);
+                    out.put("videoColorTransfer", video.colorInfo.colorTransfer);
+                    out.put("videoColorRange", video.colorInfo.colorRange);
+                }
+            }
             out.put("error", error == null ? "" : error.errorCode);
             if (error != null) {
                 out.put("errorMessage", error.getMessage());

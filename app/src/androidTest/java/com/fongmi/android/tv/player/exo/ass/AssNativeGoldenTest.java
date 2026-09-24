@@ -2,6 +2,7 @@ package com.fongmi.android.tv.player.exo.ass;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import androidx.media3.common.C;
 import androidx.test.platform.app.InstrumentationRegistry;
 import junit.framework.TestCase;
 import java.io.ByteArrayOutputStream;
@@ -85,6 +86,50 @@ public class AssNativeGoldenTest extends TestCase {
             assertTrue(AssNative.testSurface(handle, 800, 600));
             for (int time : new int[]{1000, 1500, 1900}) compare(handle, "blur+t", time, 800, 600);
         } finally { AssNative.destroy(handle); }
+    }
+
+    public void testHdrSdrRgbColorsAndVideoColorTransitions() throws Exception {
+        // A solid ASS drawing gives an independent color/alpha reference without font variance.
+        String script = "[Script Info]\nScriptType: v4.00+\nPlayResX: 64\nPlayResY: 64\n"
+                + "YCbCr Matrix: TV.601\n[V4+ Styles]\n"
+                + "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+                + "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+                + "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+                + "Style: Default,Arimo,20,&H00C08040,&H00C08040,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n"
+                + "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+                + "Dialogue: 0,0:00:00.00,0:00:10.00,Default,,0,0,0,,"
+                + "{\\an7\\pos(0,0)\\bord0\\shad0\\1a&H80&\\p1}m 0 0 l 64 0 64 64 0 64\n";
+        long handle = create();
+        long[] stats = new long[6];
+        try {
+            assertTrue(AssNative.load(handle, AssInput.normalize(script.getBytes(StandardCharsets.UTF_8))));
+            assertTrue(AssNative.testSurface(handle, 64, 64));
+            assertTrue(AssNative.render(handle, 1000, 64, 64, 64, 64, 1,
+                    AssNative.COLOR_SPACE_SDR_RGB, C.COLOR_RANGE_FULL, false, stats) > 0);
+            byte[] hdr = AssNative.readPixels(handle);
+            assertSdrRgbPixel(hdr);
+            assertTrue("Color-mode changes redraw even at a paused timestamp",
+                    AssNative.render(handle, 1000, 64, 64, 64, 64, 1,
+                            C.COLOR_SPACE_BT709, C.COLOR_RANGE_LIMITED, false, stats) > 0);
+            byte[] sdr = AssNative.readPixels(handle);
+            int pixel = (32 * 64 + 32) * 4;
+            assertTrue("SDR retains the historical TV.601 to TV.709 conversion",
+                    Math.abs((hdr[pixel] & 255) - (sdr[pixel] & 255)) >= 2);
+            assertEquals(hdr[pixel + 3], sdr[pixel + 3]);
+            assertTrue(AssNative.render(handle, 1000, 64, 64, 64, 64, 1,
+                    AssNative.COLOR_SPACE_SDR_RGB, C.COLOR_RANGE_FULL, false, stats) > 0);
+            assertSdrRgbPixel(AssNative.readPixels(handle));
+        } finally { AssNative.destroy(handle); }
+    }
+
+    private void assertSdrRgbPixel(byte[] pixels) {
+        assertNotNull(pixels);
+        int pixel = (32 * 64 + 32) * 4;
+        // ASS &H80C08040 is RGB(64,128,192), opacity 127/255, stored premultiplied.
+        int[] expected = {32, 64, 96, 127};
+        for (int channel = 0; channel < 4; channel++)
+            assertTrue("SDR RGB channel " + channel + " actual=" + (pixels[pixel + channel] & 255),
+                    Math.abs(expected[channel] - (pixels[pixel + channel] & 255)) <= 1);
     }
 
     public void testOfficialKaraokeFrames() throws Exception {

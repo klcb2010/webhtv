@@ -187,7 +187,9 @@ Matrix subtitle_matrix(ASS_YCbCrMatrix matrix) {
 void rgba(Session &s, uint32_t color, GLfloat *out) {
     double rgb[] = { (color >> 24) / 255.0, ((color >> 16) & 255) / 255.0,
                      ((color >> 8) & 255) / 255.0 };
-    if (s.track->YCbCrMatrix != YCBCR_NONE) {
+    // color_space == 0 is AssNative.COLOR_SPACE_SDR_RGB: HDR/wide-gamut video
+    // uses an independent SDR subtitle layer, not a video YCbCr round trip.
+    if (s.color_space != 0 && s.track->YCbCrMatrix != YCBCR_NONE) {
         Matrix src = subtitle_matrix(s.track->YCbCrMatrix);
         Matrix dst = s.color_space == 2 ? Matrix{.299, .114, s.color_range != 1}
                                        : Matrix{.2126, .0722, s.color_range != 1};

@@ -4,6 +4,9 @@ import android.view.Surface;
 
 /** Loaded only by the ASS worker after eligible, selected subtitle data arrives. */
 final class AssNative {
+    // HDR/wide-gamut video keeps ASS colors in the independent SDR RGB layer.
+    // Zero is outside Media3's BT.601/BT.709 values; exo_ass.cpp must match it.
+    static final int COLOR_SPACE_SDR_RGB = 0;
     private static boolean loaded;
 
     static synchronized void ensureLoaded() {

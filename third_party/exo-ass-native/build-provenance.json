@@ -2,7 +2,7 @@
   "schema": 1,
   "artifact": {
     "path": "prebuilt/arm64-v8a/libexo_ass.so",
-    "sha256": "476b3e048fff1002cbd25a328340637f0cb40fdec6a6f2f6033fc7548ac80157",
+    "sha256": "31e04a1d26c606dd2f5df0b0b81f2916ed0b29c13b3415515a77cff540e83cc2",
     "bytes": 2775600
   },
   "android": {
@@ -18,7 +18,7 @@
     "third_party/exo-ass-lock.json": "b524b2904218465093a9d20ebc8e5419529eae322650adfe331b48474fa67000",
     "scripts/build_exo_ass_native.py": "be7828a4ba01788258c2ef67328e87b808df57d6d55eed9938df7c0fd286fdb4",
     "third_party/exo-ass-native/CMakeLists.txt": "4abec300900d0588502938c62c3e7a90f9fc5cc2a832f0446689356e5df29266",
-    "third_party/exo-ass-native/exo_ass.cpp": "d37931e1d22a27e940c4d97b82e1ecfd8684ed4fb3ce14587275e7b10c87f4f2",
+    "third_party/exo-ass-native/exo_ass.cpp": "b333e896881a9a13a8a618cc147a5472914b7570290264db732bda624f4f8470",
     "third_party/exo-ass-native/mask_copy.h": "8fa89ecb7904ad82bb3bafd551517e77f1cef6463278897fcf198d12e42db574"
   },
   "sources": {

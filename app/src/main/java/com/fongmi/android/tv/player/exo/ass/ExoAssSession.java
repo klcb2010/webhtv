@@ -10,7 +10,6 @@ import android.view.Surface;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
-import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.text.CueGroup;
@@ -295,14 +294,7 @@ public final class ExoAssSession implements TextRenderer.Observer {
         if (!enabled || released || ended || stream == null
                 || !(isExternal(stream.format) || isPacketized(stream.format))
                 || !failure.isEmpty() || tunneling || videoFormat == null) return false;
-        Format f = videoFormat;
-        ColorInfo color = f.colorInfo;
-        return f.width > 0 && f.height > 0 && f.rotationDegrees == 0
-                && f.drmInitData == null && f.cryptoType == C.CRYPTO_TYPE_NONE
-                && !MimeTypes.VIDEO_DOLBY_VISION.equals(f.sampleMimeType)
-                && (color == null || color.colorTransfer == C.COLOR_TRANSFER_SDR
-                || color.colorTransfer == Format.NO_VALUE)
-                && (color == null || color.colorSpace != C.COLOR_SPACE_BT2020);
+        return AssVideoPolicy.supports(videoFormat);
     }
 
     private boolean renderableLocked() {
@@ -427,10 +419,8 @@ public final class ExoAssSession implements TextRenderer.Observer {
                 connectedSurfaceEpoch = request.surfaceEpoch;
             }
             long timeMs = AssInput.timeMs(request.positionUs, request.streamOffsetUs, request.textOffsetUs);
-            ColorInfo color = request.video.colorInfo;
-            int space = color == null || color.colorSpace == Format.NO_VALUE
-                    ? (request.video.height <= 576 ? C.COLOR_SPACE_BT601 : C.COLOR_SPACE_BT709) : color.colorSpace;
-            int range = color == null || color.colorRange == Format.NO_VALUE ? C.COLOR_RANGE_LIMITED : color.colorRange;
+            int space = AssVideoPolicy.colorSpace(request.video);
+            int range = AssVideoPolicy.colorRange(request.video);
             double aspect = request.video.pixelWidthHeightRatio > 0 ? request.video.pixelWidthHeightRatio : 1.0;
             lastStartNs = System.nanoTime();
             int result = AssNative.render(handle, timeMs, request.width, request.height,
