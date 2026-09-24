@@ -134,6 +134,27 @@ public final class AssrtSubtitleMatch {
         App.post(() -> persistAndSelectText(pm, disp, fmt), 5000);
     }
 
+
+    /** 与字幕列表 UI 对齐：奥德赛，SRT */
+    private static String trackLabelFor(String display, String format, String fileName) {
+        String base = !TextUtils.isEmpty(display) ? display.trim() : "";
+        if (TextUtils.isEmpty(base) && !TextUtils.isEmpty(fileName)) {
+            base = fileName;
+            int dot = base.lastIndexOf('.');
+            if (dot > 0) base = base.substring(0, dot);
+        }
+        String tag = "SRT";
+        String f = format == null ? "" : format.toLowerCase(Locale.ROOT);
+        String fn = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (f.contains("vtt") || fn.endsWith(".vtt")) tag = "VTT";
+        else if (f.contains("ssa") || f.contains("ass") || fn.endsWith(".ass") || fn.endsWith(".ssa")) tag = "ASS";
+        else if (f.contains("ttml") || fn.endsWith(".ttml")) tag = "TTML";
+        else if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) tag = "SRT";
+        if (!TextUtils.isEmpty(base) && base.toUpperCase(Locale.ROOT).contains(tag)) return base;
+        if (TextUtils.isEmpty(base)) return tag;
+        return base + "，" + tag;
+    }
+
     private static void persistTextTrackSelection(PlayerManager player, String display, String format) {
         try {
             if (player == null) return;
