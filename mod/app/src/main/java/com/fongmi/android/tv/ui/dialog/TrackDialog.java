@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.util.Log;
@@ -225,6 +227,7 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
 
     @Override
     public void onItemClick(Track item) {
+        try { AssrtSubtitleMatch.rememberChosenTrack(player, item); } catch (Throwable ignored) {}
         if (secondarySubtitle) {
             player.setSecondarySubtitleTrack(item);
             dismiss();
