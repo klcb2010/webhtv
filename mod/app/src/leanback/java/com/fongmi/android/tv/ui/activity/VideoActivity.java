@@ -87,6 +87,7 @@ import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.model.SearchProgress;
+import com.fongmi.android.tv.playback.EpisodeProgressStore;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
@@ -3811,6 +3812,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mHistory == null || Setting.isIncognito()) return;
         if (service() != null && isOwner()) {
             updatePlaybackHistoryPosition();
+            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             mHistory.setCreateTime(System.currentTimeMillis());
         }
         if (exit && service() != null) PlaybackEventCollector.get().onStop(player());
@@ -3839,10 +3841,18 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), getFlag().getFlag());
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
+            // 换集前：把当前集进度写入分集缓存
+            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             PlaybackEventCollector.get().onStop(player());
         }
-        mHistory.setPosition(sameEpisode ? mHistory.getPosition() : C.TIME_UNSET);
-        if (!sameEpisode) mHistory.setDuration(C.TIME_UNSET);
+        if (sameEpisode) {
+            mHistory.setPosition(mHistory.getPosition());
+        } else {
+            // 换到新集：先清，再尝试加载该集缓存进度
+            mHistory.setPosition(C.TIME_UNSET);
+            mHistory.setDuration(C.TIME_UNSET);
+            try { EpisodeProgressStore.applyToHistory(mHistory, item); } catch (Throwable ignored) {}
+        }
         mHistory.setVodFlag(getFlag().getFlag());
         mHistory.setVodRemarks(item.getName());
         mHistory.setEpisodeUrl(item.getUrl());

@@ -93,6 +93,7 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.playback.EpisodeProgressStore;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.playback.PlaybackOrientation;
 import com.fongmi.android.tv.player.PlayerHelper;
@@ -4447,6 +4448,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mHistory == null || Setting.isIncognito()) return;
         if (service() != null && isOwner()) {
             updatePlaybackHistoryPosition();
+            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             mHistory.setCreateTime(System.currentTimeMillis());
         }
         if (exit && service() != null) PlaybackEventCollector.get().onStop(player());
@@ -4477,10 +4479,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), vodFlag);
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
+            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             PlaybackEventCollector.get().onStop(player());
         }
-        mHistory.setPosition(sameEpisode ? mHistory.getPosition() : C.TIME_UNSET);
-        if (!sameEpisode) mHistory.setDuration(C.TIME_UNSET);
+        if (sameEpisode) {
+            mHistory.setPosition(mHistory.getPosition());
+        } else {
+            mHistory.setPosition(C.TIME_UNSET);
+            mHistory.setDuration(C.TIME_UNSET);
+            try { EpisodeProgressStore.applyToHistory(mHistory, item); } catch (Throwable ignored) {}
+        }
         mHistory.setVodFlag(vodFlag);
         mHistory.setVodRemarks(item.getName());
         mHistory.setEpisodeUrl(item.getUrl());
