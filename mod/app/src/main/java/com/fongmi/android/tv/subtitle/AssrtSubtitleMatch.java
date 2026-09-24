@@ -327,6 +327,72 @@ public final class AssrtSubtitleMatch {
         }
     }
 
+
+    /** 从缓存解析字幕文件信息，未命中返回 null */
+    public static String[] loadCachedSubPayload(History history, Episode episode) {
+        try {
+            for (String key : subCacheKeys(history, episode)) {
+                String v = Prefers.getString(key);
+                if (!TextUtils.isEmpty(v)) {
+                    String[] parts = v.split("\u0001", -1);
+                    if (parts.length >= 1 && !TextUtils.isEmpty(parts[0]) && new File(parts[0]).isFile()) {
+                        return parts;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * 起播前挂到 Result.subs，避免先播默认轨再 setSub 被轨道恢复盖掉。
+     * Result.setSubs 仅在空列表时生效，故用反射强制写入。
+     */
+    public static void attachRememberedSub(Object result, History history, Episode episode) {
+        if (result == null) return;
+        if (history == null) history = sLastHistory;
+        if (episode == null) episode = sLastEpisode;
+        String[] parts = loadCachedSubPayload(history, episode);
+        if (parts == null) return;
+        try {
+            File file = new File(parts[0]);
+            String name = parts.length > 1 && !TextUtils.isEmpty(parts[1]) ? parts[1] : file.getName();
+            String lang = parts.length > 2 ? parts[2] : "";
+            String format = parts.length > 3 ? parts[3] : "";
+            if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+            Sub sub = Sub.create(name, file.getAbsolutePath(), lang, format);
+            sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+            java.util.ArrayList<Sub> list = new java.util.ArrayList<>();
+            list.add(sub);
+            try {
+                java.lang.reflect.Field f = result.getClass().getDeclaredField("subs");
+                f.setAccessible(true);
+                f.set(result, list);
+            } catch (Throwable e) {
+                try {
+                    java.lang.reflect.Method m = result.getClass().getMethod("setSubs", java.util.List.class);
+                    m.invoke(result, list);
+                } catch (Throwable ignored) {
+                }
+            }
+            // 清掉「禁用字幕」记忆，防止 restoreTrack 关掉外挂
+            try {
+                String hk = history != null ? history.getKey() : null;
+                if (!TextUtils.isEmpty(hk)) {
+                    Track track = new Track(C.TRACK_TYPE_TEXT, name, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
+                    track.setKey(hk);
+                    track.setSelected(true);
+                    track.save();
+                }
+            } catch (Throwable ignored) {
+            }
+            Log.i(TAG, "attachRememberedSub " + name);
+        } catch (Throwable e) {
+            Log.w(TAG, "attachRememberedSub failed: " + e.getMessage());
+        }
+    }
+
     public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         try {
             String raw = null;
