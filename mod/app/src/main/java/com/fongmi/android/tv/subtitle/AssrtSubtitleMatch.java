@@ -146,19 +146,24 @@ public final class AssrtSubtitleMatch {
             try {
                 PlayerManager player = playerProvider.get();
                 if (player == null || player.isEmpty()) {
-                    if (attempt < 20) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+                    if (attempt < 24) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
                     return;
                 }
-                if (tryRestoreSub(activity, history, episode, playerProvider)) {
+                // 多试几次：历史刚进时 episode 可能尚未对齐
+                if (tryRestoreSub(activity, history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode, playerProvider)) {
+                    return;
+                }
+                if (attempt < 6) {
+                    waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
                     return;
                 }
                 if (!Setting.isSubtitleAutoMatchEnabled()) return;
                 if (TextUtils.isEmpty(keyword)) return;
                 Task.execute(() -> doAutoMatch(activity, playerProvider, keyword, gen));
             } catch (Throwable e) {
-                if (attempt < 20) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+                if (attempt < 24) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
             }
-        }, attempt == 0 ? 800 : 500);
+        }, attempt == 0 ? 600 : 400);
     }
 
     /**
@@ -218,18 +223,39 @@ public final class AssrtSubtitleMatch {
         return e;
     }
 
-    private static String subCacheKey(History history, Episode episode) {
-        String k = history != null ? String.valueOf(history.getKey()) : "";
-        String e = "";
-        try {
-            if (episode != null && episode.getName() != null) e = episode.getName().trim();
-            else if (history != null && history.getVodRemarks() != null) e = history.getVodRemarks().trim();
-        } catch (Throwable ignored) {
-        }
+
+    private static String subCacheKey(String historyKey, String episodePart) {
+        String k = historyKey == null ? "" : historyKey;
+        String e = episodePart == null ? "" : episodePart.trim();
         return "ext_sub_" + Util.md5(k + "|" + e);
     }
 
-    /** 记住当前片+集选用的外挂字幕，历史重进可恢复 */
+    /** 同一部片可能集名/备注不一致，写入多个键方便重进命中 */
+    private static java.util.List<String> subCacheKeys(History history, Episode episode) {
+        java.util.LinkedHashSet<String> keys = new java.util.LinkedHashSet<>();
+        String hk = "";
+        try {
+            if (history != null && history.getKey() != null) hk = history.getKey();
+        } catch (Throwable ignored) {
+        }
+        String epName = "";
+        String remarks = "";
+        try {
+            if (episode != null && episode.getName() != null) epName = episode.getName().trim();
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (history != null && history.getVodRemarks() != null) remarks = history.getVodRemarks().trim();
+        } catch (Throwable ignored) {
+        }
+        if (!epName.isEmpty()) keys.add(subCacheKey(hk, epName));
+        if (!remarks.isEmpty()) keys.add(subCacheKey(hk, remarks));
+        keys.add(subCacheKey(hk, "")); // 仅按片
+        // 兼容旧版单键
+        keys.add(subCacheKey(history != null ? String.valueOf(history.getKey()) : "", epName));
+        return new java.util.ArrayList<>(keys);
+    }
+
     public static void rememberSub(History history, Episode episode, File file, String name, String lang, String format) {
         try {
             if (file == null || !file.isFile()) return;
@@ -239,19 +265,35 @@ public final class AssrtSubtitleMatch {
                     + (name == null ? "" : name) + "\u0001"
                     + (lang == null ? "" : lang) + "\u0001"
                     + (format == null ? "" : format);
-            Prefers.put(subCacheKey(history, episode), payload);
+            for (String key : subCacheKeys(history, episode)) {
+                Prefers.put(key, payload);
+            }
+            Log.i(TAG, "remember sub keys=" + subCacheKeys(history, episode).size() + " file=" + file.getName());
         } catch (Throwable ignored) {
         }
     }
 
     public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         try {
-            String raw = Prefers.getString(subCacheKey(history, episode));
-            if (TextUtils.isEmpty(raw)) return false;
+            String raw = null;
+            for (String key : subCacheKeys(history, episode)) {
+                String v = Prefers.getString(key);
+                if (!TextUtils.isEmpty(v)) {
+                    raw = v;
+                    break;
+                }
+            }
+            if (TextUtils.isEmpty(raw)) {
+                Log.i(TAG, "restore miss no cache");
+                return false;
+            }
             String[] parts = raw.split("\u0001", -1);
             if (parts.length < 1 || TextUtils.isEmpty(parts[0])) return false;
             File file = new File(parts[0]);
-            if (!file.isFile()) return false;
+            if (!file.isFile()) {
+                Log.w(TAG, "restore miss file gone " + parts[0]);
+                return false;
+            }
             String name = parts.length > 1 ? parts[1] : file.getName();
             String lang = parts.length > 2 ? parts[2] : "";
             String format = parts.length > 3 ? parts[3] : "";
@@ -259,6 +301,24 @@ public final class AssrtSubtitleMatch {
             PlayerManager player = playerProvider == null ? null : playerProvider.get();
             if (player == null || player.isEmpty()) return false;
             applyToPlayer(player, file, name, lang, format);
+            // 起播后轨道恢复可能把默认内嵌轨抢回去，延迟再挂一次
+            final File f2 = file;
+            final String n2 = name, l2 = lang, fmt2 = format;
+            final PlayerProvider pp = playerProvider;
+            com.fongmi.android.tv.App.post(() -> {
+                try {
+                    PlayerManager p2 = pp.get();
+                    if (p2 != null && !p2.isEmpty()) applyToPlayer(p2, f2, n2, l2, fmt2);
+                } catch (Throwable ignored) {
+                }
+            }, 1200);
+            com.fongmi.android.tv.App.post(() -> {
+                try {
+                    PlayerManager p2 = pp.get();
+                    if (p2 != null && !p2.isEmpty()) applyToPlayer(p2, f2, n2, l2, fmt2);
+                } catch (Throwable ignored) {
+                }
+            }, 2800);
             Log.i(TAG, "restored sub " + name + " path=" + file.getAbsolutePath());
             return true;
         } catch (Throwable e) {
@@ -267,77 +327,6 @@ public final class AssrtSubtitleMatch {
         }
     }
 
-    public static void updateKeyword(String title, String episode) {
-        String k = formatKeyword(title, episode);
-        if (!TextUtils.isEmpty(k)) sLastKeyword = k;
-    }
-
-    public static void updateKeyword(String keyword) {
-        if (!TextUtils.isEmpty(keyword)) sLastKeyword = keyword.trim();
-    }
-
-    public static String lastKeyword() {
-        return sLastKeyword == null ? "" : sLastKeyword;
-    }
-
-    private static void waitPlayingThenMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen, int attempt) {
-        if (gen != GEN.get()) return;
-        long delayMs = attempt == 0 ? 2000L : 1000L;
-        Task.schedule(() -> {
-            if (gen != GEN.get()) return;
-            App.post(() -> {
-                if (gen != GEN.get() || activity.isFinishing()) return;
-                PlayerManager player = playerProvider.get();
-                boolean ready = player != null && !player.isEmpty();
-                if (!ready) {
-                    if (attempt < 20) waitPlayingThenMatch(activity, playerProvider, keyword, gen, attempt + 1);
-                    else Log.i(TAG, "auto match give up, player not ready keyword=" + keyword);
-                    return;
-                }
-                Task.execute(() -> doAutoMatch(activity, playerProvider, keyword, gen));
-            });
-        }, delayMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-    }
-
-    private static void doAutoMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen) {
-        try {
-            Map<String, Item> map = new LinkedHashMap<>();
-            for (String q : buildQueriesFromKeyword(keyword)) {
-                for (Item it : searchAllSources(q)) {
-                    String key = it.provider + ":" + it.id;
-                    if (!map.containsKey(key)) map.put(key, it);
-                }
-            }
-            List<Item> items = new ArrayList<>(map.values());
-            if (items.isEmpty()) {
-                Log.i(TAG, "auto match empty keyword=" + keyword);
-                return;
-            }
-            if (gen != GEN.get()) return;
-            Item hit = pickBest(items);
-            File file = downloadItem(hit);
-            if (file == null || !file.isFile()) {
-                Log.w(TAG, "auto resolve failed " + hit.label());
-                return;
-            }
-            if (gen != GEN.get()) return;
-            final File subFile = file;
-            final Item applied = hit;
-            final String display = displayNameForKeyword(applied, keyword);
-            App.post(() -> {
-                if (gen != GEN.get() || activity.isFinishing()) return;
-                PlayerManager player = playerProvider.get();
-                if (player == null || player.isEmpty()) return;
-                String format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(applied.name);
-                if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(subFile.getName());
-                applyToPlayer(player, subFile, display, applied.lang, format);
-                Notify.show(activity.getString(R.string.subtitle_auto_match_hit, display));
-                Log.i(TAG, "auto applied " + display + " src=" + applied.label());
-            });
-        } catch (Exception e) {
-            Log.w(TAG, "auto match failed: " + e.getMessage());
-        }
-    }
 
     private static List<String> buildQueriesFromKeyword(String keyword) {
         List<String> qs = new ArrayList<>();
