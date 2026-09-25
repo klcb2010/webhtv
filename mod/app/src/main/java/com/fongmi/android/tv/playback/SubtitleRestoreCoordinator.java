@@ -81,12 +81,20 @@ public final class SubtitleRestoreCoordinator {
             } catch (Throwable ignored) {
             }
             Sub durable = ensureDurable(sub);
-            String episodeUrl = safe(h.getEpisodeUrl());
+            // 稳定集标识：优先备注/集名，避免把可变播放 URL 写进 episodeUrl
+            String episodeUrl = stableEpisodeId(h);
             SubtitleSource source = SubtitleSource.of(durable, episodeUrl);
             if (source == null) return;
             String json = SubtitleSource.encode(source);
             putCommit(cacheKey(h.getKey(), episodeUrl), json);
             putCommit(cacheKey(h.getKey(), ""), json);
+            // 兼容旧逻辑：若 History 仍带 play URL，也写一份（恢复时会被 url-rotated 放过）
+            try {
+                String play = safe(h.getEpisodeUrl());
+                if (!play.isEmpty() && !play.equals(episodeUrl)) {
+                    putCommit(cacheKey(h.getKey(), play), json);
+                }
+            } catch (Throwable ignored) {}
             try {
                 String vod = safe(h.getVodName());
                 String remarks = safe(h.getVodRemarks());
@@ -118,9 +126,11 @@ public final class SubtitleRestoreCoordinator {
             if (incognito instanceof Boolean && (Boolean) incognito) return;
         } catch (Throwable ignored) {
         }
-        String episodeUrl = safe(history.getEpisodeUrl());
+        String episodeUrl = stableEpisodeId(history);
+        String playUrl = safe(history.getEpisodeUrl());
         SubtitleSource source = load(history.getKey(), episodeUrl);
         if (source == null) source = load(history.getKey(), "");
+        if (source == null && !playUrl.isEmpty()) source = load(history.getKey(), playUrl);
         if (source == null) {
             try {
                 source = load("vod:" + safe(history.getVodName()), safe(history.getVodRemarks()));
@@ -129,6 +139,10 @@ public final class SubtitleRestoreCoordinator {
         }
         if (source == null) source = load("last", "");
         SubtitleRestorePolicy.Decision d = SubtitleRestorePolicy.decide(source, episodeUrl, false);
+        // 播放 URL 变化时 policy 已放行；若仍 skip episode-changed，同 key 强制恢复
+        if (!d.restore() && "episode-changed".equals(d.reason()) && source != null && source.isUsable()) {
+            d = SubtitleRestorePolicy.Decision.inject("episode-changed-override");
+        }
         if (d.clear()) {
             clear(history.getKey(), episodeUrl);
             clear(history.getKey(), "");
