@@ -135,7 +135,7 @@ if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi
 
-  else
+
     cp -f "$PROGUARD_SRC" "$PROGUARD_DST"
     echo "[mod] installed proguard-rules.pro for subtitle"
   fi
