@@ -129,13 +129,15 @@ public final class AssrtSubtitleMatch {
             rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
         } catch (Throwable ignored) {
         }
-        // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
+        // setSub 后立即 + 延迟强制选外挂，避免内嵌轨抢回
         final String disp = trackLabel;
         final String fmt = format;
         final PlayerManager pm = player;
-        // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 600);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 2500);
+        sForceSettled = false;
+        persistAndSelectText(pm, disp, fmt);
+        App.post(() -> { sForceSettled = false; persistAndSelectText(pm, disp, fmt); }, 400);
+        App.post(() -> { sForceSettled = false; persistAndSelectText(pm, disp, fmt); }, 1200);
+        App.post(() -> { sForceSettled = false; persistAndSelectText(pm, disp, fmt); }, 2800);
     }
 
 
@@ -255,7 +257,7 @@ public final class AssrtSubtitleMatch {
                     }
                 }
             }
-            if (bestGroup == null || bestIndex < 0 || bestScore < 50) {
+            if (bestGroup == null || bestIndex < 0 || bestScore < 10) {
                 Log.i(TAG, "forceSelect skip score=" + bestScore + " wantExt=" + wantExternal + " name=" + remembered);
                 return false;
             }
