@@ -385,8 +385,7 @@ for rel in [
         anchor = "    protected void onTracksChanged() {"
         if anchor not in t:
             fail(f"{rel}: onTracksChanged anchor not found")
-        method = '''    @Override
-    protected void onSubtitleSelected(Sub sub) {
+        method = '''    protected void onSubtitleSelected(Sub sub) {
         if (SubtitleRestoreCoordinator.remember(mHistory, sub)) syncHistory();
     }
 
