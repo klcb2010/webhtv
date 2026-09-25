@@ -720,6 +720,17 @@ public final class AssrtSubtitleMatch {
         return sLastKeyword == null ? "" : sLastKeyword;
     }
 
+
+    private static List<String> buildQueriesFromKeyword(String keyword) {
+        List<String> qs = new ArrayList<>();
+        if (!TextUtils.isEmpty(keyword)) qs.add(keyword.trim());
+        String cleaned = keyword == null ? "" : keyword.trim();
+        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
+        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
+        if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword == null ? "" : keyword.trim())) qs.add(cleaned);
+        return qs;
+    }
+
     private static void doAutoMatch(Activity activity, PlayerProvider playerProvider, String keyword, int gen) {
         try {
             Map<String, Item> map = new LinkedHashMap<>();
