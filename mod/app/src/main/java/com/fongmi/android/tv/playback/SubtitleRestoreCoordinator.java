@@ -330,6 +330,23 @@ public final class SubtitleRestoreCoordinator {
         return PREFIX + md5((historyKey == null ? "" : historyKey) + "\u0001" + (episodeUrl == null ? "" : episodeUrl));
     }
 
+
+    /** 稳定集标识：备注优先；避免把可变播放 URL 当 episode 键 */
+    private static String stableEpisodeId(History h) {
+        if (h == null) return "";
+        try {
+            String remarks = safe(h.getVodRemarks());
+            if (!remarks.isEmpty() && !SubtitleRestorePolicy.looksLikePlayUrl(remarks)) return remarks;
+        } catch (Throwable ignored) {
+        }
+        try {
+            String ep = safe(h.getEpisodeUrl());
+            if (!ep.isEmpty() && !SubtitleRestorePolicy.looksLikePlayUrl(ep) && ep.length() < 64) return ep;
+        } catch (Throwable ignored) {
+        }
+        return "";
+    }
+
     private static String safe(String s) {
         return s == null ? "" : s.trim();
     }
