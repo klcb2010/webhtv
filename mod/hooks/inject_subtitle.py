@@ -49,12 +49,7 @@ SHOW = r"""
 
 
 def inject_set_player(t: str) -> str:
-    """Auto-restore disabled."""
-    return t
-
-
-def inject_set_player_DISABLED(t: str) -> str:
-    """Before startPlayer in setPlayer(Result), attach remembered external sub."""
+    """Before startPlayer in setPlayer(Result), attach remembered external sub (light)."""
     if "attachRememberedSub" in t and "setPlayer" in t:
         # already
         pass
@@ -169,7 +164,14 @@ for rel in [
             )
 
     def add_ready(match):
-        return match.group(0)
+        s = match.group(0)
+        if "AssrtSubtitleMatch.onPlayerReady" in s:
+            return s
+        extra = (
+            "\n        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : \"\", getEpisode() != null ? getEpisode().getName() : \"\"); } catch (Throwable ignored) {}"
+            "\n        AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player());"
+        )
+        return s + extra
 
     t = re.sub(
         r"startPlayer\(getHistoryKey\(\), result, isUseParse\(\), getSite\(\)\.getTimeout\(\), buildMetadata\(\), mInitialPlaybackPosition\);",

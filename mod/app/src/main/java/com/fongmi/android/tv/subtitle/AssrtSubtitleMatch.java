@@ -589,9 +589,17 @@ public final class AssrtSubtitleMatch {
 
 
     /** 轨道列表变化时调用（有内嵌+外挂时外挂常晚到，需多次尝试） */
+
     public static void onTracksReady(PlayerManager player) {
-        // 自动恢复已关闭
+        try {
+            if (player == null || player.isEmpty()) return;
+            // 仅软选：SOFT_RESTORE_ONLY 下用 setTrack，不 Override
+            selectPendingIfAny(player);
+        } catch (Throwable e) {
+            Log.w(TAG, "onTracksReady: " + e.getMessage());
+        }
     }
+
 
     public static void selectPendingIfAny(PlayerManager player) {
         try {
@@ -899,17 +907,90 @@ public final class AssrtSubtitleMatch {
         return null;
     }
 
+
     /**
-     * 起播前挂到 Result.subs，避免先播默认轨再 setSub 被轨道恢复盖掉。
-     * Result.setSubs 仅在空列表时生效，故用反射强制写入。
+     * 起播前挂到 Result.subs：让外挂出现在字幕列表，并尽量作为默认轨。
+     * 不碰 PlaySpec / MediaSource，避免有声无画。
      */
     public static void attachRememberedSub(Object result, History history, Episode episode) {
-        // 自动恢复已关闭
+        if (result == null) return;
+        if (history == null) history = sLastHistory;
+        if (episode == null) episode = sLastEpisode;
+        String[] parts = loadCachedSubPayload(history, episode);
+        if (parts == null) return;
+        try {
+            File file = new File(parts[0]);
+            if (!file.isFile()) return;
+            String name = parts.length > 1 && !TextUtils.isEmpty(parts[1]) ? parts[1] : file.getName();
+            String lang = parts.length > 2 ? parts[2] : "";
+            String format = parts.length > 3 ? parts[3] : "";
+            if (TextUtils.isEmpty(format)) {
+                format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+            }
+            String label = trackLabelFor(name, format, file.getName());
+            sPreferExternal = true;
+            sPendingSelectName = label;
+            sPendingSelectFormat = format;
+            sForceSettled = false;
+            Sub sub = Sub.create(label, file.getAbsolutePath(), lang, format);
+            sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+            java.util.ArrayList<Sub> list = new java.util.ArrayList<>();
+            list.add(sub);
+            try {
+                java.lang.reflect.Field f = result.getClass().getDeclaredField("subs");
+                f.setAccessible(true);
+                f.set(result, list);
+            } catch (Throwable e) {
+                try {
+                    java.lang.reflect.Method m = result.getClass().getMethod("setSubs", java.util.List.class);
+                    m.invoke(result, list);
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                String hk = history != null ? history.getKey() : null;
+                if (!TextUtils.isEmpty(hk)) {
+                    Track track = new Track(C.TRACK_TYPE_TEXT, label, TextUtils.isEmpty(format) ? "application/x-subrip" : format);
+                    track.setKey(hk);
+                    track.setSelected(true);
+                    track.save();
+                }
+            } catch (Throwable ignored) {
+            }
+            Log.i(TAG, "attachRememberedSub " + label);
+        } catch (Throwable e) {
+            Log.w(TAG, "attachRememberedSub failed: " + e.getMessage());
+        }
     }
 
+
+
+    /** 轻量恢复：缓存文件仍在则 setSub；不注入 PlaySpec。 */
     public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
-        return false; // 自动恢复已关闭
+        try {
+            if (history == null) history = sLastHistory;
+            if (episode == null) episode = sLastEpisode;
+            String[] parts = loadCachedSubPayload(history, episode);
+            if (parts == null) return false;
+            File file = new File(parts[0]);
+            if (!file.isFile()) return false;
+            PlayerManager player = playerProvider != null ? playerProvider.get() : null;
+            if (player == null || player.isEmpty()) return false;
+            String name = parts.length > 1 && !TextUtils.isEmpty(parts[1]) ? parts[1] : file.getName();
+            String lang = parts.length > 2 ? parts[2] : "";
+            String format = parts.length > 3 ? parts[3] : "";
+            if (TextUtils.isEmpty(format)) {
+                format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+            }
+            applyToPlayer(player, file, name, lang, format);
+            Log.i(TAG, "tryRestoreSub applied " + name);
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "tryRestoreSub: " + e.getMessage());
+            return false;
+        }
     }
+
 
     public static String displayNameForKeyword(Item item, String keyword) {
         if (!TextUtils.isEmpty(keyword)) return keyword.trim();
