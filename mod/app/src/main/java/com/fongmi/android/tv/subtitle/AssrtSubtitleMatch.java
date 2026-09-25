@@ -371,6 +371,52 @@ public final class AssrtSubtitleMatch {
     }
 
 
+
+    /** 判断当前播放器是否已经选中了记忆中的外挂字幕，避免恢复流程重复 setSub。 */
+    private static boolean isRememberedSelectionActive(PlayerManager player) {
+        try {
+            if (player == null) return false;
+            Tracks tracks = player.getCurrentTracks();
+            if (tracks == null || tracks.isEmpty()) return false;
+
+            String remembered = !TextUtils.isEmpty(sPendingSelectName)
+                    ? sPendingSelectName
+                    : loadRememberedTrackName(sLastHistory, sLastEpisode);
+            if (TextUtils.isEmpty(remembered)) return false;
+
+            String r = remembered.trim();
+            String rBase = r;
+            int comma = Math.max(r.lastIndexOf('，'), r.lastIndexOf(','));
+            if (comma > 0) rBase = r.substring(0, comma).trim();
+
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+                for (int i = 0; i < group.length; i++) {
+                    if (!group.isTrackSelected(i)) continue;
+                    Format f = group.getTrackFormat(i);
+                    if (f == null) continue;
+                    String label = f.label == null ? "" : f.label.trim();
+                    String id = f.id == null ? "" : String.valueOf(f.id).trim();
+                    String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
+
+                    boolean nameMatch = r.equalsIgnoreCase(label)
+                            || rBase.equalsIgnoreCase(label)
+                            || r.equalsIgnoreCase(id)
+                            || rBase.equalsIgnoreCase(id)
+                            || (!TextUtils.isEmpty(rBase) && label.toLowerCase(Locale.ROOT).contains(rBase.toLowerCase(Locale.ROOT)));
+                    boolean external = mime.contains("subrip")
+                            || mime.contains("vtt")
+                            || mime.contains("ssa")
+                            || mime.contains("ttml")
+                            || mime.contains("text/");
+                    if (nameMatch && external) return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     private static boolean selectExternalFromCurrentTracks(PlayerManager player, String display) {
         try {
             Tracks tracks = player.getCurrentTracks();
