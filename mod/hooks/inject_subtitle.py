@@ -67,7 +67,7 @@ def inject_set_player(t: str) -> str:
         if pat in t:
             t = t.replace(
                 pat,
-                "        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}\n        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 800); } catch (Throwable ignored) {}\n        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 2000); } catch (Throwable ignored) {}\n        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 4000); } catch (Throwable ignored) {}\n" + pat,
+                "        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}\n" + pat,
                 1,
             )
             return t
@@ -82,7 +82,7 @@ def inject_set_player(t: str) -> str:
     abs_idx = m.start() + idx
     line_start = t.rfind("\n", 0, abs_idx) + 1
     indent = re.match(r"[ \t]*", t[line_start:]).group(0)
-    insert = f"{indent}try {{ AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); }} catch (Throwable ignored) {{}}\n{indent}try {{ com.fongmi.android.tv.App.post(() -> {{ try {{ AssrtSubtitleMatch.selectPendingIfAny(player()); }} catch (Throwable ignored) {{}} }}, 800); }} catch (Throwable ignored) {{}}\n"
+    insert = f"{indent}try {{ AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); }} catch (Throwable ignored) {{}}\n"
     t = t[:line_start] + insert + t[line_start:]
     return t
 
