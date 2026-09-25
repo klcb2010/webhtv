@@ -263,6 +263,21 @@ public final class AiRecommendService {
                 suffix = m.group(3) == null ? "" : m.group(3).trim();
             }
         }
+        if (prefix == null || cur < 1) {
+            // 末尾数字季：闪电侠3 / 绿箭侠 第3季 已覆盖；补「名称+数字」
+            m = java.util.regex.Pattern.compile("^(.*?)[\\s·\\-_]*([0-9]{1,2})[\\s·\\-_]*$").matcher(t);
+            if (m.find()) {
+                String cand = m.group(1).trim();
+                int n;
+                try { n = Integer.parseInt(m.group(2)); } catch (Exception e) { n = -1; }
+                if (n >= 1 && n <= 20 && cand.length() >= 2) {
+                    prefix = cand;
+                    cur = n;
+                    unit = "季";
+                    suffix = "";
+                }
+            }
+        }
         if (prefix == null || prefix.isEmpty() || cur < 1) return out;
         int ahead = Math.max(1, Math.min(maxSeasonsAhead, 6));
         for (int i = 1; i <= ahead; i++) {

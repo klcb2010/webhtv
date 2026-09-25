@@ -16,16 +16,33 @@ public final class SubtitleRestorePolicy {
             this.reason = reason;
         }
 
-        public boolean restore() { return restore; }
-        public boolean clear() { return clear; }
-        public String reason() { return reason; }
+        public boolean restore() {
+            return restore;
+        }
 
-        static Decision inject() { return new Decision(true, false, "restore"); }
-        static Decision drop(String reason) { return new Decision(false, true, reason); }
-        static Decision skip(String reason) { return new Decision(false, false, reason); }
+        public boolean clear() {
+            return clear;
+        }
+
+        public String reason() {
+            return reason;
+        }
+
+        static Decision inject() {
+            return new Decision(true, false, "restore");
+        }
+
+        static Decision drop(String reason) {
+            return new Decision(false, true, reason);
+        }
+
+        static Decision skip(String reason) {
+            return new Decision(false, false, reason);
+        }
     }
 
-    private SubtitleRestorePolicy() {}
+    private SubtitleRestorePolicy() {
+    }
 
     public static Decision decide(SubtitleSource source, String episodeUrl, boolean crossSource) {
         return decide(source, episodeUrl, crossSource, path -> new File(path).isFile());

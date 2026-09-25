@@ -17,13 +17,12 @@ import java.nio.channels.FileChannel;
 import java.security.MessageDigest;
 
 /**
- * 对齐 Silent docs/SUB-EXT-HISTORY-external-subtitle-restore.md：
+ * 对齐 Silent SUB-EXT-HISTORY：
  * <ul>
- *   <li>写入：所有外挂最终都走 PlayerManager.setSub → onUserSetSub</li>
- *   <li>恢复：setMediaItem 之前把 Sub 注入 PlaySpec.subs（不走 setSub 重启分支）</li>
- *   <li>选中：同时 priming Assrt 的 preferExternal / pendingName，由 onTracksReady 强制 Override</li>
+ *   <li>写入：PlayerManager.setSub → onUserSetSub（记文件路径，复制到 filesDir/sub_remember）</li>
+ *   <li>恢复：VideoActivity.setPlayer → prepareRestore；setMediaItem 前 injectPending 写入 PlaySpec.subs</li>
  * </ul>
- * 存储用 Prefers（避免 Room 迁移风险），文件复制到 filesDir/sub_remember。
+ * 存储用 Prefers JSON，避免 History Room 迁移。
  */
 public final class SubtitleRestoreCoordinator {
 
@@ -32,8 +31,6 @@ public final class SubtitleRestoreCoordinator {
 
     private static volatile History sBoundHistory;
     private static volatile Sub sPendingRestore;
-    private static volatile String sPendingName;
-    private static volatile String sPendingFormat;
 
     private SubtitleRestoreCoordinator() {
     }
@@ -44,23 +41,10 @@ public final class SubtitleRestoreCoordinator {
 
     public static void clearBind() {
         sBoundHistory = null;
+        sPendingRestore = null;
     }
 
-    public static Sub peekPending() {
-        return sPendingRestore;
-    }
-
-    public static String peekPendingName() {
-        return sPendingName;
-    }
-
-    public static String peekPendingFormat() {
-        return sPendingFormat;
-    }
-
-    /**
-     * PlayerManager.setSub 唯一收口：记住当前外挂。
-     */
+    /** PlayerManager.setSub 唯一写入收口 */
     public static void onUserSetSub(Sub sub) {
         try {
             if (sub == null || TextUtils.isEmpty(sub.getUrl())) return;
@@ -85,12 +69,11 @@ public final class SubtitleRestoreCoordinator {
                 if (!TextUtils.isEmpty(vod)) putCommit(cacheKey("vod:" + vod, remarks), json);
             } catch (Throwable ignored) {
             }
-            // 同步 Assrt 侧文件缓存，保证 attachRememberedSub / tryRestore 也能命中
+            // 同步 Assrt 文件缓存 + 选中偏好
             try {
                 Class<?> assrt = Class.forName("com.fongmi.android.tv.subtitle.AssrtSubtitleMatch");
-                Method m = assrt.getMethod("rememberSubFromCoordinator",
-                        History.class, String.class, String.class, String.class, String.class);
-                m.invoke(null, h, durable.getUrl(), durable.getName(), durable.getLang(), durable.getFormat());
+                assrt.getMethod("rememberSubFromCoordinator", History.class, String.class, String.class, String.class, String.class)
+                        .invoke(null, h, durable.getUrl(), durable.getName(), durable.getLang(), durable.getFormat());
             } catch (Throwable ignored) {
             }
             Log.i(TAG, "remember setSub name=" + durable.getName() + " ep=" + episodeUrl);
@@ -99,14 +82,10 @@ public final class SubtitleRestoreCoordinator {
         }
     }
 
-    /**
-     * 起播前由 VideoActivity 调用：从 Prefers 装载并登记 pending。
-     * 同时 priming Assrt 选轨状态，避免只进列表不选中。
-     */
+    /** 起播前由 VideoActivity 调用：装载并登记 pending */
     public static void prepareRestore(History history) {
+        if (history != null) sBoundHistory = history;
         sPendingRestore = null;
-        sPendingName = null;
-        sPendingFormat = null;
         if (history == null) return;
         try {
             Class<?> setting = Class.forName("com.fongmi.android.tv.setting.Setting");
@@ -136,32 +115,20 @@ public final class SubtitleRestoreCoordinator {
         }
         Sub sub = source.toSub();
         if (sub == null) return;
-        // 本地文件再确认一次存在；不存在则 drop
-        if (!source.isRemote()) {
-            File f = new File(source.getUrl());
-            if (!f.isFile()) {
-                clear(history.getKey(), episodeUrl);
-                clear(history.getKey(), "");
-                Log.i(TAG, "prepareRestore file missing, cleared");
-                return;
-            }
-        }
         sPendingRestore = sub;
-        sPendingName = sub.getName();
-        sPendingFormat = sub.getFormat();
-        // 关键 Assrt 状态：历史重进后 onTracksReady 才能强制选外挂
+        // 通知 Assrt：有外挂待选，历史重进强制选中
         try {
             Class<?> assrt = Class.forName("com.fongmi.android.tv.subtitle.AssrtSubtitleMatch");
-            Method prime = assrt.getMethod("primeExternalPreference", String.class, String.class);
-            prime.invoke(null, sub.getName(), sub.getFormat());
+            assrt.getMethod("primeExternalPreference", String.class, String.class)
+                    .invoke(null, sub.getName(), sub.getFormat());
         } catch (Throwable ignored) {
         }
         Log.i(TAG, "prepareRestore pending name=" + sub.getName() + " url=" + sub.getUrl());
     }
 
     /**
-     * 在 setMediaItem / prepareMpvOutputForNewItem / start 开头调用。
-     * 把 pending 注入当前 PlaySpec；注入成功才消费 pending（失败保留，便于重试）。
+     * setMediaItem / prepareMpv / start 前调用。
+     * 成功注入才消费 pending；失败保留以便重试。
      */
     public static void injectPendingIntoPlayerManager(Object playerManager) {
         Sub sub = sPendingRestore;
@@ -175,7 +142,7 @@ public final class SubtitleRestoreCoordinator {
             specField.setAccessible(true);
             Object spec = specField.get(playerManager);
             if (spec == null) {
-                Log.w(TAG, "spec is null, cannot inject yet");
+                Log.w(TAG, "spec is null, cannot inject");
                 return;
             }
             Method setSub = null;
@@ -190,12 +157,46 @@ public final class SubtitleRestoreCoordinator {
                 return;
             }
             setSub.invoke(spec, sub);
-            // 成功才消费，避免 prepareMpv 早退导致丢失
-            sPendingRestore = null;
+            sPendingRestore = null; // 成功才消费
             Log.i(TAG, "injected into PlaySpec name=" + sub.getName());
         } catch (Throwable e) {
             Log.w(TAG, "inject failed: " + e.getMessage());
         }
+    }
+
+    public static Sub peekPending() {
+        return sPendingRestore;
+    }
+
+    public static String peekPendingName() {
+        return sPendingRestore != null ? sPendingRestore.getName() : "";
+    }
+
+    public static String peekPendingFormat() {
+        return sPendingRestore != null ? sPendingRestore.getFormat() : "";
+    }
+
+    public static boolean remember(History history, Sub sub) {
+        History prev = sBoundHistory;
+        if (history != null) sBoundHistory = history;
+        try {
+            onUserSetSub(sub);
+            return true;
+        } finally {
+            if (history != null) sBoundHistory = prev != null ? prev : history;
+        }
+    }
+
+    public static boolean remember(String historyKey, String episodeUrl, Sub sub) {
+        if (sub == null) return false;
+        onUserSetSub(sub);
+        return true;
+    }
+
+    public static Sub restore(History history, Object player, Object result) {
+        prepareRestore(history);
+        if (player != null) injectPendingIntoPlayerManager(player);
+        return sPendingRestore;
     }
 
     private static Field findField(Class<?> c, String name) {
@@ -274,28 +275,5 @@ public final class SubtitleRestoreCoordinator {
         } catch (Throwable e) {
             return Integer.toHexString((input == null ? "" : input).hashCode());
         }
-    }
-
-    public static boolean remember(History history, Sub sub) {
-        History prev = sBoundHistory;
-        if (history != null) sBoundHistory = history;
-        try {
-            onUserSetSub(sub);
-            return true;
-        } finally {
-            if (history != null) sBoundHistory = prev != null ? prev : history;
-        }
-    }
-
-    public static boolean remember(String historyKey, String episodeUrl, Sub sub) {
-        if (sub == null) return false;
-        onUserSetSub(sub);
-        return true;
-    }
-
-    public static Sub restore(History history, Object player, Object result) {
-        prepareRestore(history);
-        if (player != null) injectPendingIntoPlayerManager(player);
-        return sPendingRestore;
     }
 }

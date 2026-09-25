@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-对齐 Silent SUB-EXT-HISTORY：
-1) PlayerManager.setSub → onUserSetSub（唯一写入收口）
-2) prepareMpvOutputForNewItem / setMediaItem / start 开头 → injectPendingIntoPlayerManager
-3) VideoActivity.setPlayer 开头 → bindHistory + prepareRestore
+Silent SUB-EXT-HISTORY hooks on PlayerManager (VideoActivity 已在 mod 源内烘焙).
+1) setSub → onUserSetSub
+2) prepareMpvOutputForNewItem / setMediaItem / setMediaItemNow / this.spec = → injectPending
+3) VideoActivity 若未烘焙则补 prepareRestore（幂等）
 """
 from __future__ import annotations
 
@@ -29,19 +29,23 @@ def ensure_import(text: str) -> str:
     return text[: m.end()] + "\n" + IMPORT + "\n" + text[m.end() :]
 
 
-def insert_after_method_open(text: str, pattern: str, insert: str, label: str) -> str:
-    if "SubtitleRestoreCoordinator." in insert and insert.strip().split("(")[0].split(".")[-1] in text and label in text:
-        # already has this specific inject nearby
-        pass
+def insert_after_match(text: str, pattern: str, insert: str, label: str, already_token: str) -> str:
+    if already_token in text and already_token in insert:
+        # check if this specific method already has it nearby
+        m = re.search(pattern, text)
+        if m:
+            window = text[m.end() : m.end() + 500]
+            if already_token in window:
+                log("[mod] already: %s" % label)
+                return text
     m = re.search(pattern, text)
     if not m:
         log("[mod] WARN no match for %s" % label)
         return text
-    # avoid double insert at same method
     window = text[m.end() : m.end() + 400]
-    key = insert.strip().split("\n")[0].strip() if insert.strip() else ""
+    key = already_token
     if key and key in window:
-        log("[mod] already: %s" % label)
+        log("[mod] already near: %s" % label)
         return text
     text = text[: m.end()] + insert + text[m.end() :]
     log("[mod] %s" % label)
@@ -55,109 +59,76 @@ def patch_player_manager(path: pathlib.Path) -> None:
     text = path.read_text(encoding="utf-8")
     text = ensure_import(text)
 
-    # setSub → remember
-    if "SubtitleRestoreCoordinator.onUserSetSub" not in text:
-        text = insert_after_method_open(
-            text,
-            r"(public\s+void\s+setSub\s*\(\s*Sub\s+sub\s*\)\s*\{)",
-            (
-                "\n"
-                "        try {\n"
-                "            if (sub != null) SubtitleRestoreCoordinator.onUserSetSub(sub);\n"
-                "        } catch (Throwable ignored) {}\n"
-            ),
-            "PlayerManager.setSub → onUserSetSub",
-        )
-    else:
-        log("[mod] already setSub hook")
+    # setSub
+    text = insert_after_match(
+        text,
+        r"(public\s+void\s+setSub\s*\(\s*Sub\s+sub\s*\)\s*\{)",
+        (
+            "\n"
+            "        try {\n"
+            "            if (sub != null) SubtitleRestoreCoordinator.onUserSetSub(sub);\n"
+            "        } catch (Throwable ignored) {}\n"
+        ),
+        "PlayerManager.setSub → onUserSetSub",
+        "SubtitleRestoreCoordinator.onUserSetSub",
+    )
 
-    inject_line = (
+    inject_block = (
         "\n"
-        "        // Silent SUB-EXT: inject pending external sub before setMediaItem\n"
+        "        // Silent SUB-EXT: inject pending external sub before media start\n"
         "        try { SubtitleRestoreCoordinator.injectPendingIntoPlayerManager(this); } catch (Throwable ignored) {}\n"
     )
 
-    # prepareMpvOutputForNewItem
-    if "prepareMpvOutputForNewItem" in text:
-        text = insert_after_method_open(
-            text,
-            r"(private\s+void\s+prepareMpvOutputForNewItem\s*\(\s*\)\s*\{)",
-            inject_line,
-            "prepareMpvOutputForNewItem → injectPending",
+    for pattern, label in (
+        (r"(private\s+void\s+prepareMpvOutputForNewItem\s*\(\s*\)\s*\{)", "prepareMpvOutputForNewItem → inject"),
+        (r"(private\s+void\s+setMediaItemNow\s*\(\s*long\s+\w+\s*,\s*boolean\s+\w+\s*\)\s*\{)", "setMediaItemNow → inject"),
+        (r"(private\s+void\s+setMediaItem\s*\(\s*long\s+\w+\s*\)\s*\{)", "setMediaItem → inject"),
+    ):
+        text = insert_after_match(
+            text, pattern, inject_block, label, "SubtitleRestoreCoordinator.injectPendingIntoPlayerManager"
         )
 
-    # setMediaItemNow — covers Exo + all engines (prepareMpv early-returns for non-MPV)
-    if "setMediaItemNow" in text:
-        text = insert_after_method_open(
-            text,
-            r"(private\s+void\s+setMediaItemNow\s*\(\s*long\s+timeout\s*,\s*boolean\s+notifyPrepare\s*\)\s*\{)",
-            inject_line,
-            "setMediaItemNow → injectPending",
-        )
-
-    # start(PlaySpec,...) after this.spec = spec
-    if re.search(r"this\.spec\s*=\s*spec\s*;", text) and "injectPendingIntoPlayerManager" in text:
-        # ensure one inject right after this.spec = spec in start methods
-        def add_after_spec_assign(t: str) -> str:
-            # only in start methods region — replace first few this.spec = spec; that lack inject after
-            pattern = re.compile(
-                r"(this\.spec\s*=\s*spec\s*;\n)(?![ \t]*try \{ SubtitleRestoreCoordinator\.injectPending)"
+    # after this.spec = spec in start()
+    if "this.spec = spec;" in text and "injectPendingIntoPlayerManager" in text:
+        # add after first this.spec = spec in start method if not already next line
+        def repl_spec(m):
+            after = text[m.end() : m.end() + 200]
+            if "injectPendingIntoPlayerManager" in after:
+                return m.group(0)
+            return (
+                m.group(0)
+                + "\n        try { SubtitleRestoreCoordinator.injectPendingIntoPlayerManager(this); } catch (Throwable ignored) {}"
             )
-            count = 0
 
-            def repl(m):
-                nonlocal count
-                count += 1
-                if count > 4:
-                    return m.group(0)
-                return (
-                    m.group(1)
-                    + "        try { SubtitleRestoreCoordinator.injectPendingIntoPlayerManager(this); } catch (Throwable ignored) {}\n"
-                )
-
-            out = pattern.sub(repl, t)
-            if count:
-                log("[mod] this.spec=spec → injectPending x%d" % min(count, 4))
-            return out
-
-        text = add_after_spec_assign(text)
+        new_text, n = re.subn(
+            r"(this\.spec\s*=\s*spec;)",
+            repl_spec,
+            text,
+            count=2,
+        )
+        if n:
+            text = new_text
+            log("[mod] this.spec= → inject (x%d)" % n)
 
     path.write_text(text, encoding="utf-8")
+    log("[mod] PlayerManager patched")
 
 
 def patch_video(path: pathlib.Path) -> None:
     if not path.is_file():
-        log("[mod] skip missing %s" % path)
         return
-    rel = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+    rel = str(path.relative_to(ROOT)) if ROOT in path.parents or path.is_relative_to(ROOT) else path.name
     text = path.read_text(encoding="utf-8")
     text = ensure_import(text)
 
-    # strip old broken injects
-    text = re.sub(
-        r"\n[ \t]*try \{\n[ \t]*SubtitleRestoreCoordinator\.(?:restore|prepareRestore|bindHistory)\([^;]+;\n[ \t]*\} catch \(Throwable ignored\) \{\}\n?",
-        "\n",
-        text,
-        count=8,
-    )
-    text = re.sub(
-        r"\n[ \t]*try \{\n[ \t]*if \(mHistory != null\) \{\n[ \t]*Object _pl = null;\n(?:[ \t]*.*\n){0,12}?SubtitleRestoreCoordinator\.[^;]+;\n[ \t]*\}\n[ \t]*\} catch \(Throwable ignored\) \{\}\n?",
-        "\n",
-        text,
-        count=3,
-    )
-
-    if "SubtitleRestoreCoordinator.prepareRestore" not in text:
-        m = re.search(
-            r"(private\s+void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)",
-            text,
-        )
-        if not m:
-            m = re.search(r"(void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)", text)
+    # 幂等：若源内已烘焙则跳过
+    if "SubtitleRestoreCoordinator.prepareRestore" in text:
+        log("[mod] already prepareRestore (baked): %s" % rel)
+    else:
+        m = re.search(r"(private\s+void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)", text)
         if m:
             insert = (
                 "\n"
-                "        // Silent SUB-EXT: 绑定历史 + 登记 pending（真正注入在 setMediaItem 前）\n"
                 "        try {\n"
                 "            SubtitleRestoreCoordinator.bindHistory(mHistory);\n"
                 "            SubtitleRestoreCoordinator.prepareRestore(mHistory);\n"
@@ -166,23 +137,42 @@ def patch_video(path: pathlib.Path) -> None:
             text = text[: m.end()] + insert + text[m.end() :]
             log("[mod] setPlayer → prepareRestore: %s" % rel)
         else:
-            log("[mod] WARN no setPlayer in %s" % rel)
-    else:
-        log("[mod] already prepareRestore: %s" % rel)
+            log("[mod] WARN no setPlayer: %s" % rel)
 
-    if "SubtitleRestoreCoordinator.clearBind" not in text and "void onDestroy()" in text:
-        text = text.replace(
-            "void onDestroy() {",
-            "void onDestroy() {\n        try { SubtitleRestoreCoordinator.clearBind(); } catch (Throwable ignored) {}",
-            1,
-        )
-        log("[mod] onDestroy clearBind: %s" % rel)
+    if "SubtitleRestoreCoordinator.clearBind" not in text:
+        for sig in ("void onDestroy() {", "protected void onDestroy() {", "public void onDestroy() {"):
+            if sig in text:
+                text = text.replace(
+                    sig,
+                    sig + "\n        try { SubtitleRestoreCoordinator.clearBind(); } catch (Throwable ignored) {}",
+                    1,
+                )
+                log("[mod] onDestroy clearBind: %s" % rel)
+                break
+
+    # attach if missing
+    if "AssrtSubtitleMatch.attachRememberedSub(result" not in text:
+        for pat in (
+            "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata(), mInitialPlaybackPosition);",
+            "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());",
+        ):
+            if pat in text:
+                pre = (
+                    "        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}\n"
+                    "        try { AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player()); } catch (Throwable ignored) {}\n"
+                    "        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 800); } catch (Throwable ignored) {}\n"
+                    "        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 2000); } catch (Throwable ignored) {}\n"
+                    "        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 4500); } catch (Throwable ignored) {}\n"
+                )
+                text = text.replace(pat, pre + pat, 1)
+                log("[mod] attach before startPlayer: %s" % rel)
+                break
 
     path.write_text(text, encoding="utf-8")
 
 
 def main() -> int:
-    log("[mod] subtitle_restore Silent-aligned begin")
+    log("[mod] subtitle_restore begin")
     pm = ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java"
     patch_player_manager(pm)
     for rel in (

@@ -58,7 +58,7 @@ import okhttp3.Response;
  */
 public final class AssrtSubtitleMatch {
 
-    private static final String TAG = "SubtitleMatch";
+    private static final String TAG = "AssrtSub";
     private static final String ASSRT_API = "https://api.assrt.net/v1";
     private static final String XUNLEI_API = "https://api-shoulei-ssl.xunlei.com/oracle/subtitle?name=";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -327,7 +327,24 @@ public final class AssrtSubtitleMatch {
                     }
                 }
             }
-            if (bestGroup == null || bestIndex < 0 || bestScore < 20) {
+            // 有外挂偏好但名字没对上：再扫一遍只认外挂 mime
+            if ((bestGroup == null || bestIndex < 0 || bestScore < 15) && wantExternal) {
+                for (Tracks.Group group : tracks.getGroups()) {
+                    if (group.getType() != C.TRACK_TYPE_TEXT || !group.isSupported()) continue;
+                    for (int i = 0; i < group.length; i++) {
+                        if (!group.isTrackSupported(i)) continue;
+                        Format f = group.getTrackFormat(i);
+                        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
+                        String lab = f.label == null ? "" : f.label.toLowerCase(Locale.ROOT);
+                        int sc = 0;
+                        if (mime.contains("subrip") || mime.contains("ssa") || mime.contains("ass")
+                                || mime.contains("vtt") || mime.contains("ttml") || mime.startsWith("text/")) sc = 50;
+                        if (lab.contains("srt") || lab.contains("ass") || lab.contains("vtt") || lab.contains("外挂")) sc = Math.max(sc, 45);
+                        if (sc > bestScore) { bestScore = sc; bestGroup = group; bestIndex = i; }
+                    }
+                }
+            }
+            if (bestGroup == null || bestIndex < 0 || bestScore < 15) {
                 Log.i(TAG, "forceSelect skip score=" + bestScore + " wantExt=" + wantExternal + " name=" + remembered);
                 return false;
             }
@@ -912,6 +929,23 @@ public final class AssrtSubtitleMatch {
         if (history == null) history = sLastHistory;
         if (episode == null) episode = sLastEpisode;
         String[] parts = loadCachedSubPayload(history, episode);
+        if (parts == null) {
+            // Coordinator JSON 回退：Assrt 文件缓存丢失时仍能挂
+            try {
+                Object pend = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator")
+                        .getMethod("peekPending").invoke(null);
+                if (pend instanceof Sub) {
+                    Sub ps = (Sub) pend;
+                    String u = ps.getUrl();
+                    if (!TextUtils.isEmpty(u) && (u.contains("://") || new File(u).isFile())) {
+                        parts = new String[]{u, ps.getName() == null ? "" : ps.getName(),
+                                ps.getLang() == null ? "" : ps.getLang(),
+                                ps.getFormat() == null ? "" : ps.getFormat()};
+                        Log.i(TAG, "attachRememberedSub from Coordinator pending");
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
         if (parts == null) return;
         try {
             File file = new File(parts[0]);
