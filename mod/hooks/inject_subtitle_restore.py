@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Wire SubtitleRestoreCoordinator into VideoActivity.setPlayer only (fast, no rglob)."""
+"""
+对齐 Silent SUB-EXT-HISTORY：
+1) PlayerManager.setSub → onUserSetSub（唯一写入收口）
+2) prepareMpvOutputForNewItem / setMediaItem / start 开头 → injectPendingIntoPlayerManager
+3) VideoActivity.setPlayer 开头 → bindHistory + prepareRestore
+"""
 from __future__ import annotations
 
 import pathlib
@@ -9,24 +14,6 @@ import sys
 
 ROOT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
 IMPORT = "import com.fongmi.android.tv.playback.SubtitleRestoreCoordinator;"
-
-# Explicit paths only — never walk whole tree
-TARGETS = [
-    "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
-    "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
-]
-
-INJECT = """
-        try {
-            if (mHistory != null) {
-                Object _pl = null;
-                try { _pl = player(); } catch (Throwable ignored) {}
-                SubtitleRestoreCoordinator.restore(mHistory, _pl, result);
-            }
-        } catch (Throwable ignored) {}
-"""
-
-MARKER = "SubtitleRestoreCoordinator.restore(mHistory, _pl, result)"
 
 
 def log(msg: str) -> None:
@@ -42,81 +29,171 @@ def ensure_import(text: str) -> str:
     return text[: m.end()] + "\n" + IMPORT + "\n" + text[m.end() :]
 
 
-def strip_bad_inject(text: str) -> str:
-    """Line-scan remove broken blocks; no catastrophic regex on huge files."""
-    if "mPlayers" not in text and "mResult" not in text:
-        # still remove getPlayer() no-arg if paired with coordinator
-        if "SubtitleRestoreCoordinator.restore" not in text:
-            return text
-    lines = text.splitlines(keepends=True)
-    out = []
-    i = 0
-    removed = 0
-    while i < len(lines):
-        # detect start of try { near coordinator restore with bad symbols in next ~20 lines
-        if "try {" in lines[i] and i + 1 < len(lines):
-            window = "".join(lines[i : min(i + 20, len(lines))])
-            if "SubtitleRestoreCoordinator.restore" in window and (
-                "mPlayers" in window or "mResult" in window or "getPlayer()" in window
-            ):
-                # skip until matching catch (Throwable ignored) {}
-                j = i
-                while j < len(lines) and j < i + 25:
-                    if "catch (Throwable ignored)" in lines[j]:
-                        j += 1
-                        removed += 1
-                        break
-                    j += 1
-                else:
-                    out.append(lines[i])
-                    i += 1
-                    continue
-                i = j
-                continue
-        out.append(lines[i])
-        i += 1
-    if removed:
-        log("[mod] stripped %d bad restore inject block(s)" % removed)
-    return "".join(out)
+def insert_after_method_open(text: str, pattern: str, insert: str, label: str) -> str:
+    if "SubtitleRestoreCoordinator." in insert and insert.strip().split("(")[0].split(".")[-1] in text and label in text:
+        # already has this specific inject nearby
+        pass
+    m = re.search(pattern, text)
+    if not m:
+        log("[mod] WARN no match for %s" % label)
+        return text
+    # avoid double insert at same method
+    window = text[m.end() : m.end() + 400]
+    key = insert.strip().split("\n")[0].strip() if insert.strip() else ""
+    if key and key in window:
+        log("[mod] already: %s" % label)
+        return text
+    text = text[: m.end()] + insert + text[m.end() :]
+    log("[mod] %s" % label)
+    return text
 
 
-def patch_video(path: pathlib.Path) -> None:
-    rel = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
-    log("[mod] subtitle_restore: start %s" % rel)
+def patch_player_manager(path: pathlib.Path) -> None:
     if not path.is_file():
-        log("[mod] subtitle_restore: skip missing %s" % rel)
+        log("[mod] skip missing PlayerManager")
         return
     text = path.read_text(encoding="utf-8")
     text = ensure_import(text)
-    text = strip_bad_inject(text)
 
-    if MARKER in text:
-        path.write_text(text, encoding="utf-8")
-        log("[mod] subtitle_restore: already OK %s" % rel)
-        return
+    # setSub → remember
+    if "SubtitleRestoreCoordinator.onUserSetSub" not in text:
+        text = insert_after_method_open(
+            text,
+            r"(public\s+void\s+setSub\s*\(\s*Sub\s+sub\s*\)\s*\{)",
+            (
+                "\n"
+                "        try {\n"
+                "            if (sub != null) SubtitleRestoreCoordinator.onUserSetSub(sub);\n"
+                "        } catch (Throwable ignored) {}\n"
+            ),
+            "PlayerManager.setSub → onUserSetSub",
+        )
+    else:
+        log("[mod] already setSub hook")
 
-    m = re.search(r"(private\s+void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)", text)
-    if not m:
-        m = re.search(r"(void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)", text)
-    if not m:
-        log("[mod] subtitle_restore: WARN no setPlayer(Result) in %s" % rel)
-        path.write_text(text, encoding="utf-8")
-        return
+    inject_line = (
+        "\n"
+        "        // Silent SUB-EXT: inject pending external sub before setMediaItem\n"
+        "        try { SubtitleRestoreCoordinator.injectPendingIntoPlayerManager(this); } catch (Throwable ignored) {}\n"
+    )
 
-    text = text[: m.end()] + "\n" + INJECT + text[m.end() :]
+    # prepareMpvOutputForNewItem
+    if "prepareMpvOutputForNewItem" in text:
+        text = insert_after_method_open(
+            text,
+            r"(private\s+void\s+prepareMpvOutputForNewItem\s*\(\s*\)\s*\{)",
+            inject_line,
+            "prepareMpvOutputForNewItem → injectPending",
+        )
+
+    # setMediaItemNow — covers Exo + all engines (prepareMpv early-returns for non-MPV)
+    if "setMediaItemNow" in text:
+        text = insert_after_method_open(
+            text,
+            r"(private\s+void\s+setMediaItemNow\s*\(\s*long\s+timeout\s*,\s*boolean\s+notifyPrepare\s*\)\s*\{)",
+            inject_line,
+            "setMediaItemNow → injectPending",
+        )
+
+    # start(PlaySpec,...) after this.spec = spec
+    if re.search(r"this\.spec\s*=\s*spec\s*;", text) and "injectPendingIntoPlayerManager" in text:
+        # ensure one inject right after this.spec = spec in start methods
+        def add_after_spec_assign(t: str) -> str:
+            # only in start methods region — replace first few this.spec = spec; that lack inject after
+            pattern = re.compile(
+                r"(this\.spec\s*=\s*spec\s*;\n)(?![ \t]*try \{ SubtitleRestoreCoordinator\.injectPending)"
+            )
+            count = 0
+
+            def repl(m):
+                nonlocal count
+                count += 1
+                if count > 4:
+                    return m.group(0)
+                return (
+                    m.group(1)
+                    + "        try { SubtitleRestoreCoordinator.injectPendingIntoPlayerManager(this); } catch (Throwable ignored) {}\n"
+                )
+
+            out = pattern.sub(repl, t)
+            if count:
+                log("[mod] this.spec=spec → injectPending x%d" % min(count, 4))
+            return out
+
+        text = add_after_spec_assign(text)
+
     path.write_text(text, encoding="utf-8")
-    log("[mod] subtitle_restore: injected %s" % rel)
+
+
+def patch_video(path: pathlib.Path) -> None:
+    if not path.is_file():
+        log("[mod] skip missing %s" % path)
+        return
+    rel = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+    text = path.read_text(encoding="utf-8")
+    text = ensure_import(text)
+
+    # strip old broken injects
+    text = re.sub(
+        r"\n[ \t]*try \{\n[ \t]*SubtitleRestoreCoordinator\.(?:restore|prepareRestore|bindHistory)\([^;]+;\n[ \t]*\} catch \(Throwable ignored\) \{\}\n?",
+        "\n",
+        text,
+        count=8,
+    )
+    text = re.sub(
+        r"\n[ \t]*try \{\n[ \t]*if \(mHistory != null\) \{\n[ \t]*Object _pl = null;\n(?:[ \t]*.*\n){0,12}?SubtitleRestoreCoordinator\.[^;]+;\n[ \t]*\}\n[ \t]*\} catch \(Throwable ignored\) \{\}\n?",
+        "\n",
+        text,
+        count=3,
+    )
+
+    if "SubtitleRestoreCoordinator.prepareRestore" not in text:
+        m = re.search(
+            r"(private\s+void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)",
+            text,
+        )
+        if not m:
+            m = re.search(r"(void\s+setPlayer\s*\(\s*Result\s+result\s*\)\s*\{)", text)
+        if m:
+            insert = (
+                "\n"
+                "        // Silent SUB-EXT: 绑定历史 + 登记 pending（真正注入在 setMediaItem 前）\n"
+                "        try {\n"
+                "            SubtitleRestoreCoordinator.bindHistory(mHistory);\n"
+                "            SubtitleRestoreCoordinator.prepareRestore(mHistory);\n"
+                "        } catch (Throwable ignored) {}\n"
+            )
+            text = text[: m.end()] + insert + text[m.end() :]
+            log("[mod] setPlayer → prepareRestore: %s" % rel)
+        else:
+            log("[mod] WARN no setPlayer in %s" % rel)
+    else:
+        log("[mod] already prepareRestore: %s" % rel)
+
+    if "SubtitleRestoreCoordinator.clearBind" not in text and "void onDestroy()" in text:
+        text = text.replace(
+            "void onDestroy() {",
+            "void onDestroy() {\n        try { SubtitleRestoreCoordinator.clearBind(); } catch (Throwable ignored) {}",
+            1,
+        )
+        log("[mod] onDestroy clearBind: %s" % rel)
+
+    path.write_text(text, encoding="utf-8")
 
 
 def main() -> int:
-    log("[mod] subtitle_restore: begin")
-    for rel in TARGETS:
+    log("[mod] subtitle_restore Silent-aligned begin")
+    pm = ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java"
+    patch_player_manager(pm)
+    for rel in (
+        "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+        "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+    ):
         patch_video(ROOT / rel)
-    # sources must already be copied by apply.sh
     for name in ("SubtitleSource.java", "SubtitleRestorePolicy.java", "SubtitleRestoreCoordinator.java"):
         hits = list((ROOT / "app").rglob(name)) if (ROOT / "app").is_dir() else []
-        log("[mod] subtitle_restore: %s -> %d" % (name, len(hits)))
-    log("[mod] subtitle_restore: done")
+        log("[mod] %s -> %d" % (name, len(hits)))
+    log("[mod] subtitle_restore done")
     return 0
 
 

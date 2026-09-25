@@ -77,6 +77,40 @@ public final class AssrtSubtitleMatch {
     private AssrtSubtitleMatch() {
     }
 
+    /** 由 SubtitleRestoreCoordinator.prepareRestore 调用：历史重进前 priming 选轨意图 */
+    public static void primeExternalPreference(String name, String format) {
+        try {
+            if (!TextUtils.isEmpty(name)) sPendingSelectName = name;
+            if (!TextUtils.isEmpty(format)) sPendingSelectFormat = format;
+            sPreferExternal = true;
+            sForceSettled = false;
+            android.util.Log.i(TAG, "primeExternalPreference name=" + name + " fmt=" + format);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 由 Coordinator.onUserSetSub 同步写入 Assrt 文件缓存，保证 attach/tryRestore 命中 */
+    public static void rememberSubFromCoordinator(History history, String url, String name, String lang, String format) {
+        try {
+            if (TextUtils.isEmpty(url)) return;
+            if (url.contains("://")) {
+                // 远程 URL：只记名字意图
+                if (!TextUtils.isEmpty(name)) {
+                    sPendingSelectName = name;
+                    sPendingSelectFormat = format == null ? "" : format;
+                    sPreferExternal = true;
+                }
+                return;
+            }
+            java.io.File file = new java.io.File(url);
+            if (!file.isFile()) return;
+            rememberSub(history, sLastEpisode, file, name, lang, format);
+        } catch (Throwable e) {
+            android.util.Log.w(TAG, "rememberSubFromCoordinator: " + e.getMessage());
+        }
+    }
+
+
     public interface PlayerProvider {
         PlayerManager get();
     }
@@ -269,6 +303,12 @@ public final class AssrtSubtitleMatch {
                     ? sPendingSelectName
                     : loadRememberedTrackName(sLastHistory, sLastEpisode);
             boolean wantExternal = sPreferExternal || loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
+            try {
+                Class<?> c = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator");
+                if (c.getMethod("peekPending").invoke(null) != null) wantExternal = true;
+                String pn = (String) c.getMethod("peekPendingName").invoke(null);
+                if (!TextUtils.isEmpty(pn) && TextUtils.isEmpty(remembered)) remembered = pn;
+            } catch (Throwable ignored) {}
 
             Tracks.Group bestGroup = null;
             int bestIndex = -1;
@@ -287,7 +327,7 @@ public final class AssrtSubtitleMatch {
                     }
                 }
             }
-            if (bestGroup == null || bestIndex < 0 || bestScore < 25) {
+            if (bestGroup == null || bestIndex < 0 || bestScore < 20) {
                 Log.i(TAG, "forceSelect skip score=" + bestScore + " wantExt=" + wantExternal + " name=" + remembered);
                 return false;
             }
@@ -325,49 +365,42 @@ public final class AssrtSubtitleMatch {
     /** 名字优先；有外挂记忆时才用 mime 识别外挂轨（有内嵌时也能选中外挂） */
     private static int scoreByRemembered(Format f, String remembered, boolean wantExternal) {
         if (f == null) return -1;
-        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType;
+        int score = 0;
+        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
         String label = f.label == null ? "" : f.label;
         String id = f.id == null ? "" : String.valueOf(f.id);
-        String lang = f.language == null ? "" : f.language;
-        String blob = (label + " " + id + " " + mime + " " + lang).toLowerCase(Locale.ROOT);
-        boolean isExtMime = mime.toLowerCase(Locale.ROOT).contains("subrip")
-                || mime.toLowerCase(Locale.ROOT).contains("vtt")
-                || mime.toLowerCase(Locale.ROOT).contains("ssa")
-                || mime.toLowerCase(Locale.ROOT).contains("ttml")
-                || mime.toLowerCase(Locale.ROOT).contains("text/");
-        boolean isExtHint = blob.contains("external") || blob.contains("外挂")
-                || blob.contains(".srt") || blob.contains("srt")
-                || blob.contains(".ass") || blob.contains(".vtt");
-        int s = 0;
+        String lang = f.language == null ? "" : f.language.toLowerCase(Locale.ROOT);
+        boolean isExternalMime = mime.contains("subrip") || mime.contains("ssa") || mime.contains("ass")
+                || mime.contains("vtt") || mime.contains("ttml") || mime.startsWith("text/")
+                || mime.contains("application/x-subrip");
+        // 内嵌常见：application/x-media-player-subtitles / image-based / 无 text
+        boolean likelyEmbedded = mime.contains("vobsub") || mime.contains("pgs") || mime.contains("dvb")
+                || mime.contains("image") || "application/x-media-player-subtitles".equals(mime);
         if (wantExternal) {
-            if (isExtMime) s += 70;
-            if (isExtHint) s += 20;
-            // 内嵌 PGS/图像字幕在有外挂记忆时降权
-            if (mime.toLowerCase(Locale.ROOT).contains("pgs")
-                    || mime.toLowerCase(Locale.ROOT).contains("vobsub")
-                    || mime.toLowerCase(Locale.ROOT).contains("dvb")) {
-                s -= 40;
-            }
+            if (isExternalMime) score += 60;
+            if (likelyEmbedded) score -= 40;
+            // Media3 外挂常无 language 或 label 带文件名
+            if (label.toLowerCase(Locale.ROOT).contains(".srt")
+                    || label.toLowerCase(Locale.ROOT).contains(".ass")
+                    || label.toLowerCase(Locale.ROOT).contains(".ssa")
+                    || label.toLowerCase(Locale.ROOT).contains(".vtt")
+                    || label.contains("外挂")) score += 25;
         }
         if (!TextUtils.isEmpty(remembered)) {
-            String r = remembered.trim();
-            String rBase = r;
-            int comma = Math.max(r.lastIndexOf('，'), r.lastIndexOf(','));
-            if (comma > 0) rBase = r.substring(0, comma).trim();
-            String rl = r.toLowerCase(Locale.ROOT);
-            String rbl = rBase.toLowerCase(Locale.ROOT);
-            if (label.equalsIgnoreCase(r) || id.equalsIgnoreCase(r)) s += 100;
-            else if (label.equalsIgnoreCase(rBase) || id.equalsIgnoreCase(rBase)) s += 90;
-            else if (label.toLowerCase(Locale.ROOT).contains(rbl) && rbl.length() >= 2) s += 70;
-            else if (id.toLowerCase(Locale.ROOT).contains(rbl) && rbl.length() >= 2) s += 60;
-            else if (blob.contains(rbl) && rbl.length() >= 2) s += 40;
-            if (rl.contains("srt") && mime.toLowerCase(Locale.ROOT).contains("subrip")) s += 15;
-            if (rl.contains("ass") && (mime.toLowerCase(Locale.ROOT).contains("ssa") || mime.toLowerCase(Locale.ROOT).contains("ass"))) s += 15;
-            if (rl.contains("vtt") && mime.toLowerCase(Locale.ROOT).contains("vtt")) s += 15;
-        } else if (wantExternal && isExtMime) {
-            s += 30; // 无名字时仍优先外挂文本轨
+            String r = remembered.trim().toLowerCase(Locale.ROOT);
+            String l = label.toLowerCase(Locale.ROOT);
+            if (l.equals(r) || id.equalsIgnoreCase(remembered.trim())) score += 100;
+            else if (l.contains(r) || r.contains(l)) score += 70;
+            else {
+                // 去掉「，SRT」等后缀再比
+                String rBase = r.replaceAll("[，,].*$", "").replaceAll("\\.(srt|ass|ssa|vtt|sub)$", "").trim();
+                String lBase = l.replaceAll("[，,].*$", "").replaceAll("\\.(srt|ass|ssa|vtt|sub)$", "").trim();
+                if (!rBase.isEmpty() && (lBase.contains(rBase) || rBase.contains(lBase))) score += 55;
+            }
         }
-        return s;
+        // 有外挂意图时，只要是 text 轨就给保底分，避免阈值匹配失败完全不选
+        if (wantExternal && isExternalMime && score < 30) score = 30;
+        return score;
     }
 
 
@@ -528,36 +561,44 @@ public final class AssrtSubtitleMatch {
     public static void onTracksReady(PlayerManager player) {
         try {
             if (player == null || player.isEmpty()) return;
-            // 从缓存装载「上次外挂」意图
-            String[] payload = loadCachedSubPayload(sLastHistory, sLastEpisode);
-            boolean hasExtFile = payload != null;
+            // 从 Coordinator 再取一次 pending（历史重进时 attach 可能早于 priming）
+            try {
+                Class<?> c = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator");
+                String pn = (String) c.getMethod("peekPendingName").invoke(null);
+                String pf = (String) c.getMethod("peekPendingFormat").invoke(null);
+                if (!TextUtils.isEmpty(pn)) {
+                    sPendingSelectName = pn;
+                    sPreferExternal = true;
+                }
+                if (!TextUtils.isEmpty(pf)) sPendingSelectFormat = pf;
+            } catch (Throwable ignored) {
+            }
             if (TextUtils.isEmpty(sPendingSelectName)) {
                 String n = loadRememberedTrackName(sLastHistory, sLastEpisode);
-                if (TextUtils.isEmpty(n) && hasExtFile && payload.length > 1) n = payload[1];
                 if (!TextUtils.isEmpty(n)) sPendingSelectName = n;
             }
-            if (TextUtils.isEmpty(sPendingSelectFormat) && hasExtFile && payload.length > 3) {
-                sPendingSelectFormat = payload[3];
-            }
+            boolean hasExtFile = loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
             if (hasExtFile) sPreferExternal = true;
             if (!sPreferExternal && TextUtils.isEmpty(sPendingSelectName) && !hasExtFile) return;
-
-            // 若已正确选中目标外挂，短时间不再刷；否则必须再选（防止被内嵌轨抢回）
-            if (sForceSettled && System.currentTimeMillis() - sLastForceOkAt < 3000) {
+            // 即使刚 force 成功过，历史重进后 restoreTrack 可能又把内嵌抢回去，允许再抢一次
+            if (sForceSettled && System.currentTimeMillis() - sLastForceOkAt < 1500) {
                 if (forceSelectExternalViaMedia3(player)) return;
             }
             Log.i(TAG, "onTracksReady preferExt=" + sPreferExternal + " name=" + sPendingSelectName + " hasFile=" + hasExtFile);
             persistAndSelectText(player, sPendingSelectName, sPendingSelectFormat);
-            // 轨道刚就绪时 Override 可能尚未生效，再补两次
+            forceSelectExternalViaMedia3(player);
             final PlayerManager pm = player;
             final String nm = sPendingSelectName;
             final String fm = sPendingSelectFormat;
-            App.post(() -> persistAndSelectText(pm, nm, fm), 500);
-            App.post(() -> persistAndSelectText(pm, nm, fm), 1500);
+            App.post(() -> persistAndSelectText(pm, nm, fm), 400);
+            App.post(() -> persistAndSelectText(pm, nm, fm), 1200);
+            App.post(() -> persistAndSelectText(pm, nm, fm), 2800);
+            App.post(() -> forceSelectExternalViaMedia3(pm), 3500);
         } catch (Throwable e) {
             Log.w(TAG, "onTracksReady: " + e.getMessage());
         }
     }
+
 
     public static void selectPendingIfAny(PlayerManager player) {
         try {

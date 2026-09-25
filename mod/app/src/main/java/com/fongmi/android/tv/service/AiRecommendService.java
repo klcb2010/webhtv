@@ -76,18 +76,36 @@ public final class AiRecommendService {
         String content = AiCompletionClient.complete(config, prompt);
         String exclude = currentTitle;
         if (TextUtils.isEmpty(exclude) && current != null) exclude = current.getName();
-        return parseItems(content, exclude);
+        List<Item> aiItems = parseItems(content, exclude);
+        // 本地续集扩展优先插到最前（闪电侠 S3 → S4…S7，再是 AI 的关联/相似）
+        String seed = !TextUtils.isEmpty(currentTitle) ? currentTitle
+                : (current != null ? current.getName() : "");
+        List<Item> sequels = expandSequelCandidates(seed, 6);
+        if (sequels.isEmpty()) return aiItems;
+        Map<String, Item> map = new LinkedHashMap<>();
+        for (Item it : sequels) {
+            if (it == null || TextUtils.isEmpty(it.title)) continue;
+            map.put(it.title.toLowerCase(Locale.ROOT), it);
+        }
+        for (Item it : aiItems) {
+            if (it == null || TextUtils.isEmpty(it.title)) continue;
+            String k = it.title.toLowerCase(Locale.ROOT);
+            if (!map.containsKey(k)) map.put(k, it);
+        }
+        return new ArrayList<>(map.values());
     }
 
     private static String buildPrompt(Vod current, String currentTitle) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是专业的影视推荐专家，熟悉电影、电视剧、动漫、纪录片、综艺。");
-        sb.append("请根据用户「当前作品」和「播放历史」分析题材、地区、年代、导演/演员偏好，推荐 10-14 部相关作品。");
-        sb.append("优先推荐与当前作品气质相近、但片名不同的内容；可适度拓展同类型口碑作。");
-        sb.append("不要推荐播放历史里已出现的同名作品，不要推荐当前片名。");
+        sb.append("请根据用户「当前作品」和「播放历史」推荐 10-14 部作品。");
+        sb.append("【排序规则，必须严格遵守】");
+        sb.append("1) 若当前作品是系列剧/电影的某一季或某一集，优先推荐同一系列的后续季/部（如《闪电侠》第三季 → 第四季、第五季…直到季终），reason 写「正片续集/下一季」。");
+        sb.append("2) 同一系列续集排在最前，再推荐同一宇宙/关联作品（如绿箭宇宙相关），最后才是题材相似的其他作品。");
+        sb.append("3) 不要推荐当前已播的同一季，不要推荐播放历史里已出现的同名作品。");
         sb.append("只返回可解析 JSON，不要 Markdown 或解释。");
         sb.append("格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}。");
-        sb.append("mediaType 只能是 movie 或 tv；reason 约 15-40 个中文字。\n\n");
+        sb.append("mediaType 只能是 movie 或 tv；reason 约 10-30 个中文字。\n\n");
 
         sb.append("【当前作品】\n");
         String title = !TextUtils.isEmpty(currentTitle) ? currentTitle.trim() : (current != null ? safe(current.getName()) : "");
@@ -214,4 +232,75 @@ public final class AiRecommendService {
         if (s == null) return "";
         return s.length() <= 160 ? s : s.substring(0, 160);
     }
+    /**
+     * 根据当前片名本地生成「下一季/下一部」候选，插到推荐列表最前。
+     * 例：闪电侠第三季 → 闪电侠第四季…第七季
+     */
+    public static List<Item> expandSequelCandidates(String title, int maxSeasonsAhead) {
+        List<Item> out = new ArrayList<>();
+        if (TextUtils.isEmpty(title)) return out;
+        String t = title.trim();
+        // 中文：第N季 / 第N部
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "^(.*?)[\\s·\\-_]*第([0-9一二三四五六七八九十百]+)([季部])(.*)$").matcher(t);
+        int cur = -1;
+        String prefix = null;
+        String suffix = "";
+        String unit = "季";
+        if (m.find()) {
+            prefix = m.group(1).trim();
+            cur = parseCnNum(m.group(2));
+            unit = m.group(3);
+            suffix = m.group(4) == null ? "" : m.group(4).trim();
+        } else {
+            // 英文 Season N / S0N
+            m = java.util.regex.Pattern.compile(
+                    "(?i)^(.*?)[\\s·\\-_]*S(?:eason)?[\\s\\._-]*([0-9]{1,2})(.*)$").matcher(t);
+            if (m.find()) {
+                prefix = m.group(1).trim();
+                try { cur = Integer.parseInt(m.group(2)); } catch (Exception e) { cur = -1; }
+                unit = "季";
+                suffix = m.group(3) == null ? "" : m.group(3).trim();
+            }
+        }
+        if (prefix == null || prefix.isEmpty() || cur < 1) return out;
+        int ahead = Math.max(1, Math.min(maxSeasonsAhead, 6));
+        for (int i = 1; i <= ahead; i++) {
+            int n = cur + i;
+            if (n > 20) break;
+            String name = prefix + " 第" + toCnNum(n) + unit;
+            if (!suffix.isEmpty()) name = name + suffix;
+            String reason = (i == ahead) ? ("系列第" + n + unit + "（可能季终/后续）") : ("正片续集 · 第" + n + unit);
+            out.add(new Item(name, 0, "tv", reason));
+        }
+        return out;
+    }
+
+    private static int parseCnNum(String s) {
+        if (s == null || s.isEmpty()) return -1;
+        try { return Integer.parseInt(s); } catch (Exception ignored) {}
+        String[] cn = {"零","一","二","三","四","五","六","七","八","九","十"};
+        if ("十".equals(s)) return 10;
+        if (s.startsWith("十") && s.length() == 2) {
+            for (int i = 1; i <= 9; i++) if (s.equals("十" + cn[i])) return 10 + i;
+        }
+        if (s.endsWith("十") && s.length() == 2) {
+            for (int i = 1; i <= 9; i++) if (s.equals(cn[i] + "十")) return i * 10;
+        }
+        for (int i = 1; i <= 10; i++) if (s.equals(cn[i])) return i;
+        return -1;
+    }
+
+    private static String toCnNum(int n) {
+        if (n <= 0) return String.valueOf(n);
+        if (n <= 10) {
+            String[] cn = {"零","一","二","三","四","五","六","七","八","九","十"};
+            return cn[n];
+        }
+        if (n < 20) return "十" + toCnNum(n - 10);
+        if (n % 10 == 0) return toCnNum(n / 10) + "十";
+        return toCnNum(n / 10) + "十" + toCnNum(n % 10);
+    }
+
+
 }

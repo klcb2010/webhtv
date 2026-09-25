@@ -56,7 +56,7 @@ public final class DoubanRecommendService {
         } catch (Throwable e) {
             Log.w(TAG, "rexxar fail: " + e.getMessage());
         }
-        if (!out.isEmpty()) return limit(out);
+        if (!out.isEmpty()) return withSequels(title, out);
 
         // 2) 网页「喜欢这部的人也喜欢」
         try {
@@ -64,7 +64,7 @@ public final class DoubanRecommendService {
         } catch (Throwable e) {
             Log.w(TAG, "html fail: " + e.getMessage());
         }
-        return limit(out);
+        return withSequels(title, out);
     }
 
     private static List<AiRecommendService.Item> limit(List<AiRecommendService.Item> list) {
@@ -187,4 +187,16 @@ public final class DoubanRecommendService {
         h.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
         return h;
     }
+    private static List<AiRecommendService.Item> withSequels(String title, List<AiRecommendService.Item> rec) {
+        List<AiRecommendService.Item> sequels = AiRecommendService.expandSequelCandidates(title, 5);
+        if (sequels.isEmpty()) return limit(rec);
+        java.util.LinkedHashMap<String, AiRecommendService.Item> map = new java.util.LinkedHashMap<>();
+        for (AiRecommendService.Item it : sequels) map.put(it.title.toLowerCase(java.util.Locale.ROOT), it);
+        for (AiRecommendService.Item it : rec) {
+            String k = it.title.toLowerCase(java.util.Locale.ROOT);
+            if (!map.containsKey(k)) map.put(k, it);
+        }
+        return limit(new ArrayList<>(map.values()));
+    }
+
 }
