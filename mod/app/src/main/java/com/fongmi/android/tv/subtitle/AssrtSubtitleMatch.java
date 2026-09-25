@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.subtitle;
 
+import com.fongmi.android.tv.playback.SubtitleRestoreCoordinator;
+
 import android.app.Activity;
 
 import androidx.media3.common.C;
@@ -120,6 +122,13 @@ public final class AssrtSubtitleMatch {
         Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
+        try {
+            if (sLastHistory != null) {
+                SubtitleRestoreCoordinator.remember(sLastHistory, sub);
+            } else if (sLastEpisode != null) {
+                SubtitleRestoreCoordinator.remember("", sLastEpisode.getUrl(), sub);
+            }
+        } catch (Throwable ignored) {}
         sPendingSelectName = trackLabel;
         sPendingSelectFormat = format;
         sPreferExternal = true;
@@ -736,6 +745,13 @@ public final class AssrtSubtitleMatch {
      * Result.setSubs 仅在空列表时生效，故用反射强制写入。
      */
     public static void attachRememberedSub(Object result, History history, Episode episode) {
+        try {
+            History h0 = history != null ? history : sLastHistory;
+            com.fongmi.android.tv.bean.Result r0 = null;
+            if (result instanceof com.fongmi.android.tv.bean.Result) r0 = (com.fongmi.android.tv.bean.Result) result;
+            if (h0 != null) SubtitleRestoreCoordinator.restore(h0, null, r0);
+        } catch (Throwable ignored) {}
+
         if (result == null) return;
         if (history == null) history = sLastHistory;
         if (episode == null) episode = sLastEpisode;
