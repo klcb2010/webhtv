@@ -1,9 +1,5 @@
 package com.fongmi.android.tv;
 
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.Signature;
-import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.View;
@@ -16,21 +12,14 @@ import com.fongmi.android.tv.bean.Update;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
+import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
-import com.fongmi.android.tv.update.GithubProxy;
-import com.fongmi.android.tv.update.HttpUpdateTransfer;
-import com.fongmi.android.tv.update.OciArtifact;
-import com.fongmi.android.tv.update.OciMirror;
-import com.fongmi.android.tv.update.OciUpdateTransfer;
-import com.fongmi.android.tv.update.UpdateHttp;
-import com.fongmi.android.tv.update.UpdateRoutePlanner;
-import com.fongmi.android.tv.update.UpdateTarget;
-import com.fongmi.android.tv.update.UpdateTransfer;
+import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
 import org.json.JSONArray;
@@ -40,22 +29,19 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public class Updater implements UpdateTransfer.Callback, UpdateListener {
+public class Updater implements Download.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
+    private static final String SOURCE_CNB = "cnb";
+    private static final String SOURCE_GITHUB = "github";
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
-    private static final Map<String, String> GITHUB_DOWNLOAD_HEADERS = createGithubDownloadHeaders();
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
     private static final Updater INSTANCE = new Updater();
@@ -68,9 +54,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private WeakReference<FragmentActivity> activityRef;
     private UpdateDialog dialog;
-    private UpdateTransfer transfer;
-    private List<UpdateTarget> routes;
-    private int routeIndex;
+    private Download download;
     private Update stable;
     private Update beta;
     private Update selected;
@@ -82,6 +66,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private long lastTotal;
     private long lastSpeed;
     private long lastElapsed;
+    private boolean fallbackAttempted;
 
     private Updater() {
     }
@@ -117,16 +102,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         Task.execute(() -> doInBackground(activity, forceCheck));
     }
 
-    /** 个性设置「自动检查更新」：不受 putUpdate(false) 影响，有更新才弹窗 */
-    public void startAuto(FragmentActivity activity) {
-        bind(activity);
-        if (downloading) {
-            restoreDialog(activity);
-            return;
-        }
-        Task.execute(() -> doInBackground(activity, false));
-    }
-
     public void resume(FragmentActivity activity) {
         bind(activity);
         restoreDialog(activity);
@@ -135,26 +110,20 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private void doInBackground(FragmentActivity activity, boolean forceCheck) {
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
+        Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
-        beta = Update.empty(Update.CHANNEL_BETA);
-        if (!stable.hasUpdate() && !beta.hasUpdate()) {
+        beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
+        if (!reallyHasUpdate(stable) && !reallyHasUpdate(beta)) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
-                selected = getPreferredUpdate();
+                selected = stable;
                 App.post(() -> show(activity));
                 return;
             }
             if (forceCheck) App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
             return;
         }
-        selected = getPreferredUpdate();
+        selected = stable;
         App.post(() -> show(activity));
-    }
-
-    private Update getPreferredUpdate() {
-        if (stable != null && stable.hasUpdate()) return stable;
-        if (beta != null && beta.hasUpdate()) return beta;
-        if (stable != null && stable.hasManifest()) return stable;
-        return beta;
     }
 
     private Update awaitUpdate(Future<Update> future, String channel, long deadline) {
@@ -171,57 +140,80 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         }
     }
 
-    private static Map<String, String> createGithubDownloadHeaders() {
-        Map<String, String> headers = new java.util.HashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
-        headers.put("Accept", "application/octet-stream, application/json, text/plain, */*");
-        return headers;
+    private Update getUpdate(String channel) {
+        // 全部走本仓库 GitHub Releases（klcb2010/webhtv），不再使用 CNB
+        return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
     }
 
-    private Update getUpdate(String channel) {
-        // 不走 api.github.com：用户选的加速镜像 → 直连 → 其它内置镜像
-        String direct = Github.getJson(getName());
-        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
+    private Update getGithubStableUpdate(String channel) {
         try {
-            String selected = Setting.getUpdateGithubProxy();
-            GithubProxy.Config github = GithubProxy.resolve(
-                    selected,
-                    Setting.getUpdateGithubProxyUrl(),
-                    Setting.getUpdateGithubProxyMode());
-            if (github != null && !GithubProxy.DIRECT.equals(github.id)) {
-                String rewritten = github.rewrite(direct);
-                if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
-            }
-        } catch (Throwable ignored) {
+            // 先扫 releases 列表，按 tag 选最新（避免 /latest 指向旧版或预发布）
+            Update best = pickNewestGithubUpdate(channel, false);
+            if (best != null && best.hasManifest()) return best;
+            JSONObject release = new JSONObject(OkHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            return readGithubReleaseUpdate(channel, release);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Update.empty(channel);
         }
-        urls.add(direct);
+    }
+
+    private Update pickNewestGithubUpdate(String channel, boolean betaOnly) {
         try {
-            for (GithubProxy.Preset preset : GithubProxy.presets()) {
-                if (GithubProxy.DIRECT.equals(preset.id) || GithubProxy.CUSTOM.equals(preset.id)) continue;
-                if (TextUtils.isEmpty(preset.baseUrl)) continue;
-                try {
-                    GithubProxy.Config cfg = GithubProxy.resolve(preset.id, "", GithubProxy.MODE_FULL_URL);
-                    String rewritten = cfg.rewrite(direct);
-                    if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
-                } catch (Throwable ignored) {
+            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            Update best = null;
+            String bestTag = "";
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null) continue;
+                boolean beta = isBetaRelease(release);
+                if (betaOnly && !beta) continue;
+                if (!betaOnly && beta) continue;
+                if (findAsset(release.optJSONArray("assets"), getManifestName(channel)) == null) continue;
+                String tag = release.optString("tag_name");
+                if (best == null || AppVersion.compare(tag, bestTag) > 0) {
+                    Update u = readGithubReleaseUpdate(channel, release);
+                    if (u != null && u.hasManifest()) {
+                        best = u;
+                        bestTag = tag;
+                    }
                 }
             }
+            return best == null ? Update.empty(channel) : best;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Update.empty(channel);
+        }
+    }
+
+    /** 比 Update.hasUpdate 更稳：同 versionCode 时按完整 tag 时间戳比较 */
+    private boolean reallyHasUpdate(Update update) {
+        if (update == null || !update.hasManifest()) return false;
+        try {
+            if (update.code > 0 && update.code > com.fongmi.android.tv.BuildConfig.VERSION_CODE) return true;
+            if (update.code > 0 && update.code < com.fongmi.android.tv.BuildConfig.VERSION_CODE) return false;
         } catch (Throwable ignored) {
         }
-        String lastError = "";
-        for (String url : urls) {
-            try {
-                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
-                if (update.hasManifest()) return update;
-                if (!TextUtils.isEmpty(update.error)) lastError = update.error;
-            } catch (Exception e) {
-                e.printStackTrace();
-                lastError = e.getMessage();
+        if (AppVersion.isCurrent(update.name)) return false;
+        return AppVersion.isNewerThanCurrent(update.name);
+    }
+
+    private Update getGithubBetaUpdate(String channel) {
+        Update picked = pickNewestGithubUpdate(channel, true);
+        if (picked != null && picked.hasManifest()) return picked;
+        String manifestName = getManifestName(channel);
+        try {
+            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null || !isBetaRelease(release)) continue;
+                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
+                return readGithubReleaseUpdate(channel, release);
             }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        Update empty = Update.empty(Update.CHANNEL_STABLE);
-        empty.error = lastError;
-        return empty;
+        return Update.empty(channel);
     }
 
     private boolean isBetaRelease(JSONObject release) {
@@ -243,17 +235,20 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         JSONObject asset = findAsset(release.optJSONArray("assets"), getManifestName(channel));
         long assetId = asset == null ? 0 : asset.optLong("id");
         if (assetId <= 0) return Update.empty(channel);
-        return readUpdate(channel, Github.getReleaseAssetApi(assetId), GITHUB_ASSET_HEADERS, release.optString("body"));
+        return readUpdate(channel, Github.getReleaseAssetApi(assetId), SOURCE_GITHUB, GITHUB_ASSET_HEADERS, release.optString("body"));
     }
 
-    private Update readUpdate(String channel, String manifestUrl, Map<String, String> headers, String fallbackNotes) {
+    private Update readUpdate(String channel, String manifestUrl, String source) {
+        return readUpdate(channel, manifestUrl, source, null, "");
+    }
+
+    private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            String text = UpdateHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            String text = headers == null ? OkHttp.string(manifestUrl, GITHUB_REQUEST_TIMEOUT_MS) : OkHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
             if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
             JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
-            update.versionName = object.optString("versionName");
             update.desc = normalizeText(object.optString("desc"));
             update.notes = normalizeText(object.optString("notes"));
             update.channel = object.optString("channel", channel);
@@ -261,7 +256,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             update.apk = object.optString("apk");
             update.size = object.optLong("size");
             update.sha256 = object.optString("sha256");
-            parseDownloads(object, update);
+            update.apkUrl = getApkUrl(update, source);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
                 String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
@@ -274,23 +269,20 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         return update;
     }
 
-    private void parseDownloads(JSONObject object, Update update) {
-        JSONObject downloads = object.optJSONObject("downloads");
-        JSONObject github = downloads == null ? null : downloads.optJSONObject("github");
-        update.githubUrl = github == null ? "" : github.optString("url");
-        if (TextUtils.isEmpty(update.githubUrl)) update.githubUrl = getGithubApkUrl(update);
-        update.apkUrl = update.githubUrl;
-        JSONObject oci = downloads == null ? null : downloads.optJSONObject("oci");
-        if (oci == null) return;
-        OciArtifact artifact = new OciArtifact(
-                oci.optString("registry"),
-                oci.optString("repository"),
-                oci.optString("reference"),
-                oci.optString("manifestDigest"),
-                oci.optString("layerDigest"),
-                oci.optLong("size", update.size));
-        String apkDigest = TextUtils.isEmpty(update.sha256) ? "" : "sha256:" + update.sha256.toLowerCase(Locale.ROOT);
-        if (artifact.isValid() && (apkDigest.isEmpty() || apkDigest.equals(artifact.layerDigest)) && (update.size <= 0 || update.size == artifact.size)) update.oci = artifact;
+    private void attachDownloadFallback(Update selected, Update cnb, Update github) {
+        if (selected == null || cnb == null || github == null) return;
+        if (!cnb.hasManifest() || !github.hasManifest()) return;
+        if (!sameRelease(cnb, github)) return;
+        String fallback = selected == cnb ? github.apkUrl : cnb.apkUrl;
+        if (!TextUtils.isEmpty(fallback) && !fallback.equals(selected.apkUrl)) selected.fallbackApkUrl = fallback;
+    }
+
+    private boolean sameRelease(Update first, Update second) {
+        return first.code == second.code && compareName(first.name, second.name) == 0;
+    }
+
+    private int compareName(String left, String right) {
+        return AppVersion.stripPrefix(left).compareToIgnoreCase(AppVersion.stripPrefix(right));
     }
 
     private String normalizeText(String text) {
@@ -317,10 +309,11 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         return getName() + suffix + "." + ext;
     }
 
-    private String getGithubApkUrl(Update update) {
+    private String getApkUrl(Update update, String source) {
         String apk = TextUtils.isEmpty(update.apk) ? getDefaultApkName(update.channel) : update.apk;
+        if (!TextUtils.isEmpty(update.name)) return Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
         if (apk.startsWith("http://") || apk.startsWith("https://")) return apk;
-        return TextUtils.isEmpty(update.name) ? "" : Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
+        return Github.getGithubLatestAsset(getFileName(apk, update.channel));
     }
 
     private String getFileName(String value, String channel) {
@@ -343,8 +336,11 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private String readReleaseNotes(String tag) {
-        // 已取消 GitHub API 拉取 release notes
-        return "";
+        try {
+            return new JSONObject(OkHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private boolean hasErrorOnly() {
@@ -363,50 +359,32 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     @Override
     public void onConfirm(View view) {
-        if (selected == null || !selected.hasUpdate()) {
+        if (selected == null || !reallyHasUpdate(selected)) {
             Notify.show(R.string.update_latest);
             return;
         }
         view.setEnabled(false);
         downloading = true;
         canceled = false;
-        routes = getRoutes(selected);
-        routeIndex = 0;
-        if (routes.isEmpty()) {
-            downloading = false;
-            view.setEnabled(true);
-            Notify.show(R.string.update_download_source_unavailable);
-            return;
-        }
+        fallbackAttempted = false;
         resetProgress();
         Path.clear(getFile());
         setDialogProgress(0, 0, selected.size, 0, 0);
-        startNextDownload();
+        startDownload(selected.apkUrl);
     }
 
-    private List<UpdateTarget> getRoutes(Update update) {
-        try {
-            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
-            String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
-            return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
-    private void startNextDownload() {
-        if (routes == null || routeIndex >= routes.size()) return;
-        UpdateTarget target = routes.get(routeIndex++);
-        transfer = target.kind == UpdateTarget.Kind.OCI ? new OciUpdateTransfer(target, getFile()) : new HttpUpdateTransfer(target.url, getFile(), selected == null ? 0 : selected.size);
-        transfer.start(this);
+    private void startDownload(String url) {
+        download = Download.create(url, getFile()).tag(url);
+        download.start(this);
     }
 
     private boolean retryFallback() {
-        if (canceled || selected == null || routes == null || routeIndex >= routes.size()) return false;
+        if (canceled || selected == null || fallbackAttempted || TextUtils.isEmpty(selected.fallbackApkUrl)) return false;
+        fallbackAttempted = true;
         Path.clear(getFile());
         resetProgress();
         setDialogProgress(0, 0, selected.size, 0, 0);
-        startNextDownload();
+        startDownload(selected.fallbackApkUrl);
         return true;
     }
 
@@ -415,17 +393,15 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         if (downloading) {
             canceled = true;
             downloading = false;
-            if (transfer != null) transfer.cancel();
-            transfer = null;
-            routes = null;
+            if (download != null) download.cancel();
+            download = null;
             resetProgress();
             Notify.show(R.string.update_canceled);
             dismiss();
             return;
         }
         Setting.putUpdate(false);
-        if (transfer != null) transfer.cancel();
-        transfer = null;
+        if (download != null) download.cancel();
         dismiss();
     }
 
@@ -436,6 +412,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     @Override
     public void onChannel(String channel) {
+        Setting.putUpdateChannel(channel);
         selected = Update.CHANNEL_BETA.equals(channel) ? beta : stable;
     }
 
@@ -446,6 +423,11 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         } finally {
             dialog = null;
         }
+    }
+
+    @Override
+    public void progress(int progress) {
+        setDialogProgress(progress, 0, 0, 0, 0);
     }
 
     @Override
@@ -470,10 +452,9 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     @Override
     public void error(String msg) {
         if (canceled) return;
-        transfer = null;
+        download = null;
         if (retryFallback()) return;
         downloading = false;
-        routes = null;
         resetProgress();
         Notify.show(msg);
         dismiss();
@@ -482,7 +463,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     @Override
     public void success(File file) {
         if (canceled) return;
-        transfer = null;
+        download = null;
         Update target = selected;
         Task.execute(() -> {
             String error = validate(file, target);
@@ -495,12 +476,10 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
                     downloading = true;
                     if (retryFallback()) return;
                     downloading = false;
-                    routes = null;
                     Notify.show(error);
                     dismiss();
                     return;
                 }
-                routes = null;
                 FileUtil.openFile(file);
                 dismiss();
             });
@@ -517,50 +496,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         if (file == null || !file.exists() || file.length() <= 0) return ResUtil.getString(R.string.update_download_invalid);
         if (update != null && update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
         if (update != null && !TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
-        if (!validatePackage(file, update)) return ResUtil.getString(R.string.update_download_identity);
+        if (App.get().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0) == null) return ResUtil.getString(R.string.update_download_invalid);
         return "";
-    }
-
-    private boolean validatePackage(File file, Update update) {
-        try {
-            PackageManager manager = App.get().getPackageManager();
-            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
-            PackageInfo archive = manager.getPackageArchiveInfo(file.getAbsolutePath(), flags);
-            PackageInfo installed = manager.getPackageInfo(BuildConfig.APPLICATION_ID, flags);
-            if (archive == null || installed == null || !BuildConfig.APPLICATION_ID.equals(archive.packageName)) return false;
-            long archiveCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? archive.getLongVersionCode() : archive.versionCode;
-            if (update != null && update.code > 0 && archiveCode != update.code) return false;
-            if (update != null && !TextUtils.isEmpty(update.versionName) && !update.versionName.equals(archive.versionName)) return false;
-            return signaturesMatch(installed, archive);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private boolean signaturesMatch(PackageInfo installed, PackageInfo archive) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            if (installed.signingInfo == null || archive.signingInfo == null) return false;
-            if (installed.signingInfo.hasMultipleSigners() || archive.signingInfo.hasMultipleSigners()) {
-                return fingerprints(installed.signingInfo.getApkContentsSigners()).equals(fingerprints(archive.signingInfo.getApkContentsSigners()));
-            }
-            Set<String> current = fingerprints(installed.signingInfo.getApkContentsSigners());
-            Set<String> candidateHistory = fingerprints(archive.signingInfo.getSigningCertificateHistory());
-            return !current.isEmpty() && candidateHistory.containsAll(current);
-        }
-        return fingerprints(installed.signatures).equals(fingerprints(archive.signatures));
-    }
-
-    private Set<String> fingerprints(Signature[] signatures) {
-        Set<String> values = new HashSet<>();
-        if (signatures == null) return values;
-        for (Signature signature : signatures) {
-            try {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                values.add(Arrays.toString(digest.digest(signature.toByteArray())));
-            } catch (Exception ignored) {
-            }
-        }
-        return values;
     }
 
     private String sha256(File file) {

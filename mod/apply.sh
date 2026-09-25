@@ -100,7 +100,6 @@ run_hook() {
 }
 
 run_hook "$MOD/hooks/inject_subtitle.py"
-run_hook "$MOD/hooks/inject_subtitle_restore.py"
 run_hook "$MOD/hooks/inject_video_ai.py"
 run_hook "$MOD/hooks/inject_personal_manifest.py"
 run_hook "$MOD/hooks/fix_exo_dv5.py"
@@ -108,18 +107,7 @@ run_hook "$MOD/hooks/fix_migrations_keep.py"
 run_hook "$MOD/hooks/fix_db_history_schema.py"
 run_hook "$MOD/hooks/fix_recyclerview_fixed_size.py"
 run_hook "$MOD/hooks/inject_home_sites_retry.py"
-run_hook "$MOD/hooks/inject_home_push.py"
 run_hook "$MOD/hooks/fix_update_setting_stubs.py"
 run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
-if [[ -f "$MOD/hooks/inject_subtitle_style.py" ]]; then
-  python3 "$MOD/hooks/inject_subtitle_style.py" "$ROOT"
-fi
-if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
-  python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
-fi
 echo "[mod] done"
-
-if [[ -f "$MOD/hooks/inject_stalled_auto_change.py" ]]; then
-  python3 "$MOD/hooks/inject_stalled_auto_change.py" "$ROOT"
-fi
