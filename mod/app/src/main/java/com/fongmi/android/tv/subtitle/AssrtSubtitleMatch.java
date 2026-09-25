@@ -180,6 +180,16 @@ public final class AssrtSubtitleMatch {
             rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
         } catch (Throwable ignored) {
         }
+        try {
+            if (sLastHistory == null) {
+                String payload = file.getAbsolutePath() + ""
+                        + (display == null ? "" : display) + ""
+                        + (lang == null ? "" : lang) + ""
+                        + (format == null ? "" : format);
+                putCommit("ext_sub_last", payload);
+            }
+        } catch (Throwable ignored) {
+        }
         // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
         final String disp = trackLabel;
         final String fmt = format;
@@ -900,6 +910,16 @@ public final class AssrtSubtitleMatch {
                     if (parts.length >= 1 && !TextUtils.isEmpty(parts[0]) && new File(parts[0]).isFile()) {
                         return parts;
                     }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            String v = Prefers.getString("ext_sub_last");
+            if (!TextUtils.isEmpty(v)) {
+                String[] parts = v.split("", -1);
+                if (parts.length >= 1 && !TextUtils.isEmpty(parts[0]) && new File(parts[0]).isFile()) {
+                    return parts;
                 }
             }
         } catch (Throwable ignored) {

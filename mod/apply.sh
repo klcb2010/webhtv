@@ -20,6 +20,7 @@ done < <(find "$MOD" -type f -print0)
 
 
 
+
 # 删除仓库中历史误提交的加速源残留文件（不是实现加速源）
 if [[ -f "$MOD/hooks/clean_repo_leftovers.py" ]]; then
   python3 "$MOD/hooks/clean_repo_leftovers.py" "$ROOT"
