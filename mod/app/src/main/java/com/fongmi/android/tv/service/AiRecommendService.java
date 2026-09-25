@@ -182,6 +182,121 @@ public final class AiRecommendService {
         return items;
     }
 
+
+    /**
+     * 同系列后续季优先：AI 排序偶尔不可靠时，在本地再兜底一次。
+     * 例如“闪电侠第三季”后，第四、第五、第六、第七季排在其它相似剧之前。
+     */
+    private static void prioritizeSeriesSeasons(List<Item> items, String excludeTitle) {
+        if (items == null || items.size() < 2 || TextUtils.isEmpty(excludeTitle)) return;
+
+        String base = seriesKey(excludeTitle);
+        int currentSeason = extractSeason(excludeTitle);
+        if (TextUtils.isEmpty(base) || currentSeason <= 0) return;
+
+        List<Item> original = new ArrayList<>(items);
+        original.sort((a, b) -> {
+            int pa = seasonPriority(a, base, currentSeason);
+            int pb = seasonPriority(b, base, currentSeason);
+            if (pa != pb) return Integer.compare(pa, pb);
+            return 0;
+        });
+        items.clear();
+        items.addAll(original);
+    }
+
+    private static int seasonPriority(Item item, String base, int currentSeason) {
+        if (item == null || TextUtils.isEmpty(item.title)) return 10000;
+        String itemBase = seriesKey(item.title);
+        if (!base.equals(itemBase)) return 10000;
+
+        int season = extractSeason(item.title);
+        if (season > currentSeason) return season;
+        if (season == currentSeason) return 9000;
+        if (season > 0) return 8000 + season;
+        return 7000;
+    }
+
+    /** 去掉“第X季 / Sxx / Season xx”等季数标记后得到系列名。 */
+    private static String seriesKey(String title) {
+        if (TextUtils.isEmpty(title)) return "";
+        String s = title.trim().toLowerCase(Locale.ROOT);
+        s = s.replaceAll("第[0-9零一二两三四五六七八九十百千万]+季", "");
+        s = s.replaceAll("\\b(?:season|s)\\s*[0-9]{1,2}\\b", "");
+        s = s.replaceAll("\\s*[\\(\\[【（]?\\s*[0-9]{1,2}\\s*[季\\)\\]】）]\\s*$", "");
+        s = s.replaceAll("[：:·•._\\-–—\\s]+", "");
+        return s;
+    }
+
+    private static int extractSeason(String title) {
+        if (TextUtils.isEmpty(title)) return 0;
+        String s = title.trim().toLowerCase(Locale.ROOT);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("第([0-9零一二两三四五六七八九十百千万]+)季")
+                .matcher(s);
+        if (m.find()) return chineseNumber(m.group(1));
+
+        m = java.util.regex.Pattern.compile("\\bseason\\s*([0-9]{1,2})\\b").matcher(s);
+        if (m.find()) return parseSeasonNumber(m.group(1));
+
+        m = java.util.regex.Pattern.compile("\\bs\\s*([0-9]{1,2})\\b").matcher(s);
+        if (m.find()) return parseSeasonNumber(m.group(1));
+
+        m = java.util.regex.Pattern.compile("[\\(\\[【（]?\\s*([0-9]{1,2})\\s*[季\\)\\]】）]").matcher(s);
+        if (m.find()) return parseSeasonNumber(m.group(1));
+        return 0;
+    }
+
+    private static int parseSeasonNumber(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static int chineseNumber(String value) {
+        if (TextUtils.isEmpty(value)) return 0;
+        int total = 0;
+        int section = 0;
+        int number = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            int digit;
+            switch (c) {
+                case '零': digit = 0; break;
+                case '一': digit = 1; break;
+                case '二':
+                case '两': digit = 2; break;
+                case '三': digit = 3; break;
+                case '四': digit = 4; break;
+                case '五': digit = 5; break;
+                case '六': digit = 6; break;
+                case '七': digit = 7; break;
+                case '八': digit = 8; break;
+                case '九': digit = 9; break;
+                default: digit = -1;
+            }
+            if (digit >= 0) {
+                number = number * 10 + digit;
+            } else if (c == '十') {
+                section += number == 0 ? 10 : number * 10;
+                number = 0;
+            } else if (c == '百') {
+                section += (number == 0 ? 1 : number) * 100;
+                number = 0;
+            } else if (c == '千') {
+                section += (number == 0 ? 1 : number) * 1000;
+                number = 0;
+            } else if (c == '万') {
+                total += (section + (number == 0 ? 0 : number)) * 10000;
+                section = 0;
+                number = 0;
+            }
+        }
+        return total + section + number;
+    }
+
     private static String first(JsonObject o, String... keys) {
         for (String k : keys) {
             String v = asString(o, k);
