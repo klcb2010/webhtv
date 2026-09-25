@@ -166,9 +166,6 @@ public final class SubtitleRestoreCoordinator {
         }
         Log.i(TAG, "prepareRestore pending name=" + sub.getName() + " url=" + sub.getUrl());
         markAction("prepareRestore", sub.getName());
-        try {
-            android.widget.Toast.makeText(Init.context(), "字幕记忆: 将恢复 " + sub.getName(), android.widget.Toast.LENGTH_SHORT).show();
-        } catch (Throwable ignored) {}
 
     }
 
@@ -176,39 +173,22 @@ public final class SubtitleRestoreCoordinator {
      * setMediaItem / prepareMpv / start 前调用。
      * 成功注入才消费 pending；失败保留以便重试。
      */
+    /**
+     * 起播期不再改 PlaySpec.subs（易触发 reprepare / 有声无画）。
+     * 外挂恢复改由 Result.subs（attachRememberedSub）+ 轨道就绪后轻量选轨完成。
+     * 此方法仅消费 pending 标记，便于 last_action 观测。
+     */
     public static void injectPendingIntoPlayerManager(Object playerManager) {
         Sub sub = sPendingRestore;
-        if (sub == null || playerManager == null) return;
-        try {
-            Field specField = findField(playerManager.getClass(), "spec");
-            if (specField == null) {
-                Log.w(TAG, "no spec field");
-                return;
-            }
-            specField.setAccessible(true);
-            Object spec = specField.get(playerManager);
-            if (spec == null) {
-                Log.w(TAG, "spec is null, cannot inject");
-                return;
-            }
-            Method setSub = null;
-            for (Method m : spec.getClass().getMethods()) {
-                if ("setSub".equals(m.getName()) && m.getParameterTypes().length == 1) {
-                    setSub = m;
-                    break;
-                }
-            }
-            if (setSub == null) {
-                Log.w(TAG, "PlaySpec.setSub missing");
-                return;
-            }
-            setSub.invoke(spec, sub);
-            sPendingRestore = null; // 成功才消费
-            Log.i(TAG, "injected into PlaySpec name=" + sub.getName());
-            markAction("injected", sub.getName());
-        } catch (Throwable e) {
-            Log.w(TAG, "inject failed: " + e.getMessage());
-        }
+        if (sub == null) return;
+        // 不置空 pending：留给 Assrt onTracksReady / selectPending 使用 peekPending
+        markAction("injectSkipped", sub.getName() + " (soft-restore)");
+        Log.i(TAG, "inject skipped soft-restore name=" + sub.getName());
+    }
+
+    /** 选轨成功后由 Assrt 调用，清理 pending */
+    public static void clearPending() {
+        sPendingRestore = null;
     }
 
     public static Sub peekPending() {

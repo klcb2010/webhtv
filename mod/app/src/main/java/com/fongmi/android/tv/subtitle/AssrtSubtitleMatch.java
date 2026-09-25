@@ -73,6 +73,8 @@ public final class AssrtSubtitleMatch {
     private static volatile boolean sPreferExternal;
     private static volatile long sLastForceOkAt;
     private static volatile boolean sForceSettled;
+    /** true=不起播期 Media3 Override，避免有声无画 */
+    private static final boolean SOFT_RESTORE_ONLY = true;
 
     private AssrtSubtitleMatch() {
     }
@@ -192,8 +194,7 @@ public final class AssrtSubtitleMatch {
         final String fmt = format;
         final PlayerManager pm = player;
         // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 600);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 2500);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 1500);
     }
 
 
@@ -284,6 +285,23 @@ public final class AssrtSubtitleMatch {
     private static boolean forceSelectExternalViaMedia3(PlayerManager player) {
         try {
             if (player == null) return false;
+            if (SOFT_RESTORE_ONLY) {
+                // 软恢复：只按名字 setTrack，不做 TrackSelectionOverride
+                String remembered = !TextUtils.isEmpty(sPendingSelectName)
+                        ? sPendingSelectName
+                        : loadRememberedTrackName(sLastHistory, sLastEpisode);
+                if (selectExternalFromCurrentTracks(player, remembered == null ? "" : remembered)) {
+                    sForceSettled = true;
+                    sLastForceOkAt = System.currentTimeMillis();
+                    try {
+                        Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator")
+                                .getMethod("clearPending").invoke(null);
+                    } catch (Throwable ignored) {}
+                    Log.i(TAG, "softSelect OK name=" + remembered);
+                    return true;
+                }
+                return false;
+            }
             Object engine = null;
             try {
                 java.lang.reflect.Field f = player.getClass().getDeclaredField("engine");
