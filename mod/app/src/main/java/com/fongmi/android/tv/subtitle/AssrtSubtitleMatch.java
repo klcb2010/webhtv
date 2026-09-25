@@ -92,9 +92,535 @@ public final class AssrtSubtitleMatch {
         return displayNameForKeyword(item, item == null ? "" : item.name);
     }
 
+<<<<<<< HEAD
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         if (activity == null || playerProvider == null) return;
         if (!Setting.isSubtitleAutoMatchEnabled()) return;
+=======
+
+    /** 立即挂载外挂字幕：写入 spec + 用 player.getKey() 记选中轨（与 restoreTrack 同一把钥匙） */
+    public static void applyToPlayer(PlayerManager player, File file, String display, String lang, String format) {
+        if (player == null || file == null || !file.isFile()) return;
+        if (TextUtils.isEmpty(format)) {
+            format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
+        }
+        if (TextUtils.isEmpty(display)) display = file.getName();
+        String trackLabel = trackLabelFor(display, format, file.getName());
+        Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
+        sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+        player.setSub(sub);
+        try {
+            if (sLastHistory != null) {
+                SubtitleRestoreCoordinator.remember(sLastHistory, sub);
+            }
+        } catch (Throwable ignored) {}
+        sPendingSelectName = trackLabel;
+        sPendingSelectFormat = format;
+        sPreferExternal = true;
+        sForceSettled = false;
+        persistTextTrackSelection(player, trackLabel, format);
+        try {
+            rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
+        } catch (Throwable ignored) {
+        }
+        // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
+        final String disp = trackLabel;
+        final String fmt = format;
+        final PlayerManager pm = player;
+        // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 600);
+        App.post(() -> persistAndSelectText(pm, disp, fmt), 2500);
+    }
+
+
+    /** 与字幕列表 UI 对齐：奥德赛，SRT */
+    private static String trackLabelFor(String display, String format, String fileName) {
+        String base = !TextUtils.isEmpty(display) ? display.trim() : "";
+        if (TextUtils.isEmpty(base) && !TextUtils.isEmpty(fileName)) {
+            base = fileName;
+            int dot = base.lastIndexOf('.');
+            if (dot > 0) base = base.substring(0, dot);
+        }
+        String tag = "SRT";
+        String f = format == null ? "" : format.toLowerCase(Locale.ROOT);
+        String fn = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (f.contains("vtt") || fn.endsWith(".vtt")) tag = "VTT";
+        else if (f.contains("ssa") || f.contains("ass") || fn.endsWith(".ass") || fn.endsWith(".ssa")) tag = "ASS";
+        else if (f.contains("ttml") || fn.endsWith(".ttml")) tag = "TTML";
+        else if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) tag = "SRT";
+        if (!TextUtils.isEmpty(base) && base.toUpperCase(Locale.ROOT).contains(tag)) return base;
+        if (TextUtils.isEmpty(base)) return tag;
+        return base + "，" + tag;
+    }
+
+    private static void persistTextTrackSelection(PlayerManager player, String display, String format) {
+        try {
+            if (TextUtils.isEmpty(display)) return;
+            String fmt = TextUtils.isEmpty(format) ? "application/x-subrip" : format;
+            java.util.LinkedHashSet<String> keys = new java.util.LinkedHashSet<>();
+            try {
+                if (player != null && !TextUtils.isEmpty(player.getKey())) keys.add(player.getKey());
+            } catch (Throwable ignored) {
+            }
+            try {
+                if (sLastHistory != null && !TextUtils.isEmpty(sLastHistory.getKey())) keys.add(sLastHistory.getKey());
+            } catch (Throwable ignored) {
+            }
+            // 仅 history 时也要能写
+            if (keys.isEmpty() && sLastHistory != null) {
+                try { keys.add(String.valueOf(sLastHistory.getKey())); } catch (Throwable ignored) {}
+            }
+            for (String key : keys) {
+                if (TextUtils.isEmpty(key)) continue;
+                Track track = new Track(C.TRACK_TYPE_TEXT, display, fmt);
+                track.setKey(key);
+                track.setSelected(true);
+                track.save();
+            }
+            // Prefers 再记一份名字，不依赖 Room key
+            try {
+                if (sLastHistory != null && !TextUtils.isEmpty(sLastHistory.getKey())) {
+                    putCommit("ext_sub_name_" + Util.md5(sLastHistory.getKey()), display);
+                    putCommit("ext_sub_fmt_" + Util.md5(sLastHistory.getKey()), fmt);
+                }
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void persistAndSelectText(PlayerManager player, String display, String format) {
+        try {
+            if (player == null || player.isEmpty()) return;
+            persistTextTrackSelection(player, display, format);
+            // 最稳：Media3 Override 直接点名 SRT 组
+            if (forceSelectExternalViaMedia3(player)) return;
+            // 其次：按名字 setTrack
+            if (selectExternalFromCurrentTracks(player, display)) return;
+            java.util.ArrayList<Track> list = new java.util.ArrayList<>();
+            Track track = new Track(C.TRACK_TYPE_TEXT, display, TextUtils.isEmpty(format) ? "application/x-subrip" : format);
+            track.setKey(player.getKey());
+            track.setSelected(true);
+            list.add(track);
+            try {
+                player.setTrack(list);
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 在已加载的 Tracks 中选中外挂字幕组（SRT/VTT/SSA 或 id 含 external） */
+
+    /**
+     * 用 Media3 TrackSelectionOverride 强制选中外挂 SRT（不依赖名字是否带「，SRT」）。
+     * 通过反射拿到 ExoPlayer，避免引擎类名变更。
+     */
+    @SuppressWarnings("unchecked")
+    private static boolean forceSelectExternalViaMedia3(PlayerManager player) {
+        try {
+            if (player == null) return false;
+            Object engine = null;
+            try {
+                java.lang.reflect.Field f = player.getClass().getDeclaredField("engine");
+                f.setAccessible(true);
+                engine = f.get(player);
+            } catch (Throwable ignored) {
+            }
+            if (engine == null) return false;
+            Object exo = null;
+            for (String mName : new String[]{"getPlayer", "getExoPlayer"}) {
+                try {
+                    java.lang.reflect.Method mth = engine.getClass().getMethod(mName);
+                    exo = mth.invoke(engine);
+                    if (exo != null) break;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (exo == null) {
+                try {
+                    java.lang.reflect.Field f = engine.getClass().getDeclaredField("player");
+                    f.setAccessible(true);
+                    exo = f.get(engine);
+                } catch (Throwable ignored) {
+                }
+            }
+            if (!(exo instanceof androidx.media3.common.Player)) return false;
+            androidx.media3.common.Player pl = (androidx.media3.common.Player) exo;
+            Tracks tracks = pl.getCurrentTracks();
+            if (tracks == null || tracks.isEmpty()) return false;
+
+            String remembered = !TextUtils.isEmpty(sPendingSelectName)
+                    ? sPendingSelectName
+                    : loadRememberedTrackName(sLastHistory, sLastEpisode);
+            boolean wantExternal = sPreferExternal || loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
+
+            Tracks.Group bestGroup = null;
+            int bestIndex = -1;
+            int bestScore = -1;
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+                if (!group.isSupported()) continue;
+                for (int i = 0; i < group.length; i++) {
+                    if (!group.isTrackSupported(i)) continue;
+                    Format f = group.getTrackFormat(i);
+                    int score = scoreByRemembered(f, remembered, wantExternal);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestGroup = group;
+                        bestIndex = i;
+                    }
+                }
+            }
+            if (bestGroup == null || bestIndex < 0 || bestScore < 25) {
+                Log.i(TAG, "forceSelect skip score=" + bestScore + " wantExt=" + wantExternal + " name=" + remembered);
+                return false;
+            }
+            // 已是目标轨则不重复 set
+            try {
+                if (bestGroup.isTrackSelected(bestIndex)) {
+                    Log.i(TAG, "forceSelect already selected");
+                    sForceSettled = true;
+                    sLastForceOkAt = System.currentTimeMillis();
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            androidx.media3.common.TrackSelectionOverride override =
+                    new androidx.media3.common.TrackSelectionOverride(bestGroup.getMediaTrackGroup(), bestIndex);
+            androidx.media3.common.TrackSelectionParameters params = pl.getTrackSelectionParameters()
+                    .buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .setOverrideForType(override)
+                    .build();
+            pl.setTrackSelectionParameters(params);
+            Format chosen = bestGroup.getTrackFormat(bestIndex);
+            String label = chosen.label != null ? chosen.label : String.valueOf(chosen.id);
+            persistTextTrackSelection(player, !TextUtils.isEmpty(remembered) ? remembered : label, chosen.sampleMimeType);
+            Log.i(TAG, "forceSelect OK score=" + bestScore + " label=" + label + " mime=" + chosen.sampleMimeType);
+            sForceSettled = true;
+            sLastForceOkAt = System.currentTimeMillis();
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "forceSelect failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** 名字优先；有外挂记忆时才用 mime 识别外挂轨（有内嵌时也能选中外挂） */
+    private static int scoreByRemembered(Format f, String remembered, boolean wantExternal) {
+        if (f == null) return -1;
+        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType;
+        String label = f.label == null ? "" : f.label;
+        String id = f.id == null ? "" : String.valueOf(f.id);
+        String lang = f.language == null ? "" : f.language;
+        String blob = (label + " " + id + " " + mime + " " + lang).toLowerCase(Locale.ROOT);
+        boolean isExtMime = mime.toLowerCase(Locale.ROOT).contains("subrip")
+                || mime.toLowerCase(Locale.ROOT).contains("vtt")
+                || mime.toLowerCase(Locale.ROOT).contains("ssa")
+                || mime.toLowerCase(Locale.ROOT).contains("ttml")
+                || mime.toLowerCase(Locale.ROOT).contains("text/");
+        boolean isExtHint = blob.contains("external") || blob.contains("外挂")
+                || blob.contains(".srt") || blob.contains("srt")
+                || blob.contains(".ass") || blob.contains(".vtt");
+        int s = 0;
+        if (wantExternal) {
+            if (isExtMime) s += 70;
+            if (isExtHint) s += 20;
+            // 内嵌 PGS/图像字幕在有外挂记忆时降权
+            if (mime.toLowerCase(Locale.ROOT).contains("pgs")
+                    || mime.toLowerCase(Locale.ROOT).contains("vobsub")
+                    || mime.toLowerCase(Locale.ROOT).contains("dvb")) {
+                s -= 40;
+            }
+        }
+        if (!TextUtils.isEmpty(remembered)) {
+            String r = remembered.trim();
+            String rBase = r;
+            int comma = Math.max(r.lastIndexOf('，'), r.lastIndexOf(','));
+            if (comma > 0) rBase = r.substring(0, comma).trim();
+            String rl = r.toLowerCase(Locale.ROOT);
+            String rbl = rBase.toLowerCase(Locale.ROOT);
+            if (label.equalsIgnoreCase(r) || id.equalsIgnoreCase(r)) s += 100;
+            else if (label.equalsIgnoreCase(rBase) || id.equalsIgnoreCase(rBase)) s += 90;
+            else if (label.toLowerCase(Locale.ROOT).contains(rbl) && rbl.length() >= 2) s += 70;
+            else if (id.toLowerCase(Locale.ROOT).contains(rbl) && rbl.length() >= 2) s += 60;
+            else if (blob.contains(rbl) && rbl.length() >= 2) s += 40;
+            if (rl.contains("srt") && mime.toLowerCase(Locale.ROOT).contains("subrip")) s += 15;
+            if (rl.contains("ass") && (mime.toLowerCase(Locale.ROOT).contains("ssa") || mime.toLowerCase(Locale.ROOT).contains("ass"))) s += 15;
+            if (rl.contains("vtt") && mime.toLowerCase(Locale.ROOT).contains("vtt")) s += 15;
+        } else if (wantExternal && isExtMime) {
+            s += 30; // 无名字时仍优先外挂文本轨
+        }
+        return s;
+    }
+
+
+
+    /** 判断当前播放器是否已经选中了记忆中的外挂字幕，避免恢复流程重复 setSub。 */
+    private static boolean isRememberedSelectionActive(PlayerManager player) {
+        try {
+            if (player == null) return false;
+            Tracks tracks = player.getCurrentTracks();
+            if (tracks == null || tracks.isEmpty()) return false;
+
+            String remembered = !TextUtils.isEmpty(sPendingSelectName)
+                    ? sPendingSelectName
+                    : loadRememberedTrackName(sLastHistory, sLastEpisode);
+            if (TextUtils.isEmpty(remembered)) return false;
+
+            String r = remembered.trim();
+            String rBase = r;
+            int comma = Math.max(r.lastIndexOf('，'), r.lastIndexOf(','));
+            if (comma > 0) rBase = r.substring(0, comma).trim();
+
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+                for (int i = 0; i < group.length; i++) {
+                    if (!group.isTrackSelected(i)) continue;
+                    Format f = group.getTrackFormat(i);
+                    if (f == null) continue;
+                    String label = f.label == null ? "" : f.label.trim();
+                    String id = f.id == null ? "" : String.valueOf(f.id).trim();
+                    String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
+
+                    boolean nameMatch = r.equalsIgnoreCase(label)
+                            || rBase.equalsIgnoreCase(label)
+                            || r.equalsIgnoreCase(id)
+                            || rBase.equalsIgnoreCase(id)
+                            || (!TextUtils.isEmpty(rBase) && label.toLowerCase(Locale.ROOT).contains(rBase.toLowerCase(Locale.ROOT)));
+                    boolean external = mime.contains("subrip")
+                            || mime.contains("vtt")
+                            || mime.contains("ssa")
+                            || mime.contains("ttml")
+                            || mime.contains("text/");
+                    if (nameMatch && external) return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean selectExternalFromCurrentTracks(PlayerManager player, String display) {
+        try {
+            Tracks tracks = player.getCurrentTracks();
+            if (tracks == null || tracks.isEmpty()) return false;
+            String bestName = null;
+            String bestMime = null;
+            int bestScore = -1;
+            for (Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+                for (int i = 0; i < group.length; i++) {
+                    Format f = group.getTrackFormat(i);
+                    if (f == null) continue;
+                    int score = scoreByRemembered(f, display, sPreferExternal || loadCachedSubPayload(sLastHistory, sLastEpisode) != null);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMime = f.sampleMimeType;
+                        if (!TextUtils.isEmpty(f.label)) bestName = f.label;
+                        else if (!TextUtils.isEmpty(f.id)) bestName = f.id;
+                        else if (!TextUtils.isEmpty(display)) bestName = display;
+                        else bestName = "sub";
+                    }
+                }
+            }
+            if (bestScore < 10 || TextUtils.isEmpty(bestName)) return false;
+            // 尝试多个名字：列表里是「奥德赛，SRT」，setTrack 必须对得上
+            java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+            names.add(bestName);
+            if (!TextUtils.isEmpty(display)) {
+                names.add(display);
+                int c = Math.max(display.indexOf('，'), display.indexOf(','));
+                if (c > 0) names.add(display.substring(0, c).trim());
+            }
+            int c2 = Math.max(bestName.indexOf('，'), bestName.indexOf(','));
+            if (c2 > 0) names.add(bestName.substring(0, c2).trim());
+            String mime = bestMime == null ? "application/x-subrip" : bestMime;
+            boolean ok = false;
+            for (String nm : names) {
+                if (TextUtils.isEmpty(nm)) continue;
+                try {
+                    java.util.ArrayList<Track> list = new java.util.ArrayList<>();
+                    Track track = new Track(C.TRACK_TYPE_TEXT, nm, mime);
+                    track.setKey(player.getKey());
+                    track.setSelected(true);
+                    list.add(track);
+                    player.setTrack(list);
+                    ok = true;
+                    Log.i(TAG, "selectExternal score=" + bestScore + " name=" + nm + " mime=" + mime);
+                } catch (Throwable ignored) {
+                }
+            }
+            return ok;
+        } catch (Throwable e) {
+            Log.w(TAG, "selectExternal failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** 只按「上次记住的名字」打分，不按 SRT/PGS 类型强选 */
+    private static int scoreExternalFormat(Format f, String remembered) {
+        if (f == null) return -1;
+        String id = f.id == null ? "" : f.id;
+        String label = f.label == null ? "" : f.label;
+        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType;
+        if (TextUtils.isEmpty(remembered)) {
+            // 无记忆时不抢选
+            return -1;
+        }
+        String r = remembered.trim();
+        String rBase = r;
+        int c = Math.max(r.indexOf('，'), r.indexOf(','));
+        if (c > 0) rBase = r.substring(0, c).trim();
+        int s = 0;
+        if (label.equals(r) || id.equals(r)) s += 200;
+        else if (label.equals(rBase) || id.equals(rBase)) s += 180;
+        else if (label.contains(r) || r.contains(label) && !TextUtils.isEmpty(label)) s += 120;
+        else if (label.contains(rBase) || rBase.contains(label) && label.length() >= 2) s += 100;
+        else if (id.toLowerCase(Locale.ROOT).contains(rBase.toLowerCase(Locale.ROOT))) s += 60;
+        else return -1; // 对不上名字就不选这条
+        // 轻微参考 mime（仅同分参考，不压倒名字）
+        String rl = r.toLowerCase(Locale.ROOT);
+        String ml = mime.toLowerCase(Locale.ROOT);
+        if (rl.contains("srt") && ml.contains("subrip")) s += 5;
+        if (rl.contains("pgs") && ml.contains("pgs")) s += 5;
+        if (rl.contains("ass") && (ml.contains("ssa") || ml.contains("ass"))) s += 5;
+        return s;
+    }
+
+
+
+    /** 用户在字幕列表点选某轨时调用，只记名字，下次按名恢复 */
+    public static void rememberChosenTrack(PlayerManager player, Track item) {
+        try {
+            if (item == null || item.getType() != C.TRACK_TYPE_TEXT) return;
+            if (item.isDisabled()) {
+                sPendingSelectName = "";
+                sPendingSelectFormat = "";
+                return;
+            }
+            String name = item.getName();
+            if (TextUtils.isEmpty(name)) return;
+            sPendingSelectName = name;
+            sPendingSelectFormat = item.getFormat() == null ? "" : item.getFormat();
+            String fmt = sPendingSelectFormat.toLowerCase(Locale.ROOT);
+            String nl = name.toLowerCase(Locale.ROOT);
+            sPreferExternal = fmt.contains("subrip") || fmt.contains("vtt") || fmt.contains("ssa")
+                    || fmt.contains("ttml") || fmt.contains("text/")
+                    || nl.contains("srt") || nl.contains("vtt") || nl.contains("ass")
+                    || nl.contains("外挂");
+            if (item.isDisabled()) sPreferExternal = false;
+            // 写入与 apply 相同的多键缓存：无文件时只记名字，恢复靠 setTrack/Override
+            try {
+                if (player != null && !TextUtils.isEmpty(player.getKey())) {
+                    Track t = new Track(C.TRACK_TYPE_TEXT, name, item.getFormat() == null ? "" : item.getFormat());
+                    t.setKey(player.getKey());
+                    t.setSelected(true);
+                    t.save();
+                }
+            } catch (Throwable ignored) {
+            }
+            // 也写入 Prefers 名字，历史重进 attach 后可按名选
+            try {
+                Prefers.put("ext_sub_name_" + (sLastHistory != null ? Util.md5(sLastHistory.getKey()) : "x"), name);
+                if (sLastHistory != null) {
+                    for (String key : subCacheKeys(sLastHistory, sLastEpisode)) {
+                        // 若已有文件缓存则保留文件；额外记名字键
+                        Prefers.put(key + "_name", name);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            persistChosenNameOnly(name, item.getFormat() == null ? "" : item.getFormat());
+            Log.i(TAG, "rememberChosenTrack " + name);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static String loadRememberedTrackName(History history, Episode episode) {
+        try {
+            if (!TextUtils.isEmpty(sPendingSelectName)) return sPendingSelectName;
+            if (history != null) {
+                for (String key : subCacheKeys(history, episode)) {
+                    String n = Prefers.getString(key + "_name");
+                    if (!TextUtils.isEmpty(n)) return n;
+                }
+                String n2 = Prefers.getString("ext_sub_name_" + Util.md5(history.getKey()));
+                if (!TextUtils.isEmpty(n2)) return n2;
+            }
+        } catch (Throwable ignored) {
+        }
+        return "";
+    }
+
+
+    /** 轨道列表变化时调用（有内嵌+外挂时外挂常晚到，需多次尝试） */
+    public static void onTracksReady(PlayerManager player) {
+        try {
+            if (player == null || player.isEmpty()) return;
+            // 从缓存装载「上次外挂」意图
+            String[] payload = loadCachedSubPayload(sLastHistory, sLastEpisode);
+            boolean hasExtFile = payload != null;
+            if (TextUtils.isEmpty(sPendingSelectName)) {
+                String n = loadRememberedTrackName(sLastHistory, sLastEpisode);
+                if (TextUtils.isEmpty(n) && hasExtFile && payload.length > 1) n = payload[1];
+                if (!TextUtils.isEmpty(n)) sPendingSelectName = n;
+            }
+            if (TextUtils.isEmpty(sPendingSelectFormat) && hasExtFile && payload.length > 3) {
+                sPendingSelectFormat = payload[3];
+            }
+            if (hasExtFile) sPreferExternal = true;
+            if (!sPreferExternal && TextUtils.isEmpty(sPendingSelectName) && !hasExtFile) return;
+
+            // 若已正确选中目标外挂，短时间不再刷；否则必须再选（防止被内嵌轨抢回）
+            if (sForceSettled && System.currentTimeMillis() - sLastForceOkAt < 3000) {
+                if (forceSelectExternalViaMedia3(player)) return;
+            }
+            Log.i(TAG, "onTracksReady preferExt=" + sPreferExternal + " name=" + sPendingSelectName + " hasFile=" + hasExtFile);
+            persistAndSelectText(player, sPendingSelectName, sPendingSelectFormat);
+            // 轨道刚就绪时 Override 可能尚未生效，再补两次
+            final PlayerManager pm = player;
+            final String nm = sPendingSelectName;
+            final String fm = sPendingSelectFormat;
+            App.post(() -> persistAndSelectText(pm, nm, fm), 500);
+            App.post(() -> persistAndSelectText(pm, nm, fm), 1500);
+        } catch (Throwable e) {
+            Log.w(TAG, "onTracksReady: " + e.getMessage());
+        }
+    }
+
+    public static void selectPendingIfAny(PlayerManager player) {
+        try {
+            if (player == null || player.isEmpty()) return;
+            String name = sPendingSelectName;
+            String fmt = sPendingSelectFormat;
+            if (TextUtils.isEmpty(name)) {
+                // 无 pending 名时仍尝试选外挂轨
+                selectExternalFromCurrentTracks(player, "");
+                return;
+            }
+            persistAndSelectText(player, name, fmt);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
+        if (activity == null || playerProvider == null) return;
+        // 上游 SUB-EXT-HISTORY 已在 setMediaItem 前恢复外挂字幕；有效记忆存在时
+        // 不再启动旧的 Assrt 延迟恢复/自动匹配链，避免它把内嵌字幕重新切回去。
+        try {
+            com.fongmi.android.tv.playback.SubtitleSource source =
+                    history == null ? null : history.getSubtitleSourceObject();
+            if (source != null) {
+                com.fongmi.android.tv.playback.SubtitleRestorePolicy.Decision decision =
+                        com.fongmi.android.tv.playback.SubtitleRestorePolicy.decide(
+                                source, history.getEpisodeUrl(), false);
+                if (decision.restore()) return;
+            }
+        } catch (Throwable ignored) {
+        }
+>>>>>>> 03ea8ac891a89799aa5f0eb65778bdcdd3fb493c
         String title = history != null && history.getVodName() != null ? history.getVodName().trim() : "";
         String ep = episode != null && episode.getName() != null ? episode.getName().trim() : "";
         if (TextUtils.isEmpty(title) && TextUtils.isEmpty(ep)) return;
@@ -105,7 +631,88 @@ public final class AssrtSubtitleMatch {
         waitPlayingThenMatch(activity, playerProvider, keyword, gen, 0);
     }
 
+<<<<<<< HEAD
     /** 片名 + 集数，例如：金色年代 第一集 */
+=======
+    private static void waitPlayingThenRestoreOrMatch(Activity activity, History history, Episode episode, PlayerProvider playerProvider, String keyword, int gen, int attempt) {
+        App.post(() -> {
+            if (gen != GEN.get() || activity.isFinishing()) return;
+            try {
+                PlayerManager player = playerProvider.get();
+                if (player == null || player.isEmpty()) {
+                    if (attempt < 24) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+                    return;
+                }
+                // 预启动已通过 Result 注入时，当前轨道已经是记忆的外挂字幕。
+                // 不再调用 setSub()，避免把同一外挂重新挂一次造成二次重启/闪屏。
+                if (isRememberedSelectionActive(player)) {
+                    Log.i(TAG, "restore already active, skip setSub");
+                    return;
+                }
+                selectPendingIfAny(player);
+                if (isRememberedSelectionActive(player)) {
+                    Log.i(TAG, "restore selected by pending track, skip setSub");
+                    return;
+                }
+                if (tryRestoreSub(activity, history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode, playerProvider)) {
+                    selectPendingIfAny(player);
+                    return;
+                }
+                if (attempt < 6) {
+                    waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+                    return;
+                }
+                if (!Setting.isSubtitleAutoMatchEnabled()) return;
+                if (TextUtils.isEmpty(keyword)) return;
+                Task.execute(() -> doAutoMatch(activity, playerProvider, keyword, gen));
+            } catch (Throwable e) {
+                if (attempt < 24) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
+            }
+        }, attempt == 0 ? 600 : 400);
+    }
+
+    /**
+     * 从过长片源标题里抽出适合搜字幕的短名。
+     * 例：2026恐怖片《奥德赛》/The.xxx → 奥德赛
+     */
+    public static String cleanTitleForSearch(String title) {
+        if (title == null) return "";
+        String t = title.trim();
+        if (t.isEmpty()) return "";
+        try {
+            Matcher m = Pattern.compile("《([^》]+)》").matcher(t);
+            if (m.find()) {
+                String inside = m.group(1).trim();
+                if (!inside.isEmpty()) return inside;
+            }
+            // 中文名在括号里：xxx（奥德赛）
+            m = Pattern.compile("[（(]([\u4e00-\u9fff]{2,20})[）)]").matcher(t);
+            if (m.find()) return m.group(1).trim();
+        } catch (Throwable ignored) {
+        }
+        // 去掉年份前缀与常见类型词
+        t = t.replaceAll("^\\d{4}\\s*", "");
+        t = t.replaceAll("(?i)^(恐怖片|剧情片|喜剧片|动作片|爱情片|科幻片|悬疑片|战争片|纪录片|综艺|动漫|电影|电视剧)[\\s:：]*", "");
+        // 取 / 或 | 前的中文段
+        int cut = -1;
+        for (char c : new char[]{'/', '|', '\\'}) {
+            int i = t.indexOf(c);
+            if (i > 0 && (cut < 0 || i < cut)) cut = i;
+        }
+        if (cut > 0) t = t.substring(0, cut).trim();
+        // 去掉残留书名号
+        t = t.replace("《", "").replace("》", "").trim();
+        // 若仍很长且含空格，优先连续中文
+        try {
+            Matcher m = Pattern.compile("[\\u4e00-\\u9fff]{2,30}").matcher(t);
+            if (m.find() && t.length() > 20) return m.group().trim();
+        } catch (Throwable ignored) {
+        }
+        return t.trim();
+    }
+
+    /** 片名 + 集数；片名先 clean，避免整串文件名 */
+>>>>>>> 03ea8ac891a89799aa5f0eb65778bdcdd3fb493c
     public static String formatKeyword(String title, String episode) {
         String t = title == null ? "" : title.trim();
         String e = episode == null ? "" : episode.trim();

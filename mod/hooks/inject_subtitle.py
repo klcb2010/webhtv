@@ -44,6 +44,16 @@ SHOW = r"""
 """
 
 
+<<<<<<< HEAD
+=======
+
+def inject_set_player(t: str) -> str:
+    # External subtitle history is now handled by inject_subtitle_restore.py
+    # using the upstream History -> PlayerManager pre-start restore path.
+    # Do not inject the old AssrtSubtitleMatch.attachRememberedSub() path here.
+    return t
+
+>>>>>>> 03ea8ac891a89799aa5f0eb65778bdcdd3fb493c
 def insert_after_on_subtitle_click(t: str) -> str:
     if "void showSubtitleSearch()" in t and "getSubtitleSearchKeyword()" in t:
         # refresh method bodies if old version
