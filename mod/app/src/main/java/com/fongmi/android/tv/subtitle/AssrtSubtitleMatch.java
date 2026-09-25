@@ -596,8 +596,17 @@ public final class AssrtSubtitleMatch {
                     if (attempt < 24) waitPlayingThenRestoreOrMatch(activity, history, episode, playerProvider, keyword, gen, attempt + 1);
                     return;
                 }
-                // 多试几次：历史刚进时 episode 可能尚未对齐
+                // 预启动已通过 Result 注入时，当前轨道已经是记忆的外挂字幕。
+                // 不再调用 setSub()，避免把同一外挂重新挂一次造成二次重启/闪屏。
+                if (isRememberedSelectionActive(player)) {
+                    Log.i(TAG, "restore already active, skip setSub");
+                    return;
+                }
                 selectPendingIfAny(player);
+                if (isRememberedSelectionActive(player)) {
+                    Log.i(TAG, "restore selected by pending track, skip setSub");
+                    return;
+                }
                 if (tryRestoreSub(activity, history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode, playerProvider)) {
                     selectPendingIfAny(player);
                     return;
