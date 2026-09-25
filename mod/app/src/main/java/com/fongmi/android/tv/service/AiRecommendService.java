@@ -78,23 +78,9 @@ public final class AiRecommendService {
         String content = AiCompletionClient.complete(config, prompt);
         String exclude = currentTitle;
         if (TextUtils.isEmpty(exclude) && current != null) exclude = current.getName();
-        List<Item> aiItems = parseItems(content, exclude);
-        List<Item> sequels = expandSequelCandidates(seriesTitle, 6);
-        if (sequels.isEmpty() && !TextUtils.isEmpty(currentTitle) && !currentTitle.equals(seriesTitle)) {
-            sequels = expandSequelCandidates(currentTitle, 6);
-        }
-        if (sequels.isEmpty()) return aiItems;
-        LinkedHashMap<String, Item> map = new LinkedHashMap<>();
-        for (Item it : sequels) {
-            if (it == null || TextUtils.isEmpty(it.title)) continue;
-            map.put(it.title.toLowerCase(Locale.ROOT), it);
-        }
-        for (Item it : aiItems) {
-            if (it == null || TextUtils.isEmpty(it.title)) continue;
-            String k = it.title.toLowerCase(Locale.ROOT);
-            if (!map.containsKey(k)) map.put(k, it);
-        }
-        return new ArrayList<>(map.values());
+        // 列表只信 AI 返回；本地不编造「第N季」（电影续作如「血染蜂蜜2」会被误当成剧集）
+        // seriesTitle 仅用于 prompt 上下文（流人+备注第4季），便于模型优先续集
+        return parseItems(content, exclude);
     }
 
     /**
@@ -358,23 +344,8 @@ public final class AiRecommendService {
                 suffix = m.group(3) == null ? "" : m.group(3).trim();
             }
         }
-        if (prefix == null || cur < 1) {
-            // 末尾数字季：闪电侠3 / 绿箭侠 第3季 已覆盖；补「名称+数字」
-            m = java.util.regex.Pattern.compile("^(.*?)[\\s·\\-_]*([0-9]{1,2})[\\s·\\-_]*$").matcher(t);
-            if (m.find()) {
-                String cand = m.group(1).trim();
-                int n;
-                try { n = Integer.parseInt(m.group(2)); } catch (Exception e) { n = -1; }
-                if (n >= 1 && n <= 20 && cand.length() >= 2) {
-                    prefix = cand;
-                    cur = n;
-                    unit = "季";
-                    suffix = "";
-                }
-            }
-        }
         if (prefix == null || prefix.isEmpty() || cur < 1) return out;
-        int ahead = Math.max(1, Math.min(maxSeasonsAhead, 6));
+        int ahead = Math.max(1, Math.min(maxSeasonsAhead, 2)); // 最多向后 2 季，避免瞎编
         for (int i = 1; i <= ahead; i++) {
             int n = cur + i;
             if (n > 20) break;

@@ -622,10 +622,7 @@ public final class AssrtSubtitleMatch {
             final PlayerManager pm = player;
             final String nm = sPendingSelectName;
             final String fm = sPendingSelectFormat;
-            App.post(() -> persistAndSelectText(pm, nm, fm), 400);
             App.post(() -> persistAndSelectText(pm, nm, fm), 1200);
-            App.post(() -> persistAndSelectText(pm, nm, fm), 2800);
-            App.post(() -> forceSelectExternalViaMedia3(pm), 3500);
         } catch (Throwable e) {
             Log.w(TAG, "onTracksReady: " + e.getMessage());
         }
@@ -1036,9 +1033,7 @@ public final class AssrtSubtitleMatch {
             final String rn = name;
             final String rf = format;
             final PlayerManager rpm = player;
-            App.post(() -> persistAndSelectText(rpm, rn, rf), 800);
-            App.post(() -> persistAndSelectText(rpm, rn, rf), 2000);
-            App.post(() -> persistAndSelectText(rpm, rn, rf), 4500);
+            App.post(() -> persistAndSelectText(rpm, rn, rf), 1200);
             // 起播后轨道恢复可能把默认内嵌轨抢回去，延迟再挂一次
             final File f2 = file;
             final String n2 = name, l2 = lang, fmt2 = format;
