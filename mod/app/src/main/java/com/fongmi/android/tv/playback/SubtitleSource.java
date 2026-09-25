@@ -2,24 +2,24 @@ package com.fongmi.android.tv.playback;
 
 import android.text.TextUtils;
 
-import androidx.media3.common.C;
-
 import com.fongmi.android.tv.bean.Sub;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
 
 /**
- * Silent-aligned external subtitle memory payload (path/url, not track sid).
+ * 外挂字幕来源标识（存路径/URL，不存轨道 sid）。
+ * 对齐 Silent SubtitleSource：跨会话稳定，起播时重新 setSub。
  */
 public final class SubtitleSource {
 
     public static final String MODE_EXTERNAL = "external";
     public static final String MODE_DISABLED = "disabled";
+
     private static final Gson GSON = new Gson();
 
     @SerializedName("mode")
-    private String mode = MODE_EXTERNAL;
+    private String mode;
     @SerializedName("url")
     private String url;
     @SerializedName("name")
@@ -67,7 +67,7 @@ public final class SubtitleSource {
         if (!isUsable()) return null;
         Sub sub = Sub.create(getName(), getUrl(), getLang(), getFormat());
         try {
-            sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+            sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_DEFAULT | androidx.media3.common.C.SELECTION_FLAG_FORCED);
         } catch (Throwable ignored) {
         }
         return sub;

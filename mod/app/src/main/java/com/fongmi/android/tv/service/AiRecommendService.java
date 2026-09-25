@@ -71,122 +71,23 @@ public final class AiRecommendService {
     public static List<Item> load(Vod current, String currentTitle) throws Exception {
         AiConfig config = Setting.getAiConfig();
         if (!config.isRecommendationEnabled()) throw new IllegalStateException("ai_recommend_off");
-        // 详情标题常只有系列名（流人），季数在备注/历史；拼成「流人 第4季」再展开
-        String seriesTitle = resolveSeriesTitle(currentTitle, current);
-        String prompt = buildPrompt(current, seriesTitle);
-        Log.i(TAG, "prompt chars=" + prompt.length() + " title=" + currentTitle + " series=" + seriesTitle);
+        String prompt = buildPrompt(current, currentTitle);
+        Log.i(TAG, "prompt chars=" + prompt.length() + " title=" + currentTitle);
         String content = AiCompletionClient.complete(config, prompt);
         String exclude = currentTitle;
         if (TextUtils.isEmpty(exclude) && current != null) exclude = current.getName();
-        // 列表只信 AI 返回；本地不编造「第N季」（电影续作如「血染蜂蜜2」会被误当成剧集）
-        // seriesTitle 仅用于 prompt 上下文（流人+备注第4季），便于模型优先续集
         return parseItems(content, exclude);
-    }
-
-    /**
-     * 把「流人」+ 备注/历史里的「第4季」拼成可用于续集展开的完整标题。
-     * 若标题本身已含季数则原样返回。
-     */
-    public static String resolveSeriesTitle(String title, Vod current) {
-        String base = title == null ? "" : title.trim();
-        if (TextUtils.isEmpty(base) && current != null) base = safe(current.getName());
-        if (TextUtils.isEmpty(base)) return "";
-        // 标题已带季/部/Season → 直接用
-        if (hasSeasonHint(base)) return base;
-
-        List<String> hints = new ArrayList<>();
-        if (current != null) {
-            hints.add(safe(current.getRemarks()));
-            hints.add(safe(current.getName()));
-            try { hints.add(safe(current.getTypeName())); } catch (Throwable ignored) {}
-        }
-        // 播放历史：同名条目的备注常带「第N季 / 更新至…」
-        try {
-            List<History> histories = History.get();
-            if (histories != null) {
-                String baseKey = normalizeSeriesKey(base);
-                for (History h : histories) {
-                    if (h == null) continue;
-                    String hn = safe(h.getVodName());
-                    if (TextUtils.isEmpty(hn)) continue;
-                    String hk = normalizeSeriesKey(hn);
-                    if (hk.equals(baseKey) || hn.contains(base) || base.contains(stripSeason(hn))) {
-                        hints.add(safe(h.getVodRemarks()));
-                        hints.add(hn);
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-
-        int season = -1;
-        String unit = "季";
-        for (String hint : hints) {
-            if (TextUtils.isEmpty(hint)) continue;
-            int[] found = extractSeason(hint);
-            if (found[0] > 0) {
-                season = found[0];
-                unit = found[1] == 2 ? "部" : "季";
-                break;
-            }
-        }
-        if (season < 1) return base;
-        String out = base + " 第" + toCnNum(season) + unit;
-        Log.i(TAG, "resolveSeriesTitle " + base + " → " + out);
-        return out;
-    }
-
-    private static boolean hasSeasonHint(String s) {
-        if (TextUtils.isEmpty(s)) return false;
-        if (java.util.regex.Pattern.compile("第[0-9一二三四五六七八九十百]+[季部]").matcher(s).find()) return true;
-        if (java.util.regex.Pattern.compile("(?i)S(?:eason)?[\\s._-]*[0-9]{1,2}").matcher(s).find()) return true;
-        return false;
-    }
-
-    /** @return int[2] = {season, unitCode} unitCode 1=季 2=部；找不到则 season=-1 */
-    private static int[] extractSeason(String s) {
-        int[] none = new int[]{-1, 1};
-        if (TextUtils.isEmpty(s)) return none;
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "第([0-9一二三四五六七八九十百]+)([季部])").matcher(s);
-        if (m.find()) {
-            int n = parseCnNum(m.group(1));
-            if (n >= 1) return new int[]{n, "部".equals(m.group(2)) ? 2 : 1};
-        }
-        m = java.util.regex.Pattern.compile("(?i)S(?:eason)?[\\s._-]*([0-9]{1,2})").matcher(s);
-        if (m.find()) {
-            try {
-                int n = Integer.parseInt(m.group(1));
-                if (n >= 1 && n <= 30) return new int[]{n, 1};
-            } catch (Exception ignored) {}
-        }
-        // 「更新至第12集」不算季；「第四季完结」已覆盖
-        return none;
-    }
-
-    private static String stripSeason(String s) {
-        if (s == null) return "";
-        String t = s.trim();
-        t = java.util.regex.Pattern.compile("[\\s·\\-_]*第[0-9一二三四五六七八九十百]+[季部].*$").matcher(t).replaceFirst("");
-        t = java.util.regex.Pattern.compile("(?i)[\\s·\\-_]*S(?:eason)?[\\s._-]*[0-9]{1,2}.*$").matcher(t).replaceFirst("");
-        return t.trim();
-    }
-
-    private static String normalizeSeriesKey(String s) {
-        return stripSeason(s).toLowerCase(Locale.ROOT).replaceAll("[\\s·\\-_]", "");
     }
 
     private static String buildPrompt(Vod current, String currentTitle) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是专业的影视推荐专家，熟悉电影、电视剧、动漫、纪录片、综艺。");
-        sb.append("请根据用户「当前作品」和「播放历史」推荐 10-14 部作品。");
-        sb.append("【排序规则，必须严格遵守】");
-        sb.append("1) 若当前作品是系列剧/电影的某一季或某一集，优先推荐同一系列的后续季/部（如《闪电侠》第三季 → 第四季、第五季…直到季终），reason 写「正片续集/下一季」。");
-        sb.append("2) 同一系列续集排在最前，再推荐同一宇宙/关联作品（如绿箭宇宙相关），最后才是题材相似的其他作品。");
-        sb.append("3) 不要推荐当前已播的同一季，不要推荐播放历史里已出现的同名作品。");
+        sb.append("请根据用户「当前作品」和「播放历史」分析题材、地区、年代、导演/演员偏好，推荐 10-14 部相关作品。");
+        sb.append("优先推荐与当前作品气质相近、但片名不同的内容；可适度拓展同类型口碑作。");
+        sb.append("不要推荐播放历史里已出现的同名作品，不要推荐当前片名。");
         sb.append("只返回可解析 JSON，不要 Markdown 或解释。");
         sb.append("格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}。");
-        sb.append("mediaType 只能是 movie 或 tv；reason 约 10-30 个中文字。\n\n");
+        sb.append("mediaType 只能是 movie 或 tv；reason 约 15-40 个中文字。\n\n");
 
         sb.append("【当前作品】\n");
         String title = !TextUtils.isEmpty(currentTitle) ? currentTitle.trim() : (current != null ? safe(current.getName()) : "");
@@ -313,75 +214,4 @@ public final class AiRecommendService {
         if (s == null) return "";
         return s.length() <= 160 ? s : s.substring(0, 160);
     }
-    /**
-     * 根据当前片名本地生成「下一季/下一部」候选，插到推荐列表最前。
-     * 例：闪电侠第三季 → 闪电侠第四季…第七季
-     */
-    public static List<Item> expandSequelCandidates(String title, int maxSeasonsAhead) {
-        List<Item> out = new ArrayList<>();
-        if (TextUtils.isEmpty(title)) return out;
-        String t = title.trim();
-        // 中文：第N季 / 第N部
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "^(.*?)[\\s·\\-_]*第([0-9一二三四五六七八九十百]+)([季部])(.*)$").matcher(t);
-        int cur = -1;
-        String prefix = null;
-        String suffix = "";
-        String unit = "季";
-        if (m.find()) {
-            prefix = m.group(1).trim();
-            cur = parseCnNum(m.group(2));
-            unit = m.group(3);
-            suffix = m.group(4) == null ? "" : m.group(4).trim();
-        } else {
-            // 英文 Season N / S0N
-            m = java.util.regex.Pattern.compile(
-                    "(?i)^(.*?)[\\s·\\-_]*S(?:eason)?[\\s\\._-]*([0-9]{1,2})(.*)$").matcher(t);
-            if (m.find()) {
-                prefix = m.group(1).trim();
-                try { cur = Integer.parseInt(m.group(2)); } catch (Exception e) { cur = -1; }
-                unit = "季";
-                suffix = m.group(3) == null ? "" : m.group(3).trim();
-            }
-        }
-        if (prefix == null || prefix.isEmpty() || cur < 1) return out;
-        int ahead = Math.max(1, Math.min(maxSeasonsAhead, 2)); // 最多向后 2 季，避免瞎编
-        for (int i = 1; i <= ahead; i++) {
-            int n = cur + i;
-            if (n > 20) break;
-            String name = prefix + " 第" + toCnNum(n) + unit;
-            if (!suffix.isEmpty()) name = name + suffix;
-            String reason = (i == ahead) ? ("系列第" + n + unit + "（可能季终/后续）") : ("正片续集 · 第" + n + unit);
-            out.add(new Item(name, 0, "tv", reason));
-        }
-        return out;
-    }
-
-    private static int parseCnNum(String s) {
-        if (s == null || s.isEmpty()) return -1;
-        try { return Integer.parseInt(s); } catch (Exception ignored) {}
-        String[] cn = {"零","一","二","三","四","五","六","七","八","九","十"};
-        if ("十".equals(s)) return 10;
-        if (s.startsWith("十") && s.length() == 2) {
-            for (int i = 1; i <= 9; i++) if (s.equals("十" + cn[i])) return 10 + i;
-        }
-        if (s.endsWith("十") && s.length() == 2) {
-            for (int i = 1; i <= 9; i++) if (s.equals(cn[i] + "十")) return i * 10;
-        }
-        for (int i = 1; i <= 10; i++) if (s.equals(cn[i])) return i;
-        return -1;
-    }
-
-    private static String toCnNum(int n) {
-        if (n <= 0) return String.valueOf(n);
-        if (n <= 10) {
-            String[] cn = {"零","一","二","三","四","五","六","七","八","九","十"};
-            return cn[n];
-        }
-        if (n < 20) return "十" + toCnNum(n - 10);
-        if (n % 10 == 0) return toCnNum(n / 10) + "十";
-        return toCnNum(n / 10) + "十" + toCnNum(n % 10);
-    }
-
-
 }

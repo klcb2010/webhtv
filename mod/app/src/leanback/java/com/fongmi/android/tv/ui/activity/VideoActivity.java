@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-
 import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
 
 import android.annotation.SuppressLint;
@@ -139,7 +138,6 @@ import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TimerDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
-import com.fongmi.android.tv.ui.dialog.AssrtSubtitleSearchDialog;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
@@ -170,7 +168,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.Listener, TrackDialog.Listener, ControlDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, Clock.Callback, TrackDialog.SubtitleSearchHost{
+public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.Listener, TrackDialog.Listener, ControlDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, Clock.Callback {
 
     private static final long LYRICS_OFFSET_MIN_MS = -5000L;
     private static final long LYRICS_OFFSET_MAX_MS = 5000L;
@@ -1301,7 +1299,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setPlayer(Result result) {
-
         if (isFinishing() || isDestroyed()) return;
         SpiderDebug.log("video-flow", "player finish cost=%dms useParse=%s multi=%s msg=%s", System.currentTimeMillis() - playerStartTime, result.shouldUseParse(), result.getUrl().isMulti(), result.getMsg());
         if (service() == null) {
@@ -1434,11 +1431,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public void onItemClick(Result result) {
         beginPlayHealth();
-        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : "", getEpisode() != null ? getEpisode().getName() : ""); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player()); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 800); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 2000); } catch (Throwable ignored) {}
         startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());
     }
 
@@ -3509,7 +3501,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void onTrack(int type) {
-        TrackDialog.create().type(type).player(player()).search(this::showSubtitleSearch).show(this);
+        TrackDialog.create().type(type).player(player()).show(this);
         hideControl();
     }
 
@@ -5645,25 +5637,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     @Override
-
-    private void showSubtitleSearch() {
-        String keyword = getSubtitleSearchKeyword();
-        AssrtSubtitleMatch.updateKeyword(keyword);
-        AssrtSubtitleSearchDialog.show(this, player(), keyword);
-    }
-
-    public String getSubtitleSearchKeyword() {
-        try {
-            String name = mHistory != null ? mHistory.getVodName() : "";
-            String ep = getEpisode() != null ? getEpisode().getName() : "";
-            String k = AssrtSubtitleMatch.formatKeyword(name, ep);
-            if (!android.text.TextUtils.isEmpty(k)) return k;
-            return AssrtSubtitleMatch.lastKeyword();
-        } catch (Throwable e) {
-            return AssrtSubtitleMatch.lastKeyword();
-        }
-    }
-
     public void onSubtitleClick() {
         SubtitleDialog.create().view(mBinding.exo.getSubtitleView()).player(player()).show(this);
         App.post(this::hideControl, 100);
@@ -6497,7 +6470,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     protected void onDestroy() {
-        try { AssrtSubtitleMatch.cancel(); } catch (Throwable ignored) {}
         mLyricsSearchSeq++;
         mLyricsRefreshSeq++;
         dismissLyricsResultDialog();

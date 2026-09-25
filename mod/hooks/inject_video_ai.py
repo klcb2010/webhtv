@@ -81,12 +81,7 @@ HOOK = r"""
             }
             return;
         }
-        String _rt = title == null ? "" : title;
-        try {
-            String _rs = com.fongmi.android.tv.service.AiRecommendService.resolveSeriesTitle(_rt, vod);
-            if (_rs != null && !_rs.isEmpty()) _rt = _rs;
-        } catch (Throwable ignored) {}
-        final String reqTitle = _rt;
+        final String reqTitle = title == null ? "" : title;
         com.fongmi.android.tv.utils.Task.execute(() -> {
             java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items = null;
             for (int i = 0; i < 2; i++) {
@@ -141,12 +136,7 @@ HOOK = r"""
             }
             return;
         }
-        String _rt = title == null ? "" : title;
-        try {
-            String _rs = com.fongmi.android.tv.service.AiRecommendService.resolveSeriesTitle(_rt, vod);
-            if (_rs != null && !_rs.isEmpty()) _rt = _rs;
-        } catch (Throwable ignored) {}
-        final String reqTitle = _rt;
+        final String reqTitle = title == null ? "" : title;
         final com.fongmi.android.tv.bean.Vod reqVod = vod;
         com.fongmi.android.tv.utils.Task.execute(() -> {
             Exception last = null;

@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-
 import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
 
 import android.annotation.SuppressLint;
@@ -149,7 +148,6 @@ import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
-import com.fongmi.android.tv.ui.dialog.AssrtSubtitleSearchDialog;
 import com.fongmi.android.tv.ui.dialog.VideoContentDialog;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.EpisodeTitleCompact;
@@ -185,7 +183,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class VideoActivity extends PlaybackActivity implements Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, DanmakuDialog.Host, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, EpisodeGroupAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener, TrackDialog.SubtitleSearchHost{
+public class VideoActivity extends PlaybackActivity implements Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, DanmakuDialog.Host, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, EpisodeGroupAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener {
 
     private static final String SIZE_TAG = "MPV_SIZE";
     private static final long LYRICS_OFFSET_MIN_MS = -5000L;
@@ -1373,7 +1371,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setPlayer(Result result) {
-
         if (isFinishing() || isDestroyed()) return;
         if (service() == null) {
             mPendingPlayerResult = result;
@@ -1395,11 +1392,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         updateAudioStageText();
         mBinding.control.parse.setVisibility(isUseParse() ? View.VISIBLE : View.GONE);
         List<Danmaku> siteDanmakus = result.getDanmaku();
-        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : "", getEpisode() != null ? getEpisode().getName() : ""); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player()); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 800); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 2000); } catch (Throwable ignored) {}
         startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());
         if (DanmakuApi.canAutoSearch(siteDanmakus)) DanmakuApi.search(mHistory.getVodName(), getEpisode().getName(), player()::setDanmaku);
     }
@@ -2670,18 +2662,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onTrack(View view) {
-        TrackDialog.create().type(Integer.parseInt(view.getTag().toString())).player(player()).search(this::showSubtitleSearch).show(this);
+        TrackDialog.create().type(Integer.parseInt(view.getTag().toString())).player(player()).show(this);
         hideControl();
     }
 
     private void onTrack(int type) {
-        TrackDialog.create().type(type).player(player()).search(this::showSubtitleSearch).show(this);
+        TrackDialog.create().type(type).player(player()).show(this);
         hideControl();
     }
 
     @Override
     public void onTrackPanel(int type) {
-        TrackDialog.create().type(type).player(player()).search(this::showSubtitleSearch).show(this);
+        TrackDialog.create().type(type).player(player()).show(this);
     }
 
     private void onTitle() {
@@ -5893,25 +5885,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     @Override
-
-    private void showSubtitleSearch() {
-        String keyword = getSubtitleSearchKeyword();
-        AssrtSubtitleMatch.updateKeyword(keyword);
-        AssrtSubtitleSearchDialog.show(this, player(), keyword);
-    }
-
-    public String getSubtitleSearchKeyword() {
-        try {
-            String name = mHistory != null ? mHistory.getVodName() : "";
-            String ep = getEpisode() != null ? getEpisode().getName() : "";
-            String k = AssrtSubtitleMatch.formatKeyword(name, ep);
-            if (!android.text.TextUtils.isEmpty(k)) return k;
-            return AssrtSubtitleMatch.lastKeyword();
-        } catch (Throwable e) {
-            return AssrtSubtitleMatch.lastKeyword();
-        }
-    }
-
     public void onSubtitleClick() {
         SubtitleDialog.create().view(mBinding.exo.getSubtitleView()).player(player()).show(this);
         hideControl();
@@ -6583,7 +6556,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onDestroy() {
-        try { AssrtSubtitleMatch.cancel(); } catch (Throwable ignored) {}
         dismissKaraokeResultDialogForRecreation();
         mLyricsSearchSeq++;
         cancelKaraokePitchGeneration(false);

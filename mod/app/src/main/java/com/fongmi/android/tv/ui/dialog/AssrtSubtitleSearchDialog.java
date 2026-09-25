@@ -170,12 +170,6 @@ public final class AssrtSubtitleSearchDialog {
                     String format = PlayerHelper.getSubtitleMimeType(item.name);
                     if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());
                     AssrtSubtitleMatch.applyToPlayer(player, file, display, item.lang, format);
-                    // 再取一次当前播放器，防止 dialog 持有的引用已失效
-                    try {
-                        if (activity instanceof com.fongmi.android.tv.ui.activity.VideoActivity) {
-                            // no-op: applyToPlayer 内部已延迟选轨
-                        }
-                    } catch (Throwable ignored) {}
                     Notify.show(activity.getString(R.string.subtitle_manual_applied, display));
                 });
             } catch (Exception e) {

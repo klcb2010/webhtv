@@ -56,7 +56,7 @@ public final class DoubanRecommendService {
         } catch (Throwable e) {
             Log.w(TAG, "rexxar fail: " + e.getMessage());
         }
-        if (!out.isEmpty()) return withSequels(title, out);
+        if (!out.isEmpty()) return limit(out);
 
         // 2) 网页「喜欢这部的人也喜欢」
         try {
@@ -64,7 +64,7 @@ public final class DoubanRecommendService {
         } catch (Throwable e) {
             Log.w(TAG, "html fail: " + e.getMessage());
         }
-        return withSequels(title, out);
+        return limit(out);
     }
 
     private static List<AiRecommendService.Item> limit(List<AiRecommendService.Item> list) {
@@ -187,9 +187,4 @@ public final class DoubanRecommendService {
         h.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
         return h;
     }
-    private static List<AiRecommendService.Item> withSequels(String title, List<AiRecommendService.Item> rec) {
-        // 只保留豆瓣真实条目，不再本地编造「第N季」
-        return limit(rec);
-    }
-
 }
