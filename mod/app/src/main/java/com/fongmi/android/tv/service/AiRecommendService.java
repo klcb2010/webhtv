@@ -83,9 +83,8 @@ public final class AiRecommendService {
         StringBuilder sb = new StringBuilder();
         sb.append("你是专业的影视推荐专家，熟悉电影、电视剧、动漫、纪录片、综艺。");
         sb.append("请根据用户「当前作品」和「播放历史」分析题材、地区、年代、导演/演员偏好，推荐 10-14 部相关作品。");
-        sb.append("推荐顺序非常重要：如果当前作品是电视剧/动漫并且存在未观看的后续季，必须优先推荐同一系列的后续季，按季数从下一季开始连续排列；例如当前为《闪电侠》第三季，应优先给出《闪电侠》第四季、第五季、第六季、第七季（以及存在的更后续季），再推荐《绿箭侠》等同宇宙/相似作品。");
-        sb.append("不要因为片名相同就排除后续季；只有当前正在观看的同一季，以及播放历史中已经明确观看过的同一季，才应排除。");
-        sb.append("若后续季不足，再补充同系列衍生剧、同宇宙作品、再补充题材相似作品。前 4-7 个位置尽量用于同系列后续季；没有后续季时直接进入相似推荐。");
+        sb.append("优先推荐与当前作品气质相近、但片名不同的内容；可适度拓展同类型口碑作。");
+        sb.append("不要推荐播放历史里已出现的同名作品，不要推荐当前片名。");
         sb.append("只返回可解析 JSON，不要 Markdown 或解释。");
         sb.append("格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}。");
         sb.append("mediaType 只能是 movie 或 tv；reason 约 15-40 个中文字。\n\n");
@@ -174,127 +173,11 @@ public final class AiRecommendService {
                 if (!dedupe.containsKey(key)) dedupe.put(key, new Item(title, year, type, reason));
             }
             items.addAll(dedupe.values());
-            prioritizeSeriesSeasons(items, excludeTitle);
             Log.i(TAG, "parsed " + items.size());
         } catch (Exception e) {
             Log.w(TAG, "parse fail: " + e.getMessage() + " body=" + excerpt(content));
         }
         return items;
-    }
-
-
-    /**
-     * 同系列后续季优先：AI 排序偶尔不可靠时，在本地再兜底一次。
-     * 例如“闪电侠第三季”后，第四、第五、第六、第七季排在其它相似剧之前。
-     */
-    private static void prioritizeSeriesSeasons(List<Item> items, String excludeTitle) {
-        if (items == null || items.size() < 2 || TextUtils.isEmpty(excludeTitle)) return;
-
-        String base = seriesKey(excludeTitle);
-        int currentSeason = extractSeason(excludeTitle);
-        if (TextUtils.isEmpty(base) || currentSeason <= 0) return;
-
-        List<Item> original = new ArrayList<>(items);
-        original.sort((a, b) -> {
-            int pa = seasonPriority(a, base, currentSeason);
-            int pb = seasonPriority(b, base, currentSeason);
-            if (pa != pb) return Integer.compare(pa, pb);
-            return 0;
-        });
-        items.clear();
-        items.addAll(original);
-    }
-
-    private static int seasonPriority(Item item, String base, int currentSeason) {
-        if (item == null || TextUtils.isEmpty(item.title)) return 10000;
-        String itemBase = seriesKey(item.title);
-        if (!base.equals(itemBase)) return 10000;
-
-        int season = extractSeason(item.title);
-        if (season > currentSeason) return season;
-        if (season == currentSeason) return 9000;
-        if (season > 0) return 8000 + season;
-        return 7000;
-    }
-
-    /** 去掉“第X季 / Sxx / Season xx”等季数标记后得到系列名。 */
-    private static String seriesKey(String title) {
-        if (TextUtils.isEmpty(title)) return "";
-        String s = title.trim().toLowerCase(Locale.ROOT);
-        s = s.replaceAll("第[0-9零一二两三四五六七八九十百千万]+季", "");
-        s = s.replaceAll("\\b(?:season|s)\\s*[0-9]{1,2}\\b", "");
-        s = s.replaceAll("\\s*[\\(\\[【（]?\\s*[0-9]{1,2}\\s*[季\\)\\]】）]\\s*$", "");
-        s = s.replaceAll("[：:·•._\\-–—\\s]+", "");
-        return s;
-    }
-
-    private static int extractSeason(String title) {
-        if (TextUtils.isEmpty(title)) return 0;
-        String s = title.trim().toLowerCase(Locale.ROOT);
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("第([0-9零一二两三四五六七八九十百千万]+)季")
-                .matcher(s);
-        if (m.find()) return chineseNumber(m.group(1));
-
-        m = java.util.regex.Pattern.compile("\\bseason\\s*([0-9]{1,2})\\b").matcher(s);
-        if (m.find()) return parseSeasonNumber(m.group(1));
-
-        m = java.util.regex.Pattern.compile("\\bs\\s*([0-9]{1,2})\\b").matcher(s);
-        if (m.find()) return parseSeasonNumber(m.group(1));
-
-        m = java.util.regex.Pattern.compile("[\\(\\[【（]?\\s*([0-9]{1,2})\\s*[季\\)\\]】）]").matcher(s);
-        if (m.find()) return parseSeasonNumber(m.group(1));
-        return 0;
-    }
-
-    private static int parseSeasonNumber(String value) {
-        try {
-            return Integer.parseInt(value);
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    private static int chineseNumber(String value) {
-        if (TextUtils.isEmpty(value)) return 0;
-        int total = 0;
-        int section = 0;
-        int number = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            int digit;
-            switch (c) {
-                case '零': digit = 0; break;
-                case '一': digit = 1; break;
-                case '二':
-                case '两': digit = 2; break;
-                case '三': digit = 3; break;
-                case '四': digit = 4; break;
-                case '五': digit = 5; break;
-                case '六': digit = 6; break;
-                case '七': digit = 7; break;
-                case '八': digit = 8; break;
-                case '九': digit = 9; break;
-                default: digit = -1;
-            }
-            if (digit >= 0) {
-                number = number * 10 + digit;
-            } else if (c == '十') {
-                section += number == 0 ? 10 : number * 10;
-                number = 0;
-            } else if (c == '百') {
-                section += (number == 0 ? 1 : number) * 100;
-                number = 0;
-            } else if (c == '千') {
-                section += (number == 0 ? 1 : number) * 1000;
-                number = 0;
-            } else if (c == '万') {
-                total += (section + (number == 0 ? 0 : number)) * 10000;
-                section = 0;
-                number = 0;
-            }
-        }
-        return total + section + number;
     }
 
     private static String first(JsonObject o, String... keys) {

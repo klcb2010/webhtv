@@ -725,6 +725,29 @@ public class Setting {
         Prefers.put("home_history", homeHistory);
     }
 
+    /** 手机端主页推送/链接悬浮按钮 */
+    public static boolean isHomePush() {
+        return Prefers.getBoolean("home_push", true);
+    }
+
+    public static void putHomePush(boolean homePush) {
+        Prefers.put("home_push", homePush);
+    }
+
+    /** 播放直达：msearch 静默搜源；关闭则进搜索页。默认关 */
+    public static boolean isPlayDirect() {
+        return Prefers.getBoolean("play_direct", false);
+    }
+
+    public static void putPlayDirect(boolean value) {
+        Prefers.put("play_direct", value);
+    }
+
+    /** 播放直达时随机搜索站点数上限 */
+    public static int getPlayDirectSearchLimit() {
+        return 10;
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }
@@ -793,6 +816,45 @@ public class Setting {
         return getAiConfig().isReady();
     }
 
+    /** 个性推荐来源：0关闭 1AI 2豆瓣 3自动(豆瓣优先，AI兜底) */
+    public static final int RECOMMEND_OFF = 0;
+    public static final int RECOMMEND_AI = 1;
+    public static final int RECOMMEND_DOUBAN = 2;
+    public static final int RECOMMEND_AUTO = 3;
+
+    public static int getRecommendSource() {
+        int v = Prefers.getInt("recommend_source", -1);
+        if (v >= 0 && v <= 3) return v;
+        // 兼容旧配置：曾开启 AI 推荐则迁移为 AI
+        try {
+            if (isAiRecommendationEnabled()) return RECOMMEND_AI;
+        } catch (Throwable ignored) {}
+        return RECOMMEND_OFF;
+    }
+
+    public static void putRecommendSource(int source) {
+        if (source < 0 || source > 3) source = RECOMMEND_OFF;
+        Prefers.put("recommend_source", source);
+        // 同步旧 AI recommendation 开关：AI 或自动都可能用到 AI
+        try {
+            if (source == RECOMMEND_AI || source == RECOMMEND_AUTO) {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(true);
+                putAiConfig(c);
+            } else {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(false);
+                putAiConfig(c);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static boolean isPersonalRecommendEnabled() {
+        return getRecommendSource() != RECOMMEND_OFF;
+    }
+
+
+
     public static boolean isSubtitleAutoMatchEnabled() {
         return Prefers.getBoolean("subtitle_auto_match", false);
     }
@@ -817,6 +879,16 @@ public class Setting {
         Prefers.put("subtitle_assrt_token", token == null ? "" : token.trim());
     }
 
+
+    /** 全局吐司，默认开启 */
+    public static boolean isGlobalToast() {
+        return Prefers.getBoolean("global_toast", true);
+    }
+
+    public static void putGlobalToast(boolean value) {
+        Prefers.put("global_toast", value);
+    }
+
     public static boolean isAutoBackup() {
         return Prefers.getBoolean("auto_backup", false);
     }
@@ -824,6 +896,137 @@ public class Setting {
     public static void putAutoBackup(boolean autoBackup) {
         Prefers.put("auto_backup", autoBackup);
     }
+
+    public static boolean isAutoCheckUpdate() {
+        return Prefers.getBoolean("auto_check_update", false);
+    }
+
+    public static void putAutoCheckUpdate(boolean value) {
+        Prefers.put("auto_check_update", value);
+    }
+
+    /** 退出时清理缓存阈值：0=不清理，6/8/10 表示缓存达到该 GB 数才清理 */
+
+    /** 字幕颜色：0黄 1白 2青 3绿 4红 5橙 6粉，默认黄 */
+    private static final int[] SUBTITLE_COLORS = new int[]{
+            0xFFFFFF00,
+            0xFFFFFFFF,
+            0xFF00FFFF,
+            0xFF00FF00,
+            0xFFFF4444,
+            0xFFFF9800,
+            0xFFFF80AB
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS = new String[]{
+            "黄", "白", "青", "绿", "红", "橙", "粉"
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS_EN = new String[]{
+            "Yellow", "White", "Cyan", "Green", "Red", "Orange", "Pink"
+    };
+
+    public static int getSubtitleColorIndex() {
+        int v = Prefers.getInt("subtitle_color_index", 0);
+        if (v < 0 || v >= SUBTITLE_COLORS.length) return 0;
+        return v;
+    }
+
+    public static void putSubtitleColorIndex(int index) {
+        if (index < 0 || index >= SUBTITLE_COLORS.length) index = 0;
+        Prefers.put("subtitle_color_index", index);
+    }
+
+    public static int getSubtitleColorArgb() {
+        return SUBTITLE_COLORS[getSubtitleColorIndex()];
+    }
+
+    public static String getSubtitleColorLabel(boolean zh) {
+        int i = getSubtitleColorIndex();
+        return zh ? SUBTITLE_COLOR_LABELS[i] : SUBTITLE_COLOR_LABELS_EN[i];
+    }
+
+    public static void cycleSubtitleColor() {
+        putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
+    }
+
+    /** 字幕字体：0楷体 1黑体(默认) 2宋体 3仿宋 4等宽；描边固定黑色 */
+    public static int getSubtitleFontIndex() {
+        int v = Prefers.getInt("subtitle_font_index", 1); // 默认黑体
+        if (v < 0 || v > 4) return 0;
+        return v;
+    }
+
+    public static void putSubtitleFontIndex(int index) {
+        if (index < 0 || index > 4) index = 0;
+        Prefers.put("subtitle_font_index", index);
+    }
+
+    public static void cycleSubtitleFont() {
+        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % 5);
+    }
+
+    /**
+     * MPV sub-font / fontconfig 族名。
+     * 楷体 cursive；黑体 sans；宋体 serif；仿宋 serif 斜体名；等宽 monospace。
+     */
+    public static String getSubtitleFontFamily() {
+        int i = getSubtitleFontIndex();
+        if (i == 1) return "sans-serif";
+        if (i == 2) return "serif";
+        if (i == 3) return "serif"; // 仿宋接近宋体族，设备有 FangSong 时仍靠 Typeface 侧
+        if (i == 4) return "monospace";
+        return "cursive";
+    }
+
+    public static android.graphics.Typeface getSubtitleTypeface() {
+        int i = getSubtitleFontIndex();
+        try {
+            if (i == 1) return android.graphics.Typeface.SANS_SERIF;
+            if (i == 2) return android.graphics.Typeface.SERIF;
+            if (i == 3) {
+                android.graphics.Typeface fang = android.graphics.Typeface.create("serif", android.graphics.Typeface.ITALIC);
+                if (fang != null) return fang;
+                return android.graphics.Typeface.SERIF;
+            }
+            if (i == 4) return android.graphics.Typeface.MONOSPACE;
+            android.graphics.Typeface kai = android.graphics.Typeface.create("cursive", android.graphics.Typeface.NORMAL);
+            if (kai != null) return kai;
+        } catch (Throwable ignored) {
+        }
+        return android.graphics.Typeface.SERIF;
+    }
+
+    public static String getSubtitleFontLabel(boolean zh) {
+        int i = getSubtitleFontIndex();
+        if (zh) {
+            switch (i) {
+                case 1: return "黑体";
+                case 2: return "宋体";
+                case 3: return "仿宋";
+                case 4: return "等宽";
+                default: return "楷体";
+            }
+        }
+        switch (i) {
+            case 1: return "Heiti";
+            case 2: return "Song";
+            case 3: return "FangSong";
+            case 4: return "Mono";
+            default: return "Kai";
+        }
+    }
+
+    public static int getExitClearCacheGb() {
+        int v = Prefers.getInt("exit_clear_cache_gb", 0);
+        if (v != 0 && v != 6 && v != 8 && v != 10) return 0;
+        return v;
+    }
+
+    public static void putExitClearCacheGb(int gb) {
+        if (gb != 0 && gb != 6 && gb != 8 && gb != 10) gb = 0;
+        Prefers.put("exit_clear_cache_gb", gb);
+    }
+
+
 
     public static boolean isHomeSiteLock() {
         return Prefers.getBoolean("home_site_lock", false);
@@ -901,9 +1104,10 @@ public class Setting {
 
     public static String getUpdateGithubProxy() {
         try {
-            return GithubProxy.find(Prefers.getString("update_github_proxy", GithubProxy.DIRECT)).id;
+            String id = Prefers.getString("update_github_proxy", GithubProxy.DIRECT);
+            return GithubProxy.find(id).id;
         } catch (Throwable e) {
-            return Prefers.getString("update_github_proxy", "direct");
+            return "direct";
         }
     }
 

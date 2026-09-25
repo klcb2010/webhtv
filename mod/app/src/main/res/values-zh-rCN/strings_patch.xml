@@ -1,3 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
 <string name="setting_home_history">首页最近观看</string>
 <string name="setting_home_vod_auto_load">默认加载点播</string>
 <string name="setting_home_site_lock">首页源锁定</string>
@@ -53,13 +55,13 @@
 <string name="setting_ai_fetching_models">正在获取模型列表…</string>
 <string name="setting_ai_fetch_models_fail">获取模型失败：%1$s</string>
 <string name="setting_ai_need_key">请先填写端点和 API key</string>
-<string name="ai_recommend_section">AI 推荐</string>
+<string name="ai_recommend_section">个性推荐</string>
 <string name="ai_recommend_loading_short">加载中…</string>
 <string name="ai_recommend_retry">加载失败</string>
 <string name="ai_recommend_retry_action">点击重试</string>
 <string name="setting_personal">个性设置</string>
 <string name="setting_auto_backup">自动备份</string>
-<string name="setting_episode_history">集数历史</string>
+<string name="setting_episode_history">分集进度</string>
 <string name="setting_global_history">全局历史</string>
 <string name="setting_play_back_to_detail">返回详情</string>
 <string name="setting_search_thread">搜索线程</string>
@@ -90,3 +92,31 @@
     <string name="setting_ai_fetch_models">拉取模型列表</string>
 
     <string name="setting_ai_test">测试连接</string>
+    <string name="player_auto_change">自动换源</string>
+    <string name="setting_player_auto_change">自动换源</string>
+    <string name="setting_home_push">主页推送</string>
+    <string name="personal_recommend_section">个性推荐</string>
+    <string name="setting_recommend_source">个性推荐</string>
+    <string name="setting_recommend_off">关闭</string>
+    <string name="setting_recommend_ai">AI</string>
+    <string name="setting_recommend_douban">豆瓣</string>
+    <string name="setting_recommend_auto">自动</string>
+    <string name="setting_play_direct">播放直达</string>
+    <string name="setting_play_cache">最大缓存</string>
+        <string-array name="select_play_cache">
+        <item>128MB</item>
+        <item>256MB</item>
+        <item>512MB</item>
+        <item>1GB</item>
+        <item>2GB</item>
+    </string-array>
+    <string name="danmaku">嗷呜弹幕</string>
+    <string name="about_check_update">查更新</string>
+    <string name="about_acknowledge">已悉知</string>
+    <string name="setting_auto_check_update">自动检查更新</string>
+    <string name="setting_exit_clear_cache">退出清理缓存</string>
+    <string name="setting_exit_clear_cache_off">关</string>
+    <string name="setting_subtitle_color">字幕颜色</string>
+    <string name="setting_subtitle_font">字幕字体</string>
+    <string name="setting_global_toast">全局吐司</string>
+</resources>
