@@ -1,24 +1,28 @@
 package com.fongmi.android.tv.playback;
 
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Sub;
+import com.github.catvod.Init;
 import com.github.catvod.utils.Prefers;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.nio.channels.FileChannel;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 外挂字幕在 History 与播放器之间的搬运（Prefers 落盘，避免改 Room 迁移）。
- *
- * 写入：用户选中外挂后 remember()
- * 读取：起播前 restore() → 写入 Result.subs / 调用 player.setSub
+ * 外挂字幕记忆：Prefers 存 JSON，文件复制到 filesDir/sub_remember 防清缓存丢失。
  */
 public final class SubtitleRestoreCoordinator {
 
+    private static final String TAG = "SubRestore";
     private static final String PREFIX = "ext_sub_src_";
 
     private SubtitleRestoreCoordinator() {
@@ -27,39 +31,43 @@ public final class SubtitleRestoreCoordinator {
     public static boolean remember(History history, Sub sub) {
         if (history == null || sub == null) return false;
         try {
-            // 无痕模式
             Class<?> setting = Class.forName("com.fongmi.android.tv.setting.Setting");
             Object incognito = setting.getMethod("isIncognito").invoke(null);
             if (incognito instanceof Boolean && (Boolean) incognito) return false;
         } catch (Throwable ignored) {
         }
+        Sub durable = ensureDurable(sub);
         String episodeUrl = history.getEpisodeUrl();
-        SubtitleSource source = SubtitleSource.of(sub, episodeUrl);
+        SubtitleSource source = SubtitleSource.of(durable, episodeUrl);
         if (source == null) return false;
-        Prefers.put(cacheKey(history.getKey(), episodeUrl), SubtitleSource.encode(source));
-        // 同时按 historyKey 存一份，方便 episodeUrl 短暂为空时回退
+        String json = SubtitleSource.encode(source);
+        putCommit(cacheKey(history.getKey(), episodeUrl), json);
         if (!TextUtils.isEmpty(history.getKey())) {
-            Prefers.put(cacheKey(history.getKey(), ""), SubtitleSource.encode(source));
+            putCommit(cacheKey(history.getKey(), ""), json);
         }
+        // 再按片名+集名兜底
+        try {
+            String vod = history.getVodName() == null ? "" : history.getVodName();
+            String remarks = history.getVodRemarks() == null ? "" : history.getVodRemarks();
+            if (!TextUtils.isEmpty(vod)) putCommit(cacheKey("vod:" + vod, remarks), json);
+        } catch (Throwable ignored) {
+        }
+        Log.i(TAG, "remember key=" + history.getKey() + " ep=" + episodeUrl + " url=" + durable.getUrl());
         return true;
     }
 
     public static boolean remember(String historyKey, String episodeUrl, Sub sub) {
         if (sub == null || TextUtils.isEmpty(sub.getUrl())) return false;
-        SubtitleSource source = SubtitleSource.of(sub, episodeUrl);
+        Sub durable = ensureDurable(sub);
+        SubtitleSource source = SubtitleSource.of(durable, episodeUrl);
         if (source == null) return false;
-        Prefers.put(cacheKey(historyKey, episodeUrl), SubtitleSource.encode(source));
-        if (!TextUtils.isEmpty(historyKey)) {
-            Prefers.put(cacheKey(historyKey, ""), SubtitleSource.encode(source));
-        }
+        String json = SubtitleSource.encode(source);
+        putCommit(cacheKey(historyKey, episodeUrl), json);
+        if (!TextUtils.isEmpty(historyKey)) putCommit(cacheKey(historyKey, ""), json);
+        Log.i(TAG, "remember key=" + historyKey + " url=" + durable.getUrl());
         return true;
     }
 
-    /**
-     * 起播前恢复。把字幕写进 Result（若当前无自带 subs），并尝试 player.setSub。
-     *
-     * @return 恢复用的 Sub；失败返回 null
-     */
     public static Sub restore(History history, Object player, Result result) {
         if (history == null) return null;
         try {
@@ -71,7 +79,16 @@ public final class SubtitleRestoreCoordinator {
         String episodeUrl = history.getEpisodeUrl();
         SubtitleSource source = load(history.getKey(), episodeUrl);
         if (source == null) source = load(history.getKey(), "");
+        if (source == null) {
+            try {
+                String vod = history.getVodName() == null ? "" : history.getVodName();
+                String remarks = history.getVodRemarks() == null ? "" : history.getVodRemarks();
+                if (!TextUtils.isEmpty(vod)) source = load("vod:" + vod, remarks);
+            } catch (Throwable ignored) {
+            }
+        }
         SubtitleRestorePolicy.Decision decision = SubtitleRestorePolicy.decide(source, episodeUrl, false);
+        Log.i(TAG, "restore decision=" + decision.reason() + " has=" + (source != null));
         if (decision.clear()) {
             clear(history.getKey(), episodeUrl);
             clear(history.getKey(), "");
@@ -80,17 +97,7 @@ public final class SubtitleRestoreCoordinator {
         if (!decision.restore() || source == null) return null;
         Sub sub = source.toSub();
         if (sub == null) return null;
-        if (result != null) {
-            try {
-                List<Sub> existing = result.getSubs();
-                if (existing == null || existing.isEmpty()) {
-                    List<Sub> list = new ArrayList<>();
-                    list.add(sub);
-                    result.setSubs(list);
-                }
-            } catch (Throwable ignored) {
-            }
-        }
+        injectResult(result, sub);
         applyToPlayer(player, sub);
         return sub;
     }
@@ -99,7 +106,65 @@ public final class SubtitleRestoreCoordinator {
         if (player == null || sub == null) return;
         try {
             player.getClass().getMethod("setSub", Sub.class).invoke(player, sub);
+        } catch (Throwable e) {
+            Log.w(TAG, "setSub failed: " + e.getMessage());
+        }
+    }
+
+    private static void injectResult(Result result, Sub sub) {
+        if (result == null || sub == null) return;
+        try {
+            List<Sub> list = new ArrayList<>();
+            list.add(sub);
+            try {
+                java.lang.reflect.Field f = result.getClass().getDeclaredField("subs");
+                f.setAccessible(true);
+                f.set(result, list);
+            } catch (Throwable e) {
+                result.setSubs(list);
+            }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 复制到 filesDir，避免清缓存后路径失效 */
+    private static Sub ensureDurable(Sub sub) {
+        try {
+            String url = sub.getUrl();
+            if (TextUtils.isEmpty(url) || url.contains("://")) return sub;
+            File src = new File(url);
+            if (!src.isFile()) return sub;
+            File dir = new File(Init.context().getFilesDir(), "sub_remember");
+            if (!dir.exists() && !dir.mkdirs()) return sub;
+            String name = src.getName();
+            File dst = new File(dir, md5(url) + "_" + name);
+            if (!dst.isFile() || dst.length() != src.length()) {
+                copyFile(src, dst);
+            }
+            if (!dst.isFile()) return sub;
+            Sub out = Sub.create(sub.getName(), dst.getAbsolutePath(), sub.getLang(), sub.getFormat());
+            try {
+                out.setFlag(sub.getFlag());
+            } catch (Throwable ignored) {
+            }
+            return out;
+        } catch (Throwable e) {
+            return sub;
+        }
+    }
+
+    private static void copyFile(File src, File dst) throws Exception {
+        try (FileChannel in = new FileInputStream(src).getChannel();
+             FileChannel out = new FileOutputStream(dst).getChannel()) {
+            out.transferFrom(in, 0, in.size());
+        }
+    }
+
+    private static void putCommit(String key, String value) {
+        try {
+            Prefers.getPrefers().edit().putString(key, value == null ? "" : value).commit();
+        } catch (Throwable e) {
+            Prefers.put(key, value);
         }
     }
 
@@ -109,7 +174,7 @@ public final class SubtitleRestoreCoordinator {
     }
 
     private static void clear(String historyKey, String episodeUrl) {
-        Prefers.put(cacheKey(historyKey, episodeUrl), "");
+        putCommit(cacheKey(historyKey, episodeUrl), "");
     }
 
     private static String cacheKey(String historyKey, String episodeUrl) {

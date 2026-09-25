@@ -55,9 +55,12 @@ public final class SubtitleRestorePolicy {
                            Predicate<String> exists) {
         if (source == null || !source.isUsable()) return Decision.skip("absent");
         if (crossSource) return Decision.skip("cross-source");
-        if (source.getEpisodeUrl().isEmpty()) return Decision.drop("episode-unknown");
+        // episodeUrl 为空时不丢弃（历史刚进可能尚未写上），仍尝试恢复
+        String saved = source.getEpisodeUrl();
         String ep = episodeUrl == null ? "" : episodeUrl;
-        if (!source.getEpisodeUrl().equals(ep)) return Decision.skip("episode-changed");
+        if (!saved.isEmpty() && !ep.isEmpty() && !saved.equals(ep)) {
+            return Decision.skip("episode-changed");
+        }
         if (source.isRemote()) return Decision.inject();
         return exists.test(source.getUrl()) ? Decision.inject() : Decision.drop("file-missing");
     }
