@@ -33,15 +33,8 @@ do
     continue
   fi
 done
-if ! grep -q 'AssrtSub' "$ROOT/app/src/main/java/com/fongmi/android/tv/subtitle/AssrtSubtitleMatch.java" 2>/dev/null; then
-  echo "[mod] ERROR AssrtSubtitleMatch.java has no TAG AssrtSub — wrong/old file"
-  verify_fail=1
-fi
-if ! grep -q 'prepareRestore' "$ROOT/app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java" 2>/dev/null \
-   && ! grep -q 'prepareRestore' "$ROOT/app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java" 2>/dev/null; then
-  echo "[mod] ERROR VideoActivity has no prepareRestore after copy"
-  verify_fail=1
-fi
+# Assrt search still ships; TAG optional after restore disabled
+# subtitle auto-restore disabled — no prepareRestore required in VideoActivity
 if ! grep -q 'onUserSetSub' "$ROOT/app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java" 2>/dev/null; then
   echo "[mod] WARN PlayerManager not yet hooked (inject runs next) or missing"
 fi
@@ -162,18 +155,6 @@ if ! grep -q 'injectPendingIntoPlayerManager' "$ROOT/app/src/main/java/com/fongm
   exit 1
 fi
 
-# ---- proguard keep for subtitle restore ----
-PROGUARD_SRC="$MOD/app/proguard-rules-subtitle.pro"
-PROGUARD_DST="$ROOT/app/proguard-rules.pro"
-if [[ -f "$PROGUARD_SRC" ]]; then
-  if [[ -f "$PROGUARD_DST" ]]; then
-    if ! grep -q 'SubtitleRestoreCoordinator' "$PROGUARD_DST" 2>/dev/null; then
-      echo "" >> "$PROGUARD_DST"
-      cat "$PROGUARD_SRC" >> "$PROGUARD_DST"
-      echo "[mod] appended proguard keep for subtitle restore"
-    else
-      echo "[mod] proguard subtitle keep already present"
-    fi
   else
     cp -f "$PROGUARD_SRC" "$PROGUARD_DST"
     echo "[mod] installed proguard-rules.pro for subtitle"

@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-import com.fongmi.android.tv.playback.SubtitleRestoreCoordinator;
 
 import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
 
@@ -1301,16 +1300,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setPlayer(Result result) {
-        // Silent SUB-EXT: 绑定历史 + 登记 pending（真正注入在 setMediaItem 前）
-        try {
-            android.util.Log.e("SubRestore", "SUB-EXT setPlayer enter history=" + (mHistory != null));
-            android.util.Log.e("AssrtSub", "SUB-EXT setPlayer enter");
-            System.out.println("SubRestore|setPlayer enter");
-            SubtitleRestoreCoordinator.bindHistory(mHistory);
-            SubtitleRestoreCoordinator.prepareRestore(mHistory);
-        } catch (Throwable e) {
-            android.util.Log.e("SubRestore", "SUB-EXT setPlayer restore err", e);
-        }
 
         if (isFinishing() || isDestroyed()) return;
         SpiderDebug.log("video-flow", "player finish cost=%dms useParse=%s multi=%s msg=%s", System.currentTimeMillis() - playerStartTime, result.shouldUseParse(), result.getUrl().isMulti(), result.getMsg());
@@ -1336,10 +1325,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mInitialPlaybackPosition = resolveInitialPlaybackPosition();
         SpiderDebug.log("video-flow", "startPlayer dispatch initialPosition=%d music=%s ijk=%s", mInitialPlaybackPosition, isMusicLike(), service() != null && player().isIjk());
         long start = System.currentTimeMillis();
-        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player()); } catch (Throwable ignored) {}
-        // 只延迟一次选轨，避免多次 setTrack/Override 触发 reprepare 导致有声无画
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 1500); } catch (Throwable ignored) {}
         startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata(), mInitialPlaybackPosition);
         SpiderDebug.log("video-flow", "startPlayer return cost=%dms sincePlayerStart=%dms", System.currentTimeMillis() - start, System.currentTimeMillis() - playerStartTime);
         if (DanmakuApi.canAutoSearch(siteDanmakus)) DanmakuApi.search(mHistory.getVodName(), getEpisode().getName(), player()::setDanmaku);
@@ -6488,7 +6473,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     protected void onDestroy() {
         try { AssrtSubtitleMatch.cancel(); } catch (Throwable ignored) {}
-        try { SubtitleRestoreCoordinator.clearBind(); } catch (Throwable ignored) {}
         mLyricsSearchSeq++;
         mLyricsRefreshSeq++;
         dismissLyricsResultDialog();

@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.subtitle;
 
-import com.fongmi.android.tv.playback.SubtitleRestoreCoordinator;
 
 import android.app.Activity;
 
@@ -94,7 +93,6 @@ public final class AssrtSubtitleMatch {
         } catch (Throwable ignored) {}
     }
 
-    /** 由 SubtitleRestoreCoordinator.prepareRestore 调用：历史重进前 priming 选轨意图 */
     public static void primeExternalPreference(String name, String format) {
         try {
             if (!TextUtils.isEmpty(name)) sPendingSelectName = name;
@@ -173,13 +171,6 @@ public final class AssrtSubtitleMatch {
         Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
-        try {
-            if (sLastHistory != null) {
-                SubtitleRestoreCoordinator.remember(sLastHistory, sub);
-            } else if (sLastEpisode != null) {
-                SubtitleRestoreCoordinator.remember("", sLastEpisode.getUrl(), sub);
-            }
-        } catch (Throwable ignored) {}
         sPendingSelectName = trackLabel;
         sPendingSelectFormat = format;
         sPreferExternal = true;
@@ -293,10 +284,6 @@ public final class AssrtSubtitleMatch {
                 if (selectExternalFromCurrentTracks(player, remembered == null ? "" : remembered)) {
                     sForceSettled = true;
                     sLastForceOkAt = System.currentTimeMillis();
-                    try {
-                        Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator")
-                                .getMethod("clearPending").invoke(null);
-                    } catch (Throwable ignored) {}
                     Log.i(TAG, "softSelect OK name=" + remembered);
                     return true;
                 }
@@ -337,7 +324,6 @@ public final class AssrtSubtitleMatch {
                     : loadRememberedTrackName(sLastHistory, sLastEpisode);
             boolean wantExternal = sPreferExternal || loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
             try {
-                Class<?> c = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator");
                 if (c.getMethod("peekPending").invoke(null) != null) wantExternal = true;
                 String pn = (String) c.getMethod("peekPendingName").invoke(null);
                 if (!TextUtils.isEmpty(pn) && TextUtils.isEmpty(remembered)) remembered = pn;
@@ -609,11 +595,11 @@ public final class AssrtSubtitleMatch {
 
     /** 轨道列表变化时调用（有内嵌+外挂时外挂常晚到，需多次尝试） */
     public static void onTracksReady(PlayerManager player) {
+        return; // 自动恢复已关闭
         try {
             if (player == null || player.isEmpty()) return;
             // 从 Coordinator 再取一次 pending（历史重进时 attach 可能早于 priming）
             try {
-                Class<?> c = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator");
                 String pn = (String) c.getMethod("peekPendingName").invoke(null);
                 String pf = (String) c.getMethod("peekPendingFormat").invoke(null);
                 if (!TextUtils.isEmpty(pn)) {
@@ -916,7 +902,6 @@ public final class AssrtSubtitleMatch {
                 if (history != null) {
                     com.fongmi.android.tv.bean.Sub sub = com.fongmi.android.tv.bean.Sub.create(
                             sPendingSelectName, durable.getAbsolutePath(), lang == null ? "" : lang, format == null ? "" : format);
-                    com.fongmi.android.tv.playback.SubtitleRestoreCoordinator.remember(history, sub);
                 }
             } catch (Throwable ignored) {}
             Log.i(TAG, "remember sub keys=" + subCacheKeys(history, episode).size() + " file=" + durable.getAbsolutePath() + " name=" + name);
@@ -948,11 +933,11 @@ public final class AssrtSubtitleMatch {
      * Result.setSubs 仅在空列表时生效，故用反射强制写入。
      */
     public static void attachRememberedSub(Object result, History history, Episode episode) {
+        return; // 自动恢复已关闭
         try {
             History h0 = history != null ? history : sLastHistory;
             com.fongmi.android.tv.bean.Result r0 = null;
             if (result instanceof com.fongmi.android.tv.bean.Result) r0 = (com.fongmi.android.tv.bean.Result) result;
-            if (h0 != null) SubtitleRestoreCoordinator.restore(h0, null, r0);
         } catch (Throwable ignored) {}
 
         if (result == null) return;
@@ -962,7 +947,6 @@ public final class AssrtSubtitleMatch {
         if (parts == null) {
             // Coordinator JSON 回退：Assrt 文件缓存丢失时仍能挂
             try {
-                Object pend = Class.forName("com.fongmi.android.tv.playback.SubtitleRestoreCoordinator")
                         .getMethod("peekPending").invoke(null);
                 if (pend instanceof Sub) {
                     Sub ps = (Sub) pend;
@@ -1021,6 +1005,7 @@ public final class AssrtSubtitleMatch {
     }
 
     public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
+        return false; // 自动恢复已关闭
         try {
             String raw = null;
             for (String key : subCacheKeys(history, episode)) {

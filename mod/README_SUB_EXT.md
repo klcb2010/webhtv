@@ -1,22 +1,9 @@
-# 外挂字幕记忆（对齐 Silent SUB-EXT-HISTORY）
+# 外挂字幕自动记忆：已关闭
 
-## 流程
-1. 用户选外挂 → `PlayerManager.setSub` → `SubtitleRestoreCoordinator.onUserSetSub`
-   - 文件复制到 `filesDir/sub_remember`
-   - Prefers 存 JSON（historyKey + episodeUrl）
-   - 同步 Assrt 文件缓存
-2. 历史重进 → `VideoActivity.setPlayer`（**已烘焙进 mod 源**）
-   - `prepareRestore` 登记 pending
-   - `attachRememberedSub` 写入 `Result.subs`
-   - `onPlayerReady` + 延迟 `selectPendingIfAny`
-3. `PlayerManager.start` → `injectPendingIntoPlayerManager` 写入 `PlaySpec.subs`
-4. 轨道就绪 → `onTracksChanged` → `AssrtSubtitleMatch.onTracksReady` → Media3 Override 强制选外挂
+因起播注入/强制选轨导致部分片源有声无画、选字幕闪退，已取消自动记忆与自动恢复。
 
-## 日志过滤
-```bash
-adb logcat -s AssrtSub:I SubRestore:I | tee sub.log
-```
-期望见到：`prepareRestore pending`、`injected into PlaySpec`、`forceSelect OK`、`attachRememberedSub`
+- 搜索/下载/手动选外挂字幕仍可用（Assrt）
+- `SubtitleRestoreCoordinator` 为空壳，注入脚本不再改 PlayerManager
+- 请手动在字幕列表中选择
 
-## apply
-`apply.sh` 会：复制 mod 源（含已烘焙的 VideoActivity）→ `inject_subtitle.py` → `inject_subtitle_restore.py`（挂 PlayerManager）
+清理应用数据中的 `files/sub_remember/` 可选（旧记忆残留无害）。
