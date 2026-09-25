@@ -8,8 +8,8 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
 
 /**
- * 外挂字幕来源标识（存路径/URL，不存轨道 sid）。
- * 对齐 Silent SubtitleSource：跨会话稳定，起播时重新 setSub。
+ * 持久化一次外挂字幕选择的来源，而不是运行时 sid。
+ * 依据 Silent1566/webhtv/docs/SUB-EXT-HISTORY-external-subtitle-restore.md。
  */
 public final class SubtitleSource {
 
@@ -64,13 +64,7 @@ public final class SubtitleSource {
     }
 
     public Sub toSub() {
-        if (!isUsable()) return null;
-        Sub sub = Sub.create(getName(), getUrl(), getLang(), getFormat());
-        try {
-            sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_DEFAULT | androidx.media3.common.C.SELECTION_FLAG_FORCED);
-        } catch (Throwable ignored) {
-        }
-        return sub;
+        return isUsable() ? Sub.create(getName(), getUrl(), getLang(), getFormat()) : null;
     }
 
     public boolean isUsable() {
