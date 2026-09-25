@@ -98,7 +98,8 @@ public final class SubtitleRestoreCoordinator {
         Sub sub = source.toSub();
         if (sub == null) return null;
         injectResult(result, sub);
-        applyToPlayer(player, sub);
+        // setPlayer() 发生在新播放器创建前，player() 此时可能仍是上一集。
+        // 这里只注入 Result，绝不能 setSub() 到旧播放器，否则会触发错误的重建。
         return sub;
     }
 
