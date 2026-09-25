@@ -101,6 +101,7 @@ public final class SubtitleRestoreCoordinator {
             } catch (Throwable ignored) {
             }
             Log.i(TAG, "remember setSub name=" + durable.getName() + " ep=" + episodeUrl);
+            markAction("remember", durable.getName() + " ep=" + episodeUrl);
         } catch (Throwable e) {
             Log.w(TAG, "onUserSetSub: " + e.getMessage());
         }
@@ -136,6 +137,7 @@ public final class SubtitleRestoreCoordinator {
         }
         if (!d.restore() || source == null) {
             Log.i(TAG, "prepareRestore skip reason=" + (d.reason() != null ? d.reason() : "null"));
+            markAction("prepareSkip", d.reason());
             return;
         }
         Sub sub = source.toSub();
@@ -149,6 +151,11 @@ public final class SubtitleRestoreCoordinator {
         } catch (Throwable ignored) {
         }
         Log.i(TAG, "prepareRestore pending name=" + sub.getName() + " url=" + sub.getUrl());
+        markAction("prepareRestore", sub.getName());
+        try {
+            android.widget.Toast.makeText(Init.context(), "字幕记忆: 将恢复 " + sub.getName(), android.widget.Toast.LENGTH_SHORT).show();
+        } catch (Throwable ignored) {}
+
     }
 
     /**
@@ -184,6 +191,7 @@ public final class SubtitleRestoreCoordinator {
             setSub.invoke(spec, sub);
             sPendingRestore = null; // 成功才消费
             Log.i(TAG, "injected into PlaySpec name=" + sub.getName());
+            markAction("injected", sub.getName());
         } catch (Throwable e) {
             Log.w(TAG, "inject failed: " + e.getMessage());
         }
@@ -222,6 +230,28 @@ public final class SubtitleRestoreCoordinator {
         prepareRestore(history);
         if (player != null) injectPendingIntoPlayerManager(player);
         return sPendingRestore;
+    }
+
+    
+    /** 不依赖 logcat：写文件 + 可选 Toast，方便确认补丁是否进包运行 */
+    private static void markAction(String action, String detail) {
+        try {
+            File dir = new File(Init.context().getFilesDir(), "sub_remember");
+            if (!dir.exists()) dir.mkdirs();
+            File f = new File(dir, "last_action.txt");
+            String line = System.currentTimeMillis() + "\t" + action + "\t" + (detail == null ? "" : detail) + "\n";
+            try (FileOutputStream out = new FileOutputStream(f, true)) {
+                out.write(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            // 控制台（release 也可能保留）
+            System.out.println("SubRestore|" + action + "|" + detail);
+        } catch (Throwable ignored) {
+        }
+        try {
+            android.util.Log.e(TAG, action + " " + detail);
+            android.util.Log.e("AssrtSub", action + " " + detail);
+        } catch (Throwable ignored) {
+        }
     }
 
     private static Field findField(Class<?> c, String name) {

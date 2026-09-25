@@ -161,6 +161,25 @@ if ! grep -q 'injectPendingIntoPlayerManager' "$ROOT/app/src/main/java/com/fongm
   echo "[mod] FATAL: PlayerManager missing injectPending after inject"
   exit 1
 fi
+
+# ---- proguard keep for subtitle restore ----
+PROGUARD_SRC="$MOD/app/proguard-rules-subtitle.pro"
+PROGUARD_DST="$ROOT/app/proguard-rules.pro"
+if [[ -f "$PROGUARD_SRC" ]]; then
+  if [[ -f "$PROGUARD_DST" ]]; then
+    if ! grep -q 'SubtitleRestoreCoordinator' "$PROGUARD_DST" 2>/dev/null; then
+      echo "" >> "$PROGUARD_DST"
+      cat "$PROGUARD_SRC" >> "$PROGUARD_DST"
+      echo "[mod] appended proguard keep for subtitle restore"
+    else
+      echo "[mod] proguard subtitle keep already present"
+    fi
+  else
+    cp -f "$PROGUARD_SRC" "$PROGUARD_DST"
+    echo "[mod] installed proguard-rules.pro for subtitle"
+  fi
+fi
+
 echo "[mod] VERIFY PlayerManager hooks OK"
 echo "[mod] done"
 

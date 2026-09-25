@@ -1377,6 +1377,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         try {
             android.util.Log.e("SubRestore", "SUB-EXT setPlayer enter history=" + (mHistory != null));
             android.util.Log.e("AssrtSub", "SUB-EXT setPlayer enter");
+            System.out.println("SubRestore|setPlayer enter");
             SubtitleRestoreCoordinator.bindHistory(mHistory);
             SubtitleRestoreCoordinator.prepareRestore(mHistory);
         } catch (Throwable e) {
