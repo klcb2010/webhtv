@@ -622,6 +622,19 @@ public final class AssrtSubtitleMatch {
 
     public static void onPlayerReady(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         if (activity == null || playerProvider == null) return;
+        // 上游 SUB-EXT-HISTORY 已在 setMediaItem 前恢复外挂字幕；有效记忆存在时
+        // 不再启动旧的 Assrt 延迟恢复/自动匹配链，避免它把内嵌字幕重新切回去。
+        try {
+            com.fongmi.android.tv.playback.SubtitleSource source =
+                    history == null ? null : history.getSubtitleSourceObject();
+            if (source != null) {
+                com.fongmi.android.tv.playback.SubtitleRestorePolicy.Decision decision =
+                        com.fongmi.android.tv.playback.SubtitleRestorePolicy.decide(
+                                source, history.getEpisodeUrl(), false);
+                if (decision.restore()) return;
+            }
+        } catch (Throwable ignored) {
+        }
         String title = history != null && history.getVodName() != null ? history.getVodName().trim() : "";
         String ep = episode != null && episode.getName() != null ? episode.getName().trim() : "";
         sLastHistory = history;
