@@ -20,19 +20,6 @@ done < <(find "$MOD" -type f -print0)
 
 
 
-# 外挂字幕自动记忆已废弃：删除历史类
-for obsolete in \
-  "app/src/main/java/com/fongmi/android/tv/playback/SubtitleRestoreCoordinator.java" \
-  "app/src/main/java/com/fongmi/android/tv/playback/SubtitleRestorePolicy.java" \
-  "app/src/main/java/com/fongmi/android/tv/playback/SubtitleSource.java" \
-  "app/proguard-rules-subtitle.pro"
-do
-  if [[ -f "$ROOT/$obsolete" ]]; then
-    rm -f "$ROOT/$obsolete"
-    echo "[mod] removed obsolete $obsolete"
-  fi
-done
-
 # 删除仓库中历史误提交的加速源残留文件（不是实现加速源）
 if [[ -f "$MOD/hooks/clean_repo_leftovers.py" ]]; then
   python3 "$MOD/hooks/clean_repo_leftovers.py" "$ROOT"
