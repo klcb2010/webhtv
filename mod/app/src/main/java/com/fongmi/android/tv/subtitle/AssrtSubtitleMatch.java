@@ -323,11 +323,6 @@ public final class AssrtSubtitleMatch {
                     ? sPendingSelectName
                     : loadRememberedTrackName(sLastHistory, sLastEpisode);
             boolean wantExternal = sPreferExternal || loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
-            try {
-                if (c.getMethod("peekPending").invoke(null) != null) wantExternal = true;
-                String pn = (String) c.getMethod("peekPendingName").invoke(null);
-                if (!TextUtils.isEmpty(pn) && TextUtils.isEmpty(remembered)) remembered = pn;
-            } catch (Throwable ignored) {}
 
             Tracks.Group bestGroup = null;
             int bestIndex = -1;
@@ -595,43 +590,8 @@ public final class AssrtSubtitleMatch {
 
     /** 轨道列表变化时调用（有内嵌+外挂时外挂常晚到，需多次尝试） */
     public static void onTracksReady(PlayerManager player) {
-        return; // 自动恢复已关闭
-        try {
-            if (player == null || player.isEmpty()) return;
-            // 从 Coordinator 再取一次 pending（历史重进时 attach 可能早于 priming）
-            try {
-                String pn = (String) c.getMethod("peekPendingName").invoke(null);
-                String pf = (String) c.getMethod("peekPendingFormat").invoke(null);
-                if (!TextUtils.isEmpty(pn)) {
-                    sPendingSelectName = pn;
-                    sPreferExternal = true;
-                }
-                if (!TextUtils.isEmpty(pf)) sPendingSelectFormat = pf;
-            } catch (Throwable ignored) {
-            }
-            if (TextUtils.isEmpty(sPendingSelectName)) {
-                String n = loadRememberedTrackName(sLastHistory, sLastEpisode);
-                if (!TextUtils.isEmpty(n)) sPendingSelectName = n;
-            }
-            boolean hasExtFile = loadCachedSubPayload(sLastHistory, sLastEpisode) != null;
-            if (hasExtFile) sPreferExternal = true;
-            if (!sPreferExternal && TextUtils.isEmpty(sPendingSelectName) && !hasExtFile) return;
-            // 即使刚 force 成功过，历史重进后 restoreTrack 可能又把内嵌抢回去，允许再抢一次
-            if (sForceSettled && System.currentTimeMillis() - sLastForceOkAt < 1500) {
-                if (forceSelectExternalViaMedia3(player)) return;
-            }
-            Log.i(TAG, "onTracksReady preferExt=" + sPreferExternal + " name=" + sPendingSelectName + " hasFile=" + hasExtFile);
-            persistAndSelectText(player, sPendingSelectName, sPendingSelectFormat);
-            forceSelectExternalViaMedia3(player);
-            final PlayerManager pm = player;
-            final String nm = sPendingSelectName;
-            final String fm = sPendingSelectFormat;
-            App.post(() -> persistAndSelectText(pm, nm, fm), 1200);
-        } catch (Throwable e) {
-            Log.w(TAG, "onTracksReady: " + e.getMessage());
-        }
+        // 自动恢复已关闭
     }
-
 
     public static void selectPendingIfAny(PlayerManager player) {
         try {
@@ -933,148 +893,13 @@ public final class AssrtSubtitleMatch {
      * Result.setSubs 仅在空列表时生效，故用反射强制写入。
      */
     public static void attachRememberedSub(Object result, History history, Episode episode) {
-        return; // 自动恢复已关闭
-        try {
-            History h0 = history != null ? history : sLastHistory;
-            com.fongmi.android.tv.bean.Result r0 = null;
-            if (result instanceof com.fongmi.android.tv.bean.Result) r0 = (com.fongmi.android.tv.bean.Result) result;
-        } catch (Throwable ignored) {}
-
-        if (result == null) return;
-        if (history == null) history = sLastHistory;
-        if (episode == null) episode = sLastEpisode;
-        String[] parts = loadCachedSubPayload(history, episode);
-        if (parts == null) {
-            // Coordinator JSON 回退：Assrt 文件缓存丢失时仍能挂
-            try {
-                        .getMethod("peekPending").invoke(null);
-                if (pend instanceof Sub) {
-                    Sub ps = (Sub) pend;
-                    String u = ps.getUrl();
-                    if (!TextUtils.isEmpty(u) && (u.contains("://") || new File(u).isFile())) {
-                        parts = new String[]{u, ps.getName() == null ? "" : ps.getName(),
-                                ps.getLang() == null ? "" : ps.getLang(),
-                                ps.getFormat() == null ? "" : ps.getFormat()};
-                        Log.i(TAG, "attachRememberedSub from Coordinator pending");
-                    }
-                }
-            } catch (Throwable ignored) {}
-        }
-        if (parts == null) return;
-        try {
-            File file = new File(parts[0]);
-            String name = parts.length > 1 && !TextUtils.isEmpty(parts[1]) ? parts[1] : file.getName();
-            String lang = parts.length > 2 ? parts[2] : "";
-            String format = parts.length > 3 ? parts[3] : "";
-            if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
-            sPreferExternal = true;
-            if (!TextUtils.isEmpty(name)) sPendingSelectName = name;
-            if (!TextUtils.isEmpty(format)) sPendingSelectFormat = format;
-            Sub sub = Sub.create(name, file.getAbsolutePath(), lang, format);
-            sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
-            java.util.ArrayList<Sub> list = new java.util.ArrayList<>();
-            list.add(sub);
-            try {
-                java.lang.reflect.Field f = result.getClass().getDeclaredField("subs");
-                f.setAccessible(true);
-                f.set(result, list);
-            } catch (Throwable e) {
-                try {
-                    java.lang.reflect.Method m = result.getClass().getMethod("setSubs", java.util.List.class);
-                    m.invoke(result, list);
-                } catch (Throwable ignored) {
-                }
-            }
-            // 清掉「禁用字幕」记忆，防止 restoreTrack 关掉外挂
-            try {
-                String hk = history != null ? history.getKey() : null;
-                if (!TextUtils.isEmpty(hk)) {
-                    Track track = new Track(C.TRACK_TYPE_TEXT, name, TextUtils.isEmpty(format) ? "text/x-ssa" : format);
-                    track.setKey(hk);
-                    track.setSelected(true);
-                    track.save();
-                }
-            } catch (Throwable ignored) {
-            }
-            sPendingSelectName = name;
-            sPendingSelectFormat = format;
-            Log.i(TAG, "attachRememberedSub " + name);
-        } catch (Throwable e) {
-            Log.w(TAG, "attachRememberedSub failed: " + e.getMessage());
-        }
+        // 自动恢复已关闭
     }
 
     public static boolean tryRestoreSub(Activity activity, History history, Episode episode, PlayerProvider playerProvider) {
         return false; // 自动恢复已关闭
-        try {
-            String raw = null;
-            for (String key : subCacheKeys(history, episode)) {
-                String v = Prefers.getString(key);
-                if (!TextUtils.isEmpty(v)) {
-                    raw = v;
-                    break;
-                }
-            }
-            if (TextUtils.isEmpty(raw)) {
-                Log.i(TAG, "restore miss no cache");
-                return false;
-            }
-            String[] parts = raw.split("\u0001", -1);
-            if (parts.length < 1 || TextUtils.isEmpty(parts[0])) return false;
-            File file = new File(parts[0]);
-            if (!file.isFile()) {
-                Log.w(TAG, "restore miss file gone " + parts[0]);
-                return false;
-            }
-            String name = parts.length > 1 ? parts[1] : file.getName();
-            String lang = parts.length > 2 ? parts[2] : "";
-            String format = parts.length > 3 ? parts[3] : "";
-            if (TextUtils.isEmpty(format)) format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
-            PlayerManager player = playerProvider == null ? null : playerProvider.get();
-            if (player == null || player.isEmpty()) return false;
-            applyToPlayer(player, file, name, lang, format);
-            final String rn = name;
-            final String rf = format;
-            final PlayerManager rpm = player;
-            App.post(() -> persistAndSelectText(rpm, rn, rf), 1200);
-            // 起播后轨道恢复可能把默认内嵌轨抢回去，延迟再挂一次
-            final File f2 = file;
-            final String n2 = name, l2 = lang, fmt2 = format;
-            final PlayerProvider pp = playerProvider;
-            com.fongmi.android.tv.App.post(() -> {
-                try {
-                    PlayerManager p2 = pp.get();
-                    if (p2 != null && !p2.isEmpty()) applyToPlayer(p2, f2, n2, l2, fmt2);
-                } catch (Throwable ignored) {
-                }
-            }, 1200);
-            com.fongmi.android.tv.App.post(() -> {
-                try {
-                    PlayerManager p2 = pp.get();
-                    if (p2 != null && !p2.isEmpty()) applyToPlayer(p2, f2, n2, l2, fmt2);
-                } catch (Throwable ignored) {
-                }
-            }, 2800);
-            Log.i(TAG, "restored sub " + name + " path=" + file.getAbsolutePath());
-            return true;
-        } catch (Throwable e) {
-            Log.w(TAG, "restore sub failed: " + e.getMessage());
-            return false;
-        }
     }
 
-
-    private static List<String> buildQueriesFromKeyword(String keyword) {
-        List<String> qs = new ArrayList<>();
-        if (!TextUtils.isEmpty(keyword)) qs.add(keyword.trim());
-        String cleaned = keyword == null ? "" : keyword.trim();
-        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
-        cleaned = cleaned.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}E\\d{1,3}.*$", "").trim();
-        if (!TextUtils.isEmpty(cleaned) && !cleaned.equals(keyword == null ? "" : keyword.trim())) qs.add(cleaned);
-        return qs;
-    }
-
-    /** 显示名 = 片名 集数（与预填一致），不用远程乱文件名、不带来源前缀 */
     public static String displayNameForKeyword(Item item, String keyword) {
         if (!TextUtils.isEmpty(keyword)) return keyword.trim();
         if (item == null) return "";
