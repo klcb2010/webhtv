@@ -83,8 +83,9 @@ public final class AiRecommendService {
         StringBuilder sb = new StringBuilder();
         sb.append("你是专业的影视推荐专家，熟悉电影、电视剧、动漫、纪录片、综艺。");
         sb.append("请根据用户「当前作品」和「播放历史」分析题材、地区、年代、导演/演员偏好，推荐 10-14 部相关作品。");
-        sb.append("优先推荐与当前作品气质相近、但片名不同的内容；可适度拓展同类型口碑作。");
-        sb.append("不要推荐播放历史里已出现的同名作品，不要推荐当前片名。");
+        sb.append("推荐顺序非常重要：如果当前作品是电视剧/动漫并且存在未观看的后续季，必须优先推荐同一系列的后续季，按季数从下一季开始连续排列；例如当前为《闪电侠》第三季，应优先给出《闪电侠》第四季、第五季、第六季、第七季（以及存在的更后续季），再推荐《绿箭侠》等同宇宙/相似作品。");
+        sb.append("不要因为片名相同就排除后续季；只有当前正在观看的同一季，以及播放历史中已经明确观看过的同一季，才应排除。");
+        sb.append("若后续季不足，再补充同系列衍生剧、同宇宙作品、再补充题材相似作品。前 4-7 个位置尽量用于同系列后续季；没有后续季时直接进入相似推荐。");
         sb.append("只返回可解析 JSON，不要 Markdown 或解释。");
         sb.append("格式：{\"items\":[{\"title\":\"片名\",\"year\":2024,\"mediaType\":\"movie 或 tv\",\"reason\":\"一句推荐理由\"}]}。");
         sb.append("mediaType 只能是 movie 或 tv；reason 约 15-40 个中文字。\n\n");
@@ -173,6 +174,7 @@ public final class AiRecommendService {
                 if (!dedupe.containsKey(key)) dedupe.put(key, new Item(title, year, type, reason));
             }
             items.addAll(dedupe.values());
+            prioritizeSeriesSeasons(items, excludeTitle);
             Log.i(TAG, "parsed " + items.size());
         } catch (Exception e) {
             Log.w(TAG, "parse fail: " + e.getMessage() + " body=" + excerpt(content));
