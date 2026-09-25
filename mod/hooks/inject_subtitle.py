@@ -49,43 +49,10 @@ SHOW = r"""
 
 
 def inject_set_player(t: str) -> str:
-    """Before startPlayer in setPlayer(Result), attach remembered external sub."""
-    if "attachRememberedSub" in t and "setPlayer" in t:
-        # already
-        pass
-    marker = "startPlayer(getHistoryKey(), result,"
-    if marker not in t:
-        marker = "startPlayer("
-    # Only inject once near setPlayer
-    if "AssrtSubtitleMatch.attachRememberedSub(result" in t:
-        return t
-    # Prefer exact mobile/leanback pattern
-    for pat in [
-        "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());",
-        "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());\n",
-    ]:
-        if pat in t:
-            t = t.replace(
-                pat,
-                "        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}\n" + pat,
-                1,
-            )
-            return t
-    # generic: first startPlayer after setPlayer method
-    m = re.search(r"private void setPlayer\(Result result\) \{", t)
-    if not m:
-        return t
-    region = t[m.start():m.start()+2500]
-    idx = region.find("startPlayer(")
-    if idx < 0:
-        return t
-    abs_idx = m.start() + idx
-    line_start = t.rfind("\n", 0, abs_idx) + 1
-    indent = re.match(r"[ \t]*", t[line_start:]).group(0)
-    insert = f"{indent}try {{ AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); }} catch (Throwable ignored) {{}}\n"
-    t = t[:line_start] + insert + t[line_start:]
+    # External subtitle history is now handled by inject_subtitle_restore.py
+    # using the upstream History -> PlayerManager pre-start restore path.
+    # Do not inject the old AssrtSubtitleMatch.attachRememberedSub() path here.
     return t
-
 
 def insert_after_on_subtitle_click(t: str) -> str:
     if "void showSubtitleSearch()" in t and "getSubtitleSearchKeyword()" in t:
