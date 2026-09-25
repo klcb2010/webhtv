@@ -97,7 +97,7 @@ print("[mod] subtitle_restore: History patched")
 # ---------------------------------------------------------------------------
 p, t = read("app/src/main/java/com/fongmi/android/tv/Startup.java")
 t = t.replace("import com.fongmi.android.tv.event.EventIndex;\n", "")
-t = t.replace("EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();", "EventBus.installDefaultEventBus();")
+t = t.replace("EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();", "EventBus.builder().installDefaultEventBus();")
 write(p, t)
 print("[mod] subtitle_restore: Startup patched")
 
@@ -368,7 +368,10 @@ for rel in [
     t = "".join(out)
 
     # Normalize duplicate annotations produced by overlapping mod hooks.
-    t = re.sub(r"(?m)^(\s*@Override\s*\n)\s*@Override\s*$", r"\1", t)
+    # Some hooks run after this one, so also collapse repeated @Override lines
+    # with blank/whitespace lines between them.
+    t = re.sub(r"(?m)(^[ \t]*@Override[ \t]*\n)(?:[ \t]*\n)*[ \t]*@Override[ \t]*\n", r"\1", t)
+    t = re.sub(r"(?m)(^[ \t]*@Override[ \t]*\n)(?:[ \t]*\n)*[ \t]*@Override[ \t]*\n", r"\1", t)
 
     # Avoid duplicate restore if this hook is rerun.
     t = t.replace(
