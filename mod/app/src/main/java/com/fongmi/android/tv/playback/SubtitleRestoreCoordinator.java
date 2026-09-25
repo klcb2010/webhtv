@@ -35,6 +35,13 @@ public final class SubtitleRestoreCoordinator {
     private SubtitleRestoreCoordinator() {
     }
 
+    static {
+        try {
+            android.util.Log.e("SubRestore", "SubtitleRestoreCoordinator class loaded");
+            android.util.Log.e("AssrtSub", "SubtitleRestoreCoordinator class loaded");
+        } catch (Throwable ignored) {}
+    }
+
     public static void bindHistory(History history) {
         sBoundHistory = history;
     }
@@ -47,9 +54,26 @@ public final class SubtitleRestoreCoordinator {
     /** PlayerManager.setSub 唯一写入收口 */
     public static void onUserSetSub(Sub sub) {
         try {
-            if (sub == null || TextUtils.isEmpty(sub.getUrl())) return;
+            if (sub == null || TextUtils.isEmpty(sub.getUrl())) {
+                Log.i(TAG, "onUserSetSub skip null/empty sub");
+                return;
+            }
             History h = sBoundHistory;
-            if (h == null) return;
+            if (h == null) {
+                // 仍记一份全局键，避免 bindHistory 未跑时完全无日志/无记忆
+                Log.w(TAG, "onUserSetSub no bound history, use fallback key name=" + sub.getName());
+                Sub durable = ensureDurable(sub);
+                SubtitleSource source = SubtitleSource.of(durable, "");
+                if (source != null) {
+                    putCommit(cacheKey("last", ""), SubtitleSource.encode(source));
+                }
+                try {
+                    Class<?> assrt = Class.forName("com.fongmi.android.tv.subtitle.AssrtSubtitleMatch");
+                    assrt.getMethod("rememberSubFromCoordinator", History.class, String.class, String.class, String.class, String.class)
+                            .invoke(null, null, durable.getUrl(), durable.getName(), durable.getLang(), durable.getFormat());
+                } catch (Throwable ignored) {}
+                return;
+            }
             try {
                 Class<?> setting = Class.forName("com.fongmi.android.tv.setting.Setting");
                 Object incognito = setting.getMethod("isIncognito").invoke(null);
@@ -102,6 +126,7 @@ public final class SubtitleRestoreCoordinator {
             } catch (Throwable ignored) {
             }
         }
+        if (source == null) source = load("last", "");
         SubtitleRestorePolicy.Decision d = SubtitleRestorePolicy.decide(source, episodeUrl, false);
         if (d.clear()) {
             clear(history.getKey(), episodeUrl);

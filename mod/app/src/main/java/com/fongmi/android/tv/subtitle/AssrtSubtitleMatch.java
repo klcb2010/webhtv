@@ -77,6 +77,21 @@ public final class AssrtSubtitleMatch {
     private AssrtSubtitleMatch() {
     }
 
+    static {
+        try {
+            android.util.Log.e("AssrtSub", "AssrtSubtitleMatch class loaded v2");
+            android.util.Log.e("SubRestore", "AssrtSubtitleMatch class loaded v2");
+            android.util.Log.e("SubtitleMatch", "AssrtSubtitleMatch class loaded v2");
+        } catch (Throwable ignored) {}
+    }
+
+    private static void logi(String msg) {
+        try {
+            android.util.Log.i(TAG, msg);
+            android.util.Log.i("SubtitleMatch", msg);
+        } catch (Throwable ignored) {}
+    }
+
     /** 由 SubtitleRestoreCoordinator.prepareRestore 调用：历史重进前 priming 选轨意图 */
     public static void primeExternalPreference(String name, String format) {
         try {

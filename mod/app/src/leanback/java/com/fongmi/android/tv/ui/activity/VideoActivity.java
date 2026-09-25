@@ -1303,9 +1303,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setPlayer(Result result) {
         // Silent SUB-EXT: 绑定历史 + 登记 pending（真正注入在 setMediaItem 前）
         try {
+            android.util.Log.e("SubRestore", "SUB-EXT setPlayer enter history=" + (mHistory != null));
+            android.util.Log.e("AssrtSub", "SUB-EXT setPlayer enter");
             SubtitleRestoreCoordinator.bindHistory(mHistory);
             SubtitleRestoreCoordinator.prepareRestore(mHistory);
-        } catch (Throwable ignored) {}
+        } catch (Throwable e) {
+            android.util.Log.e("SubRestore", "SUB-EXT setPlayer restore err", e);
+        }
 
         if (isFinishing() || isDestroyed()) return;
         SpiderDebug.log("video-flow", "player finish cost=%dms useParse=%s multi=%s msg=%s", System.currentTimeMillis() - playerStartTime, result.shouldUseParse(), result.getUrl().isMulti(), result.getMsg());

@@ -17,6 +17,41 @@ while IFS= read -r -d '' src; do
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
 
+
+# ---- VERIFY subtitle restore sources actually landed in ROOT ----
+echo "[mod] VERIFY subtitle restore sources"
+verify_fail=0
+for f in \
+  "app/src/main/java/com/fongmi/android/tv/subtitle/AssrtSubtitleMatch.java" \
+  "app/src/main/java/com/fongmi/android/tv/playback/SubtitleRestoreCoordinator.java" \
+  "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java" \
+  "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java"
+do
+  if [[ ! -f "$ROOT/$f" ]]; then
+    echo "[mod] ERROR missing after copy: $f"
+    verify_fail=1
+    continue
+  fi
+done
+if ! grep -q 'AssrtSub' "$ROOT/app/src/main/java/com/fongmi/android/tv/subtitle/AssrtSubtitleMatch.java" 2>/dev/null; then
+  echo "[mod] ERROR AssrtSubtitleMatch.java has no TAG AssrtSub — wrong/old file"
+  verify_fail=1
+fi
+if ! grep -q 'prepareRestore' "$ROOT/app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java" 2>/dev/null \
+   && ! grep -q 'prepareRestore' "$ROOT/app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java" 2>/dev/null; then
+  echo "[mod] ERROR VideoActivity has no prepareRestore after copy"
+  verify_fail=1
+fi
+if ! grep -q 'onUserSetSub' "$ROOT/app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java" 2>/dev/null; then
+  echo "[mod] WARN PlayerManager not yet hooked (inject runs next) or missing"
+fi
+if [[ "$verify_fail" -ne 0 ]]; then
+  echo "[mod] FATAL: subtitle restore sources incomplete — abort so you notice"
+  exit 1
+fi
+echo "[mod] VERIFY subtitle sources OK"
+
+
 # 删除仓库中历史误提交的加速源残留文件（不是实现加速源）
 if [[ -f "$MOD/hooks/clean_repo_leftovers.py" ]]; then
   python3 "$MOD/hooks/clean_repo_leftovers.py" "$ROOT"
@@ -118,6 +153,15 @@ fi
 if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi
+if ! grep -q 'onUserSetSub' "$ROOT/app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java" 2>/dev/null; then
+  echo "[mod] FATAL: PlayerManager missing onUserSetSub after inject"
+  exit 1
+fi
+if ! grep -q 'injectPendingIntoPlayerManager' "$ROOT/app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java" 2>/dev/null; then
+  echo "[mod] FATAL: PlayerManager missing injectPending after inject"
+  exit 1
+fi
+echo "[mod] VERIFY PlayerManager hooks OK"
 echo "[mod] done"
 
 if [[ -f "$MOD/hooks/inject_stalled_auto_change.py" ]]; then
