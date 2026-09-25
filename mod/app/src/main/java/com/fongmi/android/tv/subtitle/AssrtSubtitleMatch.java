@@ -125,8 +125,6 @@ public final class AssrtSubtitleMatch {
         try {
             if (sLastHistory != null) {
                 SubtitleRestoreCoordinator.remember(sLastHistory, sub);
-            } else if (sLastEpisode != null) {
-                SubtitleRestoreCoordinator.remember("", sLastEpisode.getUrl(), sub);
             }
         } catch (Throwable ignored) {}
         sPendingSelectName = trackLabel;
