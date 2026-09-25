@@ -71,18 +71,20 @@ public final class AiRecommendService {
     public static List<Item> load(Vod current, String currentTitle) throws Exception {
         AiConfig config = Setting.getAiConfig();
         if (!config.isRecommendationEnabled()) throw new IllegalStateException("ai_recommend_off");
-        String prompt = buildPrompt(current, currentTitle);
-        Log.i(TAG, "prompt chars=" + prompt.length() + " title=" + currentTitle);
+        // 详情标题常只有系列名（流人），季数在备注/历史；拼成「流人 第4季」再展开
+        String seriesTitle = resolveSeriesTitle(currentTitle, current);
+        String prompt = buildPrompt(current, seriesTitle);
+        Log.i(TAG, "prompt chars=" + prompt.length() + " title=" + currentTitle + " series=" + seriesTitle);
         String content = AiCompletionClient.complete(config, prompt);
         String exclude = currentTitle;
         if (TextUtils.isEmpty(exclude) && current != null) exclude = current.getName();
         List<Item> aiItems = parseItems(content, exclude);
-        // 本地续集扩展优先插到最前（闪电侠 S3 → S4…S7，再是 AI 的关联/相似）
-        String seed = !TextUtils.isEmpty(currentTitle) ? currentTitle
-                : (current != null ? current.getName() : "");
-        List<Item> sequels = expandSequelCandidates(seed, 6);
+        List<Item> sequels = expandSequelCandidates(seriesTitle, 6);
+        if (sequels.isEmpty() && !TextUtils.isEmpty(currentTitle) && !currentTitle.equals(seriesTitle)) {
+            sequels = expandSequelCandidates(currentTitle, 6);
+        }
         if (sequels.isEmpty()) return aiItems;
-        Map<String, Item> map = new LinkedHashMap<>();
+        LinkedHashMap<String, Item> map = new LinkedHashMap<>();
         for (Item it : sequels) {
             if (it == null || TextUtils.isEmpty(it.title)) continue;
             map.put(it.title.toLowerCase(Locale.ROOT), it);
@@ -93,6 +95,99 @@ public final class AiRecommendService {
             if (!map.containsKey(k)) map.put(k, it);
         }
         return new ArrayList<>(map.values());
+    }
+
+    /**
+     * 把「流人」+ 备注/历史里的「第4季」拼成可用于续集展开的完整标题。
+     * 若标题本身已含季数则原样返回。
+     */
+    public static String resolveSeriesTitle(String title, Vod current) {
+        String base = title == null ? "" : title.trim();
+        if (TextUtils.isEmpty(base) && current != null) base = safe(current.getName());
+        if (TextUtils.isEmpty(base)) return "";
+        // 标题已带季/部/Season → 直接用
+        if (hasSeasonHint(base)) return base;
+
+        List<String> hints = new ArrayList<>();
+        if (current != null) {
+            hints.add(safe(current.getRemarks()));
+            hints.add(safe(current.getName()));
+            try { hints.add(safe(current.getTypeName())); } catch (Throwable ignored) {}
+        }
+        // 播放历史：同名条目的备注常带「第N季 / 更新至…」
+        try {
+            List<History> histories = History.get();
+            if (histories != null) {
+                String baseKey = normalizeSeriesKey(base);
+                for (History h : histories) {
+                    if (h == null) continue;
+                    String hn = safe(h.getVodName());
+                    if (TextUtils.isEmpty(hn)) continue;
+                    String hk = normalizeSeriesKey(hn);
+                    if (hk.equals(baseKey) || hn.contains(base) || base.contains(stripSeason(hn))) {
+                        hints.add(safe(h.getVodRemarks()));
+                        hints.add(hn);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
+        int season = -1;
+        String unit = "季";
+        for (String hint : hints) {
+            if (TextUtils.isEmpty(hint)) continue;
+            int[] found = extractSeason(hint);
+            if (found[0] > 0) {
+                season = found[0];
+                unit = found[1] == 2 ? "部" : "季";
+                break;
+            }
+        }
+        if (season < 1) return base;
+        String out = base + " 第" + toCnNum(season) + unit;
+        Log.i(TAG, "resolveSeriesTitle " + base + " → " + out);
+        return out;
+    }
+
+    private static boolean hasSeasonHint(String s) {
+        if (TextUtils.isEmpty(s)) return false;
+        if (java.util.regex.Pattern.compile("第[0-9一二三四五六七八九十百]+[季部]").matcher(s).find()) return true;
+        if (java.util.regex.Pattern.compile("(?i)S(?:eason)?[\\s._-]*[0-9]{1,2}").matcher(s).find()) return true;
+        return false;
+    }
+
+    /** @return int[2] = {season, unitCode} unitCode 1=季 2=部；找不到则 season=-1 */
+    private static int[] extractSeason(String s) {
+        int[] none = new int[]{-1, 1};
+        if (TextUtils.isEmpty(s)) return none;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "第([0-9一二三四五六七八九十百]+)([季部])").matcher(s);
+        if (m.find()) {
+            int n = parseCnNum(m.group(1));
+            if (n >= 1) return new int[]{n, "部".equals(m.group(2)) ? 2 : 1};
+        }
+        m = java.util.regex.Pattern.compile("(?i)S(?:eason)?[\\s._-]*([0-9]{1,2})").matcher(s);
+        if (m.find()) {
+            try {
+                int n = Integer.parseInt(m.group(1));
+                if (n >= 1 && n <= 30) return new int[]{n, 1};
+            } catch (Exception ignored) {}
+        }
+        // 「更新至第12集」不算季；「第四季完结」已覆盖
+        return none;
+    }
+
+    private static String stripSeason(String s) {
+        if (s == null) return "";
+        String t = s.trim();
+        t = java.util.regex.Pattern.compile("[\\s·\\-_]*第[0-9一二三四五六七八九十百]+[季部].*$").matcher(t).replaceFirst("");
+        t = java.util.regex.Pattern.compile("(?i)[\\s·\\-_]*S(?:eason)?[\\s._-]*[0-9]{1,2}.*$").matcher(t).replaceFirst("");
+        return t.trim();
+    }
+
+    private static String normalizeSeriesKey(String s) {
+        return stripSeason(s).toLowerCase(Locale.ROOT).replaceAll("[\\s·\\-_]", "");
     }
 
     private static String buildPrompt(Vod current, String currentTitle) {

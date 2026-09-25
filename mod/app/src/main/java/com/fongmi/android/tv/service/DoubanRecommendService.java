@@ -188,7 +188,9 @@ public final class DoubanRecommendService {
         return h;
     }
     private static List<AiRecommendService.Item> withSequels(String title, List<AiRecommendService.Item> rec) {
-        List<AiRecommendService.Item> sequels = AiRecommendService.expandSequelCandidates(title, 5);
+        String series = AiRecommendService.resolveSeriesTitle(title, null);
+        List<AiRecommendService.Item> sequels = AiRecommendService.expandSequelCandidates(series, 5);
+        if (sequels.isEmpty()) sequels = AiRecommendService.expandSequelCandidates(title, 5);
         if (sequels.isEmpty()) return limit(rec);
         java.util.LinkedHashMap<String, AiRecommendService.Item> map = new java.util.LinkedHashMap<>();
         for (AiRecommendService.Item it : sequels) map.put(it.title.toLowerCase(java.util.Locale.ROOT), it);
