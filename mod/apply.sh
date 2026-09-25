@@ -104,7 +104,6 @@ run_hook() {
 }
 
 run_hook "$MOD/hooks/inject_subtitle.py"
-run_hook "$MOD/hooks/inject_subtitle_restore.py"
 run_hook "$MOD/hooks/inject_video_ai.py"
 run_hook "$MOD/hooks/inject_personal_manifest.py"
 run_hook "$MOD/hooks/fix_exo_dv5.py"

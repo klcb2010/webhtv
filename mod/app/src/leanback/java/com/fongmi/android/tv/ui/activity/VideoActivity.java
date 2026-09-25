@@ -1433,11 +1433,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public void onItemClick(Result result) {
         beginPlayHealth();
-        try { AssrtSubtitleMatch.attachRememberedSub(result, mHistory, getEpisode()); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : "", getEpisode() != null ? getEpisode().getName() : ""); } catch (Throwable ignored) {}
-        try { AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player()); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 1200); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.App.post(() -> { try { AssrtSubtitleMatch.selectPendingIfAny(player()); } catch (Throwable ignored) {} }, 3000); } catch (Throwable ignored) {}
         startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());
     }
 

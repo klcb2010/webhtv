@@ -49,7 +49,7 @@ SHOW = r"""
 
 
 def inject_set_player(t: str) -> str:
-    """Before startPlayer in setPlayer(Result), attach remembered external sub (light)."""
+    """Before startPlayer in setPlayer(Result), attach remembered external sub."""
     if "attachRememberedSub" in t and "setPlayer" in t:
         # already
         pass
@@ -165,12 +165,12 @@ for rel in [
 
     def add_ready(match):
         s = match.group(0)
-        if "AssrtSubtitleMatch.onPlayerReady" in s:
-            return s
         extra = (
             "\n        try { AssrtSubtitleMatch.updateKeyword(mHistory != null ? mHistory.getVodName() : \"\", getEpisode() != null ? getEpisode().getName() : \"\"); } catch (Throwable ignored) {}"
             "\n        AssrtSubtitleMatch.onPlayerReady(this, mHistory, getEpisode(), () -> player());"
         )
+        if "AssrtSubtitleMatch.onPlayerReady" in s:
+            return s
         return s + extra
 
     t = re.sub(
