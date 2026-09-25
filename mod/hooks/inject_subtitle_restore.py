@@ -97,6 +97,26 @@ print("[mod] subtitle_restore: History patched")
 # ---------------------------------------------------------------------------
 p, t = read("app/src/main/java/com/fongmi/android/tv/db/Migrations.java")
 if "MIGRATION_38_39" not in t:
+    if "addColumnIfMissing" not in t:
+        helper = '''
+    /** Idempotent ADD COLUMN helper. */
+    private static void addColumnIfMissing(androidx.sqlite.db.SupportSQLiteDatabase database, String table, String column, String typeDef) {
+        android.database.Cursor cursor = null;
+        try {
+            cursor = database.query("PRAGMA table_info(`" + table + "`)");
+            int nameIndex = cursor.getColumnIndex("name");
+            while (cursor.moveToNext()) {
+                if (nameIndex >= 0 && column.equalsIgnoreCase(cursor.getString(nameIndex))) return;
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        database.execSQL("ALTER TABLE `" + table + "` ADD COLUMN `" + column + "` " + typeDef);
+    }
+'''
+        t = t.replace("public class Migrations {\\n", "public class Migrations {\\n" + helper + "\\n", 1)
+
     block = '''
     public static final Migration MIGRATION_38_39 = new Migration(38, 39) {
         @Override
@@ -336,6 +356,9 @@ for rel in [
             out.append(indent + "if (SubtitleRestoreCoordinator.restore(mHistory, player(), result)) syncHistory();\n")
         out.append(line)
     t = "".join(out)
+
+    # Normalize duplicate annotations produced by overlapping mod hooks.
+    t = re.sub(r"(?m)^(\s*@Override\s*\n)\s*@Override\s*$", r"\1", t)
 
     # Avoid duplicate restore if this hook is rerun.
     t = t.replace(
