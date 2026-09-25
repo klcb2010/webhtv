@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+        <com.google.android.material.textview.MaterialTextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingBottom="8dp" android:text="@string/player_subtitle_assrt_token" android:textColor="@color/white" android:textSize="22sp" android:textStyle="bold" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/token" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/shape_item" android:padding="10dp" android:singleLine="true" android:textColor="@color/white" android:textColorHint="#88FFFFFF" android:textSize="16sp" />
+        <androidx.appcompat.widget.LinearLayoutCompat android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/shape_item" android:focusable="true"  android:gravity="center" android:padding="12dp">
+            <com.google.android.material.textview.MaterialTextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/dialog_positive" android:textColor="@color/white" android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+</androidx.core.widget.NestedScrollView>

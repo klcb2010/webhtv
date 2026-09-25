@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove toast-blocking remnants; restore Result.msg → Notify.show."""
+"""Route Result.getMsg() toast sites to ResultMsgUi.show (no-op). No rule files."""
 import pathlib
 import re
 import sys
@@ -13,59 +13,66 @@ TARGETS = [
     "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
 ]
 
+IMPORT = "import com.fongmi.android.tv.utils.ResultMsgUi;"
 
-def restore_msg(path: pathlib.Path) -> bool:
+
+def ensure_import(text: str) -> str:
+    if IMPORT in text:
+        return text
+    if "import com.fongmi.android.tv.utils.Notify;" in text:
+        return text.replace(
+            "import com.fongmi.android.tv.utils.Notify;",
+            "import com.fongmi.android.tv.utils.Notify;\n" + IMPORT,
+            1,
+        )
+    m = re.search(r"(package [\w.]+;\s*\n)", text)
+    if m:
+        return text[: m.end()] + "\n" + IMPORT + "\n" + text[m.end() :]
+    return text
+
+
+def patch_file(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
     t = path.read_text(encoding="utf-8")
     orig = t
-    t = t.replace("result -> UiSurface.show(result.getMsg())", "result -> Notify.show(result.getMsg())")
-    t = t.replace("UiSurface.show(result.getMsg());", "Notify.show(result.getMsg());")
-    t = t.replace("ResultMsgUi.show(result.getMsg());", "Notify.show(result.getMsg());")
-    t = t.replace("SpiderToastGuard.showMsg(result.getMsg());", "Notify.show(result.getMsg());")
-    # ternary restore if we rewrote it
+    t = ensure_import(t)
+
+    # remove old guard name if previous build left it
+    t = t.replace("SpiderToastGuard.showMsg", "ResultMsgUi.show")
+    t = t.replace("import com.fongmi.android.tv.utils.SpiderToastGuard;", IMPORT)
+
+    t = t.replace(
+        "result -> Notify.show(result.getMsg())",
+        "result -> ResultMsgUi.show(result.getMsg())",
+    )
     t = re.sub(
-        r"if \(result != null && result\.hasMsg\(\)\) UiSurface\.show\(result\.getMsg\(\)\); else Notify\.show\(([^)]+)\);",
-        r"Notify.show(result != null && result.hasMsg() ? result.getMsg() : \1);",
+        r"Notify\.show\(\s*result\.getMsg\(\)\s*\)\s*;",
+        "ResultMsgUi.show(result.getMsg());",
         t,
     )
-    t = t.replace("\nimport com.fongmi.android.tv.utils.UiSurface;\n", "\n")
-    t = t.replace("import com.fongmi.android.tv.utils.UiSurface;\n", "")
+    # spider msg branch: still no-op ui; keep real error string path
+    t = re.sub(
+        r"Notify\.show\(\s*result\s*!=\s*null\s*&&\s*result\.hasMsg\(\)\s*\?\s*result\.getMsg\(\)\s*:\s*([^)]+)\)\s*;",
+        r"if (result != null && result.hasMsg()) ResultMsgUi.show(result.getMsg()); else Notify.show(\1);",
+        t,
+    )
+
     if t != orig:
         path.write_text(t, encoding="utf-8")
-        print("[mod] restored msg toast", path.relative_to(ROOT))
+        print("[mod] result msg ui patched", path.relative_to(ROOT))
         return True
+    print("[mod] result msg ui unchanged", path.relative_to(ROOT))
     return False
 
 
-def strip_app_install() -> None:
-    path = ROOT / "app/src/main/java/com/fongmi/android/tv/App.java"
-    if not path.exists():
-        return
-    t = path.read_text(encoding="utf-8")
-    orig = t
-    t = t.replace("\n        UiSurface.install();", "")
-    t = t.replace("UiSurface.install();\n", "")
-    t = t.replace("\nimport com.fongmi.android.tv.utils.UiSurface;\n", "\n")
-    t = t.replace("import com.fongmi.android.tv.utils.UiSurface;\n", "")
-    if t != orig:
-        path.write_text(t, encoding="utf-8")
-        print("[mod] removed UiSurface.install from App")
-
-
 def main() -> None:
-    # drop assets/intoast if any
-    for p in ROOT.rglob("intoast"):
-        if p.is_file():
-            p.unlink(missing_ok=True)
-            print("[mod] removed", p)
-    ui = ROOT / "app/src/main/java/com/fongmi/android/tv/utils/UiSurface.java"
-    if ui.exists():
-        ui.unlink()
-        print("[mod] removed UiSurface.java")
-    n = sum(1 for rel in TARGETS if restore_msg(ROOT / rel))
-    strip_app_install()
-    print("[mod] toast block fully disabled, restored files:", n)
+    # drop leftover asset from older approach if any
+    for p in ROOT.rglob("spider_toast_block.dat"):
+        p.unlink(missing_ok=True)
+        print("[mod] removed", p)
+    n = sum(1 for rel in TARGETS if patch_file(ROOT / rel))
+    print("[mod] result msg ui done, changed:", n)
 
 
 if __name__ == "__main__":

@@ -90,35 +90,16 @@ public final class AssrtSubtitleSearchDialog {
     }
 
     private static String resolveKeyword(FragmentActivity activity, String defaultKeyword) {
-        // 优先：播放页站源上方标题（mBinding.name）
-        try {
-            java.lang.reflect.Field bf = activity.getClass().getDeclaredField("mBinding");
-            bf.setAccessible(true);
-            Object binding = bf.get(activity);
-            if (binding != null) {
-                for (String fn : new String[]{"name", "title", "vodName"}) {
-                    try {
-                        java.lang.reflect.Field nf = binding.getClass().getField(fn);
-                        Object tv = nf.get(binding);
-                        if (tv instanceof android.widget.TextView) {
-                            CharSequence cs = ((android.widget.TextView) tv).getText();
-                            if (cs != null) {
-                                String t = AssrtSubtitleMatch.cleanTitleForSearch(cs.toString());
-                                if (!android.text.TextUtils.isEmpty(t)) return t;
-                            }
-                        }
-                    } catch (Throwable ignored) {
-                    }
-                }
+        if (!TextUtils.isEmpty(defaultKeyword)) return defaultKeyword.trim();
+        if (activity instanceof TrackDialog.SubtitleSearchHost host) {
+            try {
+                String fromHost = host.getSubtitleSearchKeyword();
+                if (!TextUtils.isEmpty(fromHost)) return fromHost.trim();
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
-        }
-        if (!android.text.TextUtils.isEmpty(defaultKeyword)) {
-            String t = AssrtSubtitleMatch.cleanTitleForSearch(defaultKeyword);
-            if (!android.text.TextUtils.isEmpty(t)) return t;
         }
         String cached = AssrtSubtitleMatch.lastKeyword();
-        if (!android.text.TextUtils.isEmpty(cached)) return cached;
+        if (!TextUtils.isEmpty(cached)) return cached.trim();
         return "";
     }
 
@@ -169,7 +150,9 @@ public final class AssrtSubtitleSearchDialog {
                     String display = AssrtSubtitleMatch.displayNameForKeyword(item, query);
                     String format = PlayerHelper.getSubtitleMimeType(item.name);
                     if (TextUtils.isEmpty(format)) format = PlayerHelper.getSubtitleMimeType(file.getName());
-                    AssrtSubtitleMatch.applyToPlayer(player, file, display, item.lang, format);
+                    Sub sub = Sub.create(display, file.getAbsolutePath(), item.lang, format);
+                    sub.setFlag(androidx.media3.common.C.SELECTION_FLAG_FORCED);
+                    player.setSub(sub);
                     Notify.show(activity.getString(R.string.subtitle_manual_applied, display));
                 });
             } catch (Exception e) {
