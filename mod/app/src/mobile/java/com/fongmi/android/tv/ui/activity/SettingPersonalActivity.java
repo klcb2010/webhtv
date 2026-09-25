@@ -9,6 +9,7 @@ import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 
@@ -44,11 +45,16 @@ public class SettingPersonalActivity extends BaseActivity {
         }
         refreshTexts();
         setListeners();
-        // mobile touch UI
     }
 
     private void setListeners() {
+        // autoChange hidden — use upstream 播放设置
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        try { mBinding.globalToast.setOnClickListener(this::setGlobalToast); } catch (Throwable ignored) {}
+        try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColor.setOnClickListener(this::setSubtitleColor); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFont.setOnClickListener(this::setSubtitleFont); } catch (Throwable ignored) {}
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -58,10 +64,23 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
+        try { mBinding.homePush.setOnClickListener(this::setHomePush); } catch (Throwable ignored) {}
+        try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
+        try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
 
     private void refreshTexts() {
+        try {
+        // autoChange hidden
+        } catch (Throwable e) {
+        // autoChange hidden
+        }
         mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
+        try { mBinding.globalToastText.setText(getSwitch(Setting.isGlobalToast())); } catch (Throwable ignored) {}
+        try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColorText.setText(subtitleColorLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
@@ -73,19 +92,40 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
         String lang = Setting.getSubtitlePreferredLanguage();
-        String langLabel = lang;
+        String label = lang;
         if (subtitleValues != null && subtitleLabels != null) {
-            for (int i = 0; i < subtitleValues.length && i < subtitleLabels.length; i++) {
+            for (int i = 0; i < subtitleValues.length; i++) {
                 if (subtitleValues[i].equals(lang)) {
-                    langLabel = subtitleLabels[i];
+                    label = subtitleLabels[i];
                     break;
                 }
             }
         }
-        mBinding.subtitleLanguageText.setText(langLabel);
+        mBinding.subtitleLanguageText.setText(label);
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
+        try { mBinding.homePushText.setText(getSwitch(Setting.isHomePush())); } catch (Throwable ignored) {}
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        // TV-only rows may be GONE on mobile via layout; still safe if present
+        try {
+            boolean tv = false;
+            try {
+                Class.forName("androidx.leanback.widget.VerticalGridView");
+                // detect by presence of leanback resources package flavor is compile-time
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setAutoChange(View view) {
+        try {
+            PlayerSetting.putAutoChange(!PlayerSetting.isAutoChange());
+        } catch (Throwable ignored) {
+        }
+        refreshTexts();
     }
 
     private void setAutoBackup(View view) {
@@ -93,13 +133,75 @@ public class SettingPersonalActivity extends BaseActivity {
         refreshTexts();
     }
 
+    private void setGlobalToast(View view) {
+        Setting.putGlobalToast(!Setting.isGlobalToast());
+        refreshTexts();
+    }
+
+
+    private void setAutoCheckUpdate(View view) {
+        Setting.putAutoCheckUpdate(!Setting.isAutoCheckUpdate());
+        refreshTexts();
+    }
+
+    private String exitClearCacheLabel() {
+        int gb = Setting.getExitClearCacheGb();
+        if (gb <= 0) {
+            try { return getString(R.string.setting_exit_clear_cache_off); } catch (Throwable e) { return getSwitch(false); }
+        }
+        return gb + "G";
+    }
+
+    private void setExitClearCache(View view) {
+        int cur = Setting.getExitClearCacheGb();
+        int next;
+        if (cur <= 0) next = 6;
+        else if (cur == 6) next = 8;
+        else if (cur == 8) next = 10;
+        else next = 0;
+        Setting.putExitClearCacheGb(next);
+        refreshTexts();
+    }
+
+    private String subtitleColorLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleColorLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleColorLabel(true);
+        }
+    }
+
+    private String subtitleFontLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleFontLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleFontLabel(true);
+        }
+    }
+
+    private void setSubtitleColor(View view) {
+        Setting.cycleSubtitleColor();
+        refreshTexts();
+    }
+
+    private void setSubtitleFont(View view) {
+        Setting.cycleSubtitleFont();
+        refreshTexts();
+    }
+
+
+
+
     private void setEpisodeHistory(View view) {
         Setting.putEpisodeHistory(!Setting.isEpisodeHistory());
         refreshTexts();
     }
 
     private void setGlobalHistory(View view) {
-        int size = globalHistoryMode == null || globalHistoryMode.length == 0 ? 3 : globalHistoryMode.length;
+        int size = globalHistoryMode == null ? 2 : globalHistoryMode.length;
+        if (size <= 0) size = 2;
         Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % size);
         refreshTexts();
     }
@@ -110,11 +212,13 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setSearchThread(View view) {
-        int[] options = new int[]{1, 2, 4, 8, 16};
+        int[] options = new int[]{8, 16, 20, 32, 48, 64};
         int cur = Setting.getSearchThread();
         int idx = 0;
-        for (int i = 0; i < options.length; i++) if (options[i] == cur) idx = i;
-        Setting.putSearchThread(options[(idx + 1) % options.length]);
+        for (int i = 0; i < options.length; i++) if (options[i] == cur) { idx = i; break; }
+        int next = options[(idx + 1) % options.length];
+        Setting.putSearchThread(next);
+        try { com.fongmi.android.tv.utils.Task.newSearchExecutor(next); } catch (Throwable ignored) {}
         refreshTexts();
     }
 
@@ -127,7 +231,7 @@ public class SettingPersonalActivity extends BaseActivity {
         if (subtitleValues == null || subtitleValues.length == 0) return;
         String cur = Setting.getSubtitlePreferredLanguage();
         int idx = 0;
-        for (int i = 0; i < subtitleValues.length; i++) if (subtitleValues[i].equals(cur)) idx = i;
+        for (int i = 0; i < subtitleValues.length; i++) if (subtitleValues[i].equals(cur)) { idx = i; break; }
         Setting.putSubtitlePreferredLanguage(subtitleValues[(idx + 1) % subtitleValues.length]);
         refreshTexts();
     }
@@ -146,4 +250,37 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putHomeHistory(!Setting.isHomeHistory());
         refreshTexts();
     }
+
+    private void setHomePush(View view) {
+        Setting.putHomePush(!Setting.isHomePush());
+        refreshTexts();
+    }
+
+
+
+
+
+
+    private void setPlayDirect(View view) {
+        Setting.putPlayDirect(!Setting.isPlayDirect());
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
+    private String recommendSourceLabel() {
+        int src = Setting.getRecommendSource();
+        if (src == Setting.RECOMMEND_AI) return getString(R.string.setting_recommend_ai);
+        if (src == Setting.RECOMMEND_DOUBAN) return getString(R.string.setting_recommend_douban);
+        if (src == Setting.RECOMMEND_AUTO) return getString(R.string.setting_recommend_auto);
+        return getString(R.string.setting_recommend_off);
+    }
+
+    private void setRecommendSource(View view) {
+        int src = Setting.getRecommendSource();
+        src = (src + 1) % 4;
+        Setting.putRecommendSource(src);
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
 }

@@ -48,6 +48,9 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
         getHistory();
         if (mBinding.deleteButton != null) {
             mBinding.deleteButton.setOnClickListener(v -> onDelete());
+            // 避免进页时焦点落在删除上
+            mBinding.deleteButton.setFocusable(true);
+            mBinding.deleteButton.setFocusableInTouchMode(true);
             updateDeleteButtonText();
         }
         if (mBinding.reportButton != null) mBinding.reportButton.setVisibility(android.view.View.GONE);
@@ -92,7 +95,29 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
         mAdapter.setItems(History.get(), () -> {
             mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
             updateDeleteButtonText();
+            focusFirstHistoryItem();
         });
+    }
+
+    /** 进入历史页：定焦第一条最近播放记录，而不是顶部「删除」按钮 */
+    private void focusFirstHistoryItem() {
+        try {
+            if (mBinding == null || mBinding.recycler == null) return;
+            if (mAdapter == null || mAdapter.getItemCount() <= 0) return;
+            mBinding.recycler.post(() -> {
+                try {
+                    mBinding.recycler.scrollToPosition(0);
+                    androidx.recyclerview.widget.RecyclerView.ViewHolder vh = mBinding.recycler.findViewHolderForAdapterPosition(0);
+                    if (vh != null && vh.itemView != null) {
+                        vh.itemView.setFocusable(true);
+                        vh.itemView.setFocusableInTouchMode(true);
+                        vh.itemView.requestFocus();
+                        return;
+                    }
+                    mBinding.recycler.requestFocus();
+                } catch (Throwable ignored) {}
+            });
+        } catch (Throwable ignored) {}
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)

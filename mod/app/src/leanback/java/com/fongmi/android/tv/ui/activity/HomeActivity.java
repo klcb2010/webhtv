@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.LiveConfig;
@@ -51,6 +52,7 @@ import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.service.DLNARendererService;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.AutoBackupPolicy;
+import com.fongmi.android.tv.setting.ExitClearCachePolicy;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.BaseDiffCallback;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
@@ -160,6 +162,19 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         App.post(this::initConfig, 80);
         App.post(() -> PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this)), 1800);
         App.post(() -> DLNARendererService.start(this), 2500);
+        scheduleAutoCheckUpdate();
+    }
+
+    private void scheduleAutoCheckUpdate() {
+        try {
+            if (!Setting.isAutoCheckUpdate()) return;
+            App.post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    Updater.create().startAuto(this);
+                } catch (Throwable ignored) {}
+            }, 5000);
+        } catch (Throwable ignored) {}
     }
 
     private void runAfterFirstFrame(Runnable runnable) {
@@ -851,6 +866,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         DLNARendererService.stop(this);
         LiveConfig.get().clear();
         VodConfig.get().clear();
+        if (ExitClearCachePolicy.shouldRun(isFinishing(), isChangingConfigurations())) {
+            ExitClearCachePolicy.runAsync();
+        }
         if (AutoBackupPolicy.shouldRun(Setting.isAutoBackup(), Setting.hasFileAccess(), isFinishing(), isChangingConfigurations())) {
             AppDatabase.backup();
         }

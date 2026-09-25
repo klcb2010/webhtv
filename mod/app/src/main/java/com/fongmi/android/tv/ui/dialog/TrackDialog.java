@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.util.Log;
@@ -225,6 +227,7 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
 
     @Override
     public void onItemClick(Track item) {
+        try { AssrtSubtitleMatch.rememberChosenTrack(player, item); } catch (Throwable ignored) {}
         if (secondarySubtitle) {
             player.setSecondarySubtitleTrack(item);
             dismiss();
@@ -246,7 +249,13 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
-        player.setSub(Sub.from(FileChooser.getPathFromUri(result.getData().getData())));
+        Sub chosen = Sub.from(FileChooser.getPathFromUri(result.getData().getData()));
+        player.setSub(chosen);
+        try {
+            AssrtSubtitleMatch.rememberChosenTrack(player, new Track(C.TRACK_TYPE_TEXT, chosen.getName(), chosen.getFormat()));
+            java.io.File f = new java.io.File(chosen.getUrl());
+            if (f.isFile()) AssrtSubtitleMatch.rememberSub(null, null, f, chosen.getName(), chosen.getLang(), chosen.getFormat());
+        } catch (Throwable ignored) {}
         dismiss();
     });
 

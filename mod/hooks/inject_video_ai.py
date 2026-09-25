@@ -17,8 +17,9 @@ HOOK = r"""
         final int gen = ++mAiRecommendGen;
         mAiRecommendVod = item;
         mAiRecommendTitle = rawName;
-        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()
-                && !com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled()) {
+        int recommendSource = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        boolean needTitleExtract = com.fongmi.android.tv.setting.Setting.isAiTitleExtractionEnabled();
+        if (recommendSource == com.fongmi.android.tv.setting.Setting.RECOMMEND_OFF && !needTitleExtract) {
             hideAiRecommendPanel();
             return;
         }
@@ -34,24 +35,96 @@ HOOK = r"""
                             try { mBinding.name.setText(title); } catch (Throwable ignored) {}
                             mAiRecommendTitle = title;
                         }
-                        loadAiRecommendations(gen, item, mAiRecommendTitle, 0);
+                        maybeLoadPersonalRecommend(gen, item, mAiRecommendTitle, 0);
                     });
                 });
             } else {
-                loadAiRecommendations(gen, item, rawName, 0);
+                maybeLoadPersonalRecommend(gen, item, rawName, 0);
             }
         }, 400);
     }
 
-    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
-        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendationEnabled()) {
+
+    private void maybeLoadPersonalRecommend(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        int src = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_OFF) {
+            hideAiRecommendPanel();
+            return;
+        }
+        if (src == com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN
+                || src == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
+            // 豆瓣 或 自动(先豆瓣)；自动模式在豆瓣空结果时再走 AI
+            loadDoubanRecommendations(gen, vod, title, attempt);
+        } else {
+            loadAiRecommendations(gen, vod, title, attempt);
+        }
+    }
+
+    private void loadDoubanRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        int src0 = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (src0 != com.fongmi.android.tv.setting.Setting.RECOMMEND_DOUBAN
+                && src0 != com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
             hideAiRecommendPanel();
             return;
         }
         try {
             if (mBinding.aiRecommendPanel == null) return;
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
+            mBinding.aiRecommendList.removeAllViews();
+        } catch (Throwable e) {
+            if (attempt < 2) {
+                com.fongmi.android.tv.App.post(() -> {
+                    if (gen != mAiRecommendGen) return;
+                    loadDoubanRecommendations(gen, vod, title, attempt + 1);
+                }, 500);
+            }
+            return;
+        }
+        final String reqTitle = title == null ? "" : title;
+        com.fongmi.android.tv.utils.Task.execute(() -> {
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items = null;
+            for (int i = 0; i < 2; i++) {
+                if (gen != mAiRecommendGen) return;
+                try {
+                    items = com.fongmi.android.tv.service.DoubanRecommendService.load(reqTitle);
+                    if (items != null && !items.isEmpty()) break;
+                } catch (Exception e) {
+                    try { Thread.sleep(500L * (i + 1)); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                }
+            }
+            final java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> result = items;
+            com.fongmi.android.tv.App.post(() -> {
+                if (gen != mAiRecommendGen || isFinishing()) return;
+                if (result != null && !result.isEmpty()) {
+                    bindAiRecommendList(gen, result);
+                } else if (com.fongmi.android.tv.setting.Setting.getRecommendSource()
+                        == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
+                    // 自动：豆瓣无结果 → AI 兜底
+                    loadAiRecommendations(gen, vod, title, 0);
+                } else {
+                    hideAiRecommendPanel();
+                }
+            });
+        });
+    }
+
+    private void loadAiRecommendations(int gen, com.fongmi.android.tv.bean.Vod vod, String title, int attempt) {
+        int srcAi = com.fongmi.android.tv.setting.Setting.getRecommendSource();
+        if (srcAi != com.fongmi.android.tv.setting.Setting.RECOMMEND_AI
+                && srcAi != com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
+            hideAiRecommendPanel();
+            return;
+        }
+        // AI 未配置就绪时静默结束，避免空请求/异常干扰播放
+        if (!com.fongmi.android.tv.setting.Setting.isAiRecommendReady()) {
+            hideAiRecommendPanel();
+            return;
+        }
+        try {
+            if (mBinding.aiRecommendPanel == null) return;
+            mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_loading_short));
             mBinding.aiRecommendList.removeAllViews();
         } catch (Throwable e) {
             // binding 偶发未就绪，延迟再试一次
@@ -95,16 +168,11 @@ HOOK = r"""
         try {
             if (mBinding.aiRecommendPanel == null) return;
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section) + " · " + getString(R.string.ai_recommend_retry));
             mBinding.aiRecommendList.removeAllViews();
-            float density = getResources().getDisplayMetrics().density;
-            int pad = (int) (10 * density);
             com.google.android.material.textview.MaterialTextView tv = new com.google.android.material.textview.MaterialTextView(this);
             tv.setText(R.string.ai_recommend_retry_action);
-            tv.setTextColor(0xFFFFFFFF);
-            tv.setTextSize(13);
-            tv.setPadding(pad * 2, pad, pad * 2, pad);
-            tv.setBackgroundColor(0x55FFFFFF);
+            styleAiRecommendChip(tv);
             tv.setOnClickListener(v -> {
                 if (gen != mAiRecommendGen) return;
                 loadAiRecommendations(gen, vod, title, 0);
@@ -123,7 +191,7 @@ HOOK = r"""
                 return;
             }
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.ai_recommend_section));
+            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section));
             mBinding.aiRecommendList.removeAllViews();
             float density = getResources().getDisplayMetrics().density;
             int pad = (int) (10 * density);
@@ -134,30 +202,22 @@ HOOK = r"""
                 String text = it.title == null ? "" : it.title.trim();
                 if (it.year > 0) text = text + " (" + it.year + ")";
                 tv.setText(text);
-                tv.setTextColor(0xFFFFFFFF);
-                tv.setTextSize(11);
-                tv.setPadding(pad, pad, pad, pad);
-                tv.setBackgroundColor(0x33FFFFFF);
-                tv.setFocusable(true);
-                tv.setMinHeight((int) (36 * density));
-                tv.setClickable(true);
-                tv.setFocusableInTouchMode(false);
-                tv.setBackgroundColor(0x33FFFFFF);
+                styleAiRecommendChip(tv);
+                // 与选集一致的外观；焦点时滚动进可视区，不覆盖背景 selector
+                final float dens = density;
                 tv.setOnFocusChangeListener((v, hasFocus) -> {
+                    try { v.setSelected(hasFocus); } catch (Throwable ignored) {}
                     if (hasFocus) {
-                        v.setBackgroundColor(0x88FFFFFF);
                         android.view.ViewParent parent = v.getParent();
                         while (parent != null) {
                             if (parent instanceof android.widget.HorizontalScrollView) {
                                 android.widget.HorizontalScrollView hsv = (android.widget.HorizontalScrollView) parent;
-                                int x = Math.max(0, v.getLeft() - (int) (40 * density));
+                                int x = Math.max(0, v.getLeft() - (int) (40 * dens));
                                 hsv.smoothScrollTo(x, 0);
                                 break;
                             }
                             parent = parent.getParent();
                         }
-                    } else {
-                        v.setBackgroundColor(0x33FFFFFF);
                     }
                 });
                 tv.setOnKeyListener((v, keyCode, event) -> {
@@ -170,27 +230,81 @@ HOOK = r"""
                     }
                     return false;
                 });
-                tv.setMaxWidth(maxW);
-                tv.setMaxLines(2);
-                tv.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                // 片名可稍长，仍单行省略，外观对齐选集芯片
+                tv.setMaxWidth(Math.max(maxW, (int) (200 * dens)));
                 tv.setMinWidth((int) (120 * density));
                 android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT);
                 lp.setMarginEnd(gap);
                 tv.setLayoutParams(lp);
-                final String clickTitle = it.title;
+                final String clickTitle = it.title == null ? "" : it.title.trim();
                 tv.setOnClickListener(v -> {
+                    if (clickTitle.isEmpty()) return;
+                    final String title = clickTitle;
+                    final String key;
                     try {
-                        com.fongmi.android.tv.ui.activity.SearchActivity.start(this, clickTitle);
+                        String k = getKey();
+                        key = (k == null || k.isEmpty()) ? "recommend" : k;
                     } catch (Throwable e) {
-                        com.fongmi.android.tv.utils.Notify.show(clickTitle);
+                        return;
                     }
+                    try { saveHistory(); } catch (Throwable ignored) {}
+                    try { player().stop(); } catch (Throwable ignored) {}
+                    try { player().clear(); } catch (Throwable ignored) {}
+                    try { if (mClock != null) mClock.setCallback(null); } catch (Throwable ignored) {}
+
+                    // 关闭播放直达：进搜索页
+                    if (!com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
+                        try {
+                            com.fongmi.android.tv.ui.activity.SearchActivity.start(VideoActivity.this, title);
+                        } catch (Throwable e) {
+                            try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                        }
+                        return;
+                    }
+
+                    // 双端统一：先结束当前播放页，再 msearch 打开，避免 singleTop/同页不刷新、TV 无响应
+                    final android.app.Activity host = VideoActivity.this;
+                    try { finish(); } catch (Throwable ignored) {}
+                    com.fongmi.android.tv.App.post(() -> {
+                        android.app.Activity act = null;
+                        try { act = com.fongmi.android.tv.App.activity(); } catch (Throwable ignored) {}
+                        if (act == null) act = host;
+                        try {
+                            if (act != null && !act.isFinishing()) {
+                                com.fongmi.android.tv.ui.activity.VideoActivity.start(
+                                        act, key, "msearch:" + title, title, "", "");
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                        try {
+                            if (act != null && !act.isFinishing()) {
+                                com.fongmi.android.tv.ui.activity.SearchActivity.start(act, title);
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                        try {
+                            android.content.Intent intent = new android.content.Intent(
+                                    com.fongmi.android.tv.App.get(),
+                                    com.fongmi.android.tv.ui.activity.VideoActivity.class);
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                            intent.putExtra("key", key);
+                            intent.putExtra("id", "msearch:" + title);
+                            intent.putExtra("name", title);
+                            intent.putExtra("pic", "");
+                            intent.putExtra("mark", "");
+                            com.fongmi.android.tv.App.get().startActivity(intent);
+                        } catch (Throwable e2) {
+                            try { com.fongmi.android.tv.utils.Notify.show(title); } catch (Throwable ignored) {}
+                        }
+                    }, 150);
                 });
                 mBinding.aiRecommendList.addView(tv);
             }
             wireFlagToAiFocus();
             com.fongmi.android.tv.App.post(this::wireFlagToAiFocus, 300);
+            com.fongmi.android.tv.App.post(this::wireFlagToAiFocus, 800);
         
                 
                 try {
@@ -202,7 +316,7 @@ HOOK = r"""
                     mBinding.aiRecommendList.setFocusable(false);
                     // 下键从选集进入推荐：把 episode / flag 的 nextFocusDown 指到推荐滚动条
                     if (mBinding.episode != null) {
-                        mBinding.episode.setNextFocusDownId(mBinding.aiRecommendScroll.getId()); // kept
+                        // episode nextFocus left to upstream
 
                 }
                     try {
@@ -226,14 +340,13 @@ HOOK = r"""
                 try {
                     android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
                     if (flagView != null && mBinding.aiRecommendScroll != null) {
-                        flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
             flagView.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
 
             // 兜底：任意 View 上监听下键/右键跳到 AI
             flagView.setOnKeyListener((v, keyCode, event) -> {
                 if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
                 if (keyCode != android.view.KeyEvent.KEYCODE_DPAD_DOWN
-                        && keyCode != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) return false;
+                        ) return false;
                 try {
                     if (mBinding.aiRecommendPanel != null
                             && mBinding.aiRecommendPanel.getVisibility() == android.view.View.VISIBLE
@@ -293,9 +406,7 @@ HOOK = r"""
                                                             if (itemView != null && count > 0 && position >= count - 1
                                                                     && mBinding.aiRecommendPanel != null
                                                                     && mBinding.aiRecommendPanel.getVisibility() == android.view.View.VISIBLE) {
-                                                                itemView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
                                                             } else if (itemView != null) {
-                                                                itemView.setNextFocusRightId(android.view.View.NO_ID);
                                                             }
                                                         }
                                                     }
@@ -313,8 +424,7 @@ HOOK = r"""
                                                 return false;
                                             android.view.KeyEvent event = (android.view.KeyEvent) args[0];
                                             if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                                            if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-                                        && event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
+                                            if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
                                             try {
                                                 Object selectedObj = bgvCls.getMethod("getSelectedPosition").invoke(grid);
                                                 int selected = selectedObj instanceof Integer ? (Integer) selectedObj : -1;
@@ -345,89 +455,167 @@ HOOK = r"""
 
     }
 
+
+    private void styleAiRecommendChip(com.google.android.material.textview.MaterialTextView tv) {
+        try {
+            int margin = com.fongmi.android.tv.utils.ResUtil.dp2px(8);
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, margin, 0);
+            tv.setLayoutParams(lp);
+            tv.setGravity(android.view.Gravity.CENTER);
+            tv.setSingleLine(true);
+            tv.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
+            tv.setMarqueeRepeatLimit(-1);
+            tv.setClickable(true);
+            tv.setFocusable(true);
+            boolean leanback = false;
+            try { leanback = com.fongmi.android.tv.utils.Util.isLeanback(); } catch (Throwable ignored) {}
+            // 用 getIdentifier，避免 mobile/leanback 资源 ID 在编译期互相不存在
+            String pkg = getPackageName();
+            if (leanback) {
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+                tv.setFocusableInTouchMode(true);
+                int bg = getResources().getIdentifier("selector_video_item", "drawable", pkg);
+                if (bg == 0) bg = getResources().getIdentifier("selector_item", "drawable", pkg);
+                if (bg != 0) tv.setBackgroundResource(bg);
+                int colorId = getResources().getIdentifier("text", "color", pkg);
+                if (colorId != 0) {
+                    try { tv.setTextColor(getResources().getColorStateList(colorId, getTheme())); }
+                    catch (Throwable e) { tv.setTextColor(0xFFFFFFFF); }
+                } else {
+                    tv.setTextColor(0xFFFFFFFF);
+                }
+            } else {
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
+                int bg = getResources().getIdentifier("shape_video_item", "drawable", pkg);
+                if (bg == 0) bg = getResources().getIdentifier("selector_video_item", "drawable", pkg);
+                if (bg != 0) tv.setBackgroundResource(bg);
+                int colorId = getResources().getIdentifier("selector_video_text", "color", pkg);
+                if (colorId == 0) colorId = getResources().getIdentifier("text", "color", pkg);
+                if (colorId != 0) {
+                    try { tv.setTextColor(getResources().getColorStateList(colorId, getTheme())); }
+                    catch (Throwable e) { tv.setTextColor(0xFFFFFFFF); }
+                } else {
+                    tv.setTextColor(0xFFFFFFFF);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     private void wireFlagToAiFocus() {
         try {
-            android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
-            if (flagView == null || mBinding.aiRecommendScroll == null) return;
+            if (!com.fongmi.android.tv.utils.Util.isLeanback()) return;
             if (mBinding.aiRecommendPanel == null
-                    || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE) return;
-            flagView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
-            flagView.setNextFocusDownId(mBinding.aiRecommendScroll.getId());
-            mBinding.aiRecommendScroll.setNextFocusLeftId(flagView.getId());
+                    || mBinding.aiRecommendPanel.getVisibility() != android.view.View.VISIBLE
+                    || mBinding.aiRecommendList == null
+                    || mBinding.aiRecommendList.getChildCount() == 0
+                    || mBinding.aiRecommendScroll == null) return;
+            int aiId = mBinding.aiRecommendScroll.getId();
+            android.view.View firstAi = mBinding.aiRecommendList.getChildAt(0);
+
+            // 上游顺序：flag → quality → array(集数分组) → episode
+            // AI 插在线路下方：flag ↓ → AI；集数 ↑ 先到分组，分组 ↑ 再到 AI
+            android.view.View flagView = mBinding.getRoot().findViewById(R.id.flag);
+            if (flagView != null) {
+                flagView.setNextFocusDownId(aiId);
+                firstAi.setNextFocusUpId(flagView.getId());
+                mBinding.aiRecommendScroll.setNextFocusUpId(flagView.getId());
+                installKeyToAi(flagView, android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+            }
+
+            android.view.View arrayView = null;
+            try {
+                int arrayId = getResources().getIdentifier("array", "id", getPackageName());
+                if (arrayId != 0) arrayView = mBinding.getRoot().findViewById(arrayId);
+            } catch (Throwable ignored) {}
+            boolean arrayVisible = arrayView != null
+                    && arrayView.getVisibility() == android.view.View.VISIBLE
+                    && arrayView.getWidth() > 0;
+
+            java.util.List<android.view.View> episodeViews = new java.util.ArrayList<>();
+            try {
+                android.view.View ep = mBinding.getRoot().findViewById(R.id.episode);
+                if (ep != null) episodeViews.add(ep);
+            } catch (Throwable ignored) {}
+            try {
+                int gridId = getResources().getIdentifier("episodeGrid", "id", getPackageName());
+                if (gridId != 0) {
+                    android.view.View ep2 = mBinding.getRoot().findViewById(gridId);
+                    if (ep2 != null) episodeViews.add(ep2);
+                }
+            } catch (Throwable ignored) {}
+
+            if (arrayVisible) {
+                // 集数「上」→ 分组；分组「上」→ AI；不拦截集数上键，避免回不去 1-20
+                for (android.view.View ep : episodeViews) {
+                    if (ep.getVisibility() != android.view.View.VISIBLE) continue;
+                    ep.setNextFocusUpId(arrayView.getId());
+                    // 明确不装 UP 拦截
+                }
+                arrayView.setNextFocusUpId(aiId);
+                arrayView.setNextFocusDownId(episodeViews.isEmpty() ? aiId : episodeViews.get(0).getId());
+                firstAi.setNextFocusDownId(arrayView.getId());
+                mBinding.aiRecommendScroll.setNextFocusDownId(arrayView.getId());
+                installKeyToAi(arrayView, android.view.KeyEvent.KEYCODE_DPAD_UP);
+            } else {
+                // 无分组时：集数「上」→ AI
+                for (android.view.View ep : episodeViews) {
+                    if (ep.getVisibility() != android.view.View.VISIBLE) continue;
+                    ep.setNextFocusUpId(aiId);
+                    firstAi.setNextFocusDownId(ep.getId());
+                    mBinding.aiRecommendScroll.setNextFocusDownId(ep.getId());
+                    installKeyToAi(ep, android.view.KeyEvent.KEYCODE_DPAD_UP);
+                }
+            }
+
             mBinding.aiRecommendScroll.setFocusable(true);
             mBinding.aiRecommendScroll.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
             mBinding.aiRecommendList.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
-            try {
-                Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
-                if (bgvCls.isInstance(flagView)) {
-                    Object grid = flagView;
-                    Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
-                    Object keyListener = java.lang.reflect.Proxy.newProxyInstance(
-                            keyCls.getClassLoader(),
-                            new Class<?>[]{keyCls},
-                            (proxy, method, args) -> {
-                                if (args == null || args.length < 1) return false;
-                                if (!"onInterceptKeyEvent".equals(method.getName())) return false;
-                                android.view.KeyEvent event = (android.view.KeyEvent) args[0];
-                                if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
-                                if (event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-                                        && event.getKeyCode() != android.view.KeyEvent.KEYCODE_DPAD_DOWN) return false;
-                                try {
-                                    Object selectedObj = bgvCls.getMethod("getSelectedPosition").invoke(grid);
-                                    int selected = selectedObj instanceof Integer ? (Integer) selectedObj : -1;
-                                    Object adapter = bgvCls.getMethod("getAdapter").invoke(grid);
-                                    int count = 0;
-                                    if (adapter != null) {
-                                        Object n = adapter.getClass().getMethod("getItemCount").invoke(adapter);
-                                        count = n instanceof Integer ? (Integer) n : 0;
-                                    }
-                                    boolean atEnd = count <= 1 || selected >= count - 1;
-                                    if (atEnd && mBinding.aiRecommendList.getChildCount() > 0) {
-                                        mBinding.aiRecommendList.getChildAt(0).requestFocus();
-                                        return true;
-                                    }
-                                } catch (Throwable ignored) {}
-                                return false;
-                            });
-                    bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(grid, keyListener);
+        } catch (Throwable ignored) {}
+    }
+
+    private void installKeyToAi(android.view.View host, int keyCodeWanted) {
+        try {
+            Class<?> bgvCls = Class.forName("androidx.leanback.widget.BaseGridView");
+            if (bgvCls.isInstance(host)) {
+                Class<?> keyCls = Class.forName("androidx.leanback.widget.BaseGridView$OnKeyInterceptListener");
+                final int want = keyCodeWanted;
+                Object keyListener = java.lang.reflect.Proxy.newProxyInstance(
+                        keyCls.getClassLoader(),
+                        new Class[]{keyCls},
+                        (proxy, method, args) -> {
+                            if (!"onInterceptKeyEvent".equals(method.getName())) return false;
+                            android.view.KeyEvent event = (android.view.KeyEvent) args[0];
+                            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                            if (event.getKeyCode() != want) return false;
+                            try {
+                                if (mBinding.aiRecommendList != null && mBinding.aiRecommendList.getChildCount() > 0) {
+                                    mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                                    return true;
+                                }
+                            } catch (Throwable ignored) {}
+                            return false;
+                        });
+                bgvCls.getMethod("setOnKeyInterceptListener", keyCls).invoke(host, keyListener);
+                return;
+            }
+        } catch (Throwable ignored) {}
+        try {
+            if (host instanceof androidx.recyclerview.widget.RecyclerView) {
+                final int want = keyCodeWanted;
+                host.setOnKeyListener((v, keyCode, event) -> {
+                    if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
+                    if (keyCode != want) return false;
                     try {
-                        Class<?> selCls = Class.forName("androidx.leanback.widget.OnChildViewHolderSelectedListener");
-                        Object selListener = java.lang.reflect.Proxy.newProxyInstance(
-                                selCls.getClassLoader(),
-                                new Class<?>[]{selCls},
-                                (proxy, method, args) -> {
-                                    if (!"onChildViewHolderSelected".equals(method.getName()) || args == null || args.length < 3)
-                                        return null;
-                                    try {
-                                        Object vh = args[1];
-                                        int position = args[2] instanceof Integer ? (Integer) args[2] : -1;
-                                        if (vh == null) return null;
-                                        java.lang.reflect.Field f = null;
-                                        Class<?> c = vh.getClass();
-                                        while (c != null && f == null) {
-                                            try { f = c.getDeclaredField("itemView"); } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
-                                        }
-                                        if (f == null) return null;
-                                        f.setAccessible(true);
-                                        android.view.View itemView = (android.view.View) f.get(vh);
-                                        Object adapter = bgvCls.getMethod("getAdapter").invoke(grid);
-                                        int count = 0;
-                                        if (adapter != null) {
-                                            Object n = adapter.getClass().getMethod("getItemCount").invoke(adapter);
-                                            count = n instanceof Integer ? (Integer) n : 0;
-                                        }
-                                        if (itemView != null && count > 0 && position >= count - 1) {
-                                            itemView.setNextFocusRightId(mBinding.aiRecommendScroll.getId());
-                                        }
-                                    } catch (Throwable ignored) {}
-                                    return null;
-                                });
-                        bgvCls.getMethod("setOnChildViewHolderSelectedListener", selCls).invoke(grid, selListener);
+                        if (mBinding.aiRecommendList != null && mBinding.aiRecommendList.getChildCount() > 0) {
+                            mBinding.aiRecommendList.getChildAt(0).requestFocus();
+                            return true;
+                        }
                     } catch (Throwable ignored) {}
-                }
-            } catch (Throwable ignored) {}
-            if (mBinding.aiRecommendList.getChildCount() > 0) {
-                mBinding.aiRecommendList.getChildAt(0).setNextFocusLeftId(flagView.getId());
+                    return false;
+                });
             }
         } catch (Throwable ignored) {}
     }
