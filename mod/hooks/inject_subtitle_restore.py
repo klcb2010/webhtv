@@ -92,6 +92,16 @@ write(p, t)
 print("[mod] subtitle_restore: History patched")
 
 # ---------------------------------------------------------------------------
+# Startup: this upstream branch does not contain the generated EventIndex
+# class. Use EventBus default installation instead.
+# ---------------------------------------------------------------------------
+p, t = read("app/src/main/java/com/fongmi/android/tv/Startup.java")
+t = t.replace("import com.fongmi.android.tv.event.EventIndex;\n", "")
+t = t.replace("EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();", "EventBus.installDefaultEventBus();")
+write(p, t)
+print("[mod] subtitle_restore: Startup patched")
+
+# ---------------------------------------------------------------------------
 # Database: current fork already has a build-time 37->38 repair. Add the
 # subtitle column as 38->39, so old installs migrate 37->38->39.
 # ---------------------------------------------------------------------------
@@ -115,7 +125,7 @@ if "MIGRATION_38_39" not in t:
         database.execSQL("ALTER TABLE `" + table + "` ADD COLUMN `" + column + "` " + typeDef);
     }
 '''
-        t = t.replace("public class Migrations {\\n", "public class Migrations {\\n" + helper + "\\n", 1)
+        t = t.replace("public class Migrations {\n", "public class Migrations {\n" + helper + "\n", 1)
 
     block = '''
     public static final Migration MIGRATION_38_39 = new Migration(38, 39) {
