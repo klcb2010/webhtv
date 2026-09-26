@@ -58,7 +58,7 @@ APPLY_METHOD = r"""
                     if (font != null && !font.isEmpty()) m.invoke(this, "sub-font", font);
                     ok = true;
                     break;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignoredProp) {
                 }
             }
             if (!ok) {
@@ -68,7 +68,7 @@ APPLY_METHOD = r"""
                     cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
                     cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
                     ok = true;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignoredCmd) {
                 }
             }
             android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " color=" + color);
@@ -151,10 +151,10 @@ def patch_mpv_player(path: Path) -> None:
             t = t[:idx] + "\n" + APPLY_METHOD + t[idx:]
             print("[mod] inserted applyUserAssStyle")
 
-    if "try { applyUserAssStyle(); }" not in t:
+    if "applyUserAssStyle();" not in t or "ignoredAss" not in t:
         t2, n = re.subn(
             r"(defaultCaptionStyle\(\)\s*;)",
-            r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignored) {}",
+            r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}",
             t,
         )
         if n > 0:
@@ -168,7 +168,7 @@ def patch_mpv_player(path: Path) -> None:
                 brace = t.find("{", pos)
                 if brace < 0:
                     continue
-                insert = "\n        try { applyUserAssStyle(); } catch (Throwable ignored) {}"
+                insert = "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}"
                 t = t[: brace + 1] + insert + t[brace + 1 :]
                 print("[mod] entry-hook", marker)
                 break
