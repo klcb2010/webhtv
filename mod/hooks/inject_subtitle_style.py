@@ -151,27 +151,54 @@ def patch_mpv_player(path: Path) -> None:
             t = t[:idx] + "\n" + APPLY_METHOD + t[idx:]
             print("[mod] inserted applyUserAssStyle")
 
-    if "applyUserAssStyle();" not in t or "ignoredAss" not in t:
+    # 调用点：必须在 return 之前；禁止插在 return defaultCaptionStyle() 之后
+    if "applyUserAssStyle();" not in t:
+        # 1) return defaultCaptionStyle();  -> 先赋值再 apply 再 return
         t2, n = re.subn(
-            r"(defaultCaptionStyle\(\)\s*;)",
-            r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}",
+            r"return\s+defaultCaptionStyle\s*\(\s*\)\s*;",
+            "CaptionStyle __modCs = defaultCaptionStyle();\n"
+            "        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}\n"
+            "        return __modCs;",
             t,
+            count=3,
         )
         if n > 0:
             t = t2
-            print("[mod] hooked defaultCaptionStyle call sites", n)
+            print("[mod] hooked return defaultCaptionStyle()", n)
         else:
-            for marker in ["void prepare(", "void setMediaItems(", "void setMediaItem("]:
-                pos = t.find(marker)
-                if pos < 0:
-                    continue
-                brace = t.find("{", pos)
-                if brace < 0:
-                    continue
-                insert = "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}"
-                t = t[: brace + 1] + insert + t[brace + 1 :]
-                print("[mod] entry-hook", marker)
-                break
+            # 2) captionStyle 方法入口
+            hooked = False
+            for pat in [
+                r"(CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)",
+                r"(private\s+CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)",
+                r"(public\s+CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)",
+            ]:
+                t3, n3 = re.subn(
+                    pat,
+                    r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}",
+                    t,
+                    count=1,
+                )
+                if n3:
+                    t = t3
+                    print("[mod] hooked captionStyle entry")
+                    hooked = True
+                    break
+            if not hooked:
+                for marker in ["void prepare(", "void setMediaItem("]:
+                    pos = t.find(marker)
+                    if pos < 0:
+                        continue
+                    brace = t.find("{", pos)
+                    if brace < 0:
+                        continue
+                    t = (
+                        t[: brace + 1]
+                        + "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}"
+                        + t[brace + 1 :]
+                    )
+                    print("[mod] entry-hook", marker)
+                    break
 
     t = t.replace('"sub-ass-override", "scale"', '"sub-ass-override", "force"')
     t = t.replace('"ass-style-override", "scale"', '"ass-style-override", "force"')
