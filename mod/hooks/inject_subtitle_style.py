@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 
-EXO_CAPTION_STYLE = r"""
+EXO_CAPTION_STYLE = """
 public static CaptionStyleCompat getCaptionStyle() {
         if (PlayerSetting.isCaption()) {
             return CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle());
@@ -21,7 +21,7 @@ public static CaptionStyleCompat getCaptionStyle() {
     }
 """.strip()
 
-MPV_DEFAULT_STYLE = r"""
+MPV_DEFAULT_STYLE = """
 private CaptionStyle defaultCaptionStyle() {
         int fg = Color.YELLOW;
         String font = "sans-serif";
@@ -34,10 +34,49 @@ private CaptionStyle defaultCaptionStyle() {
             if (fam != null && !fam.isEmpty()) font = fam;
         } catch (Throwable ignored) {
         }
-        // outline 保证自定义颜色在深色画面上可见；ASS 需 ass-style-override=force 才生效
         return new CaptionStyle(font, false, false, fg, Color.BLACK, Color.TRANSPARENT, "outline-and-shadow", 3.0, 0.0);
     }
 """.strip()
+
+APPLY_METHOD = r"""
+    /** mod: user subtitle color/font -> MPV props (force + force-style + sub-color) */
+    private void applyUserAssStyle() {
+        try {
+            String style = MpvSubtitleStylePolicy.getAssForceStyle();
+            String color = MpvSubtitleStylePolicy.getSubColorProperty();
+            String border = MpvSubtitleStylePolicy.getSubBorderColorProperty();
+            String font = MpvSubtitleStylePolicy.getSubFontProperty();
+            boolean ok = false;
+            for (String mn : new String[]{"setProperty", "setOption", "option"}) {
+                try {
+                    java.lang.reflect.Method m = getClass().getMethod(mn, String.class, String.class);
+                    m.invoke(this, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                    m.invoke(this, "sub-ass-force-style", style);
+                    m.invoke(this, "sub-color", color);
+                    m.invoke(this, "sub-border-color", border);
+                    m.invoke(this, "sub-shadow-color", border);
+                    if (font != null && !font.isEmpty()) m.invoke(this, "sub-font", font);
+                    ok = true;
+                    break;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (!ok) {
+                try {
+                    java.lang.reflect.Method cmd = getClass().getMethod("command", String[].class);
+                    cmd.invoke(this, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
+                    cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
+                    cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
+                    ok = true;
+                } catch (Throwable ignored) {
+                }
+            }
+            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " color=" + color);
+        } catch (Throwable e) {
+            android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
+        }
+    }
+"""
 
 
 def patch_exo(path: Path) -> None:
@@ -55,10 +94,7 @@ def patch_exo(path: Path) -> None:
         "view.getSubtitleView().setApplyEmbeddedStyles(true);",
         "view.getSubtitleView().setApplyEmbeddedStyles(PlayerSetting.isCaption());",
     )
-    pat = re.compile(
-        r"public static CaptionStyleCompat getCaptionStyle\(\)\s*\{[^}]*\}",
-        re.S,
-    )
+    pat = re.compile(r"public static CaptionStyleCompat getCaptionStyle\(\)\s*\{[^}]*\}", re.S)
     if pat.search(t):
         t = pat.sub(EXO_CAPTION_STYLE, t, count=1)
     else:
@@ -76,25 +112,70 @@ def patch_mpv_player(path: Path) -> None:
         return
     t = path.read_text(encoding="utf-8")
     orig = t
-    if "com.fongmi.android.tv.setting.Setting" not in t:
+
+    if "import com.fongmi.android.tv.setting.Setting;" not in t:
         if "import com.fongmi.android.tv.setting.PlayerSetting;" in t:
             t = t.replace(
                 "import com.fongmi.android.tv.setting.PlayerSetting;",
                 "import com.fongmi.android.tv.setting.PlayerSetting;\nimport com.fongmi.android.tv.setting.Setting;",
             )
-        else:
+        elif "package androidx.media3.mpvplayer;" in t:
             t = t.replace(
                 "package androidx.media3.mpvplayer;",
                 "package androidx.media3.mpvplayer;\n\nimport com.fongmi.android.tv.setting.Setting;",
+                1,
             )
-    pat = re.compile(
-        r"private CaptionStyle defaultCaptionStyle\(\)\s*\{\s*return new CaptionStyle\([^;]+;\s*\}",
-        re.S,
-    )
+    if "import com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy;" not in t:
+        if "import com.fongmi.android.tv.setting.Setting;" in t:
+            t = t.replace(
+                "import com.fongmi.android.tv.setting.Setting;",
+                "import com.fongmi.android.tv.setting.Setting;\nimport com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy;",
+                1,
+            )
+        else:
+            t = t.replace(
+                "package androidx.media3.mpvplayer;",
+                "package androidx.media3.mpvplayer;\n\nimport com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy;",
+                1,
+            )
+
+    pat = re.compile(r"private CaptionStyle defaultCaptionStyle\(\)\s*\{[\s\S]*?\n    \}", re.M)
     if pat.search(t):
         t = pat.sub(MPV_DEFAULT_STYLE, t, count=1)
     else:
         print("[mod] WARN: defaultCaptionStyle not found")
+
+    if "applyUserAssStyle" not in t:
+        idx = t.rfind("\n}")
+        if idx > 0:
+            t = t[:idx] + "\n" + APPLY_METHOD + t[idx:]
+            print("[mod] inserted applyUserAssStyle")
+
+    if "try { applyUserAssStyle(); }" not in t:
+        t2, n = re.subn(
+            r"(defaultCaptionStyle\(\)\s*;)",
+            r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignored) {}",
+            t,
+        )
+        if n > 0:
+            t = t2
+            print("[mod] hooked defaultCaptionStyle call sites", n)
+        else:
+            for marker in ["void prepare(", "void setMediaItems(", "void setMediaItem("]:
+                pos = t.find(marker)
+                if pos < 0:
+                    continue
+                brace = t.find("{", pos)
+                if brace < 0:
+                    continue
+                insert = "\n        try { applyUserAssStyle(); } catch (Throwable ignored) {}"
+                t = t[: brace + 1] + insert + t[brace + 1 :]
+                print("[mod] entry-hook", marker)
+                break
+
+    t = t.replace('"sub-ass-override", "scale"', '"sub-ass-override", "force"')
+    t = t.replace('"ass-style-override", "scale"', '"ass-style-override", "force"')
+
     if t != orig:
         path.write_text(t, encoding="utf-8")
         print("[mod] patched", path)
@@ -112,23 +193,17 @@ def patch_ass_policy(path: Path) -> None:
         print("[mod] ASS_OVERRIDE -> force", path)
 
 
-
-
 def patch_mpv_options_apply(path: Path) -> None:
-    """若上游在某方法里设置 sub-ass-override，改为 force 并尽量写入 force-style/sub-color。"""
     if not path.exists():
         return
     t = path.read_text(encoding="utf-8")
     orig = t
-    # common string forms
     for a, b in [
         ('"sub-ass-override", "scale"', '"sub-ass-override", "force"'),
         ("'sub-ass-override', 'scale'", "'sub-ass-override', 'force'"),
         ('"sub-ass-override", "yes"', '"sub-ass-override", "force"'),
-        ('"ass-style-override", "scale"', '"ass-style-override", "force"'),
     ]:
         t = t.replace(a, b)
-    # If there is applySubtitleStyle or similar empty, skip — reflection-based apply is upstream job
     if t != orig:
         path.write_text(t, encoding="utf-8")
         print("[mod] patched mpv option strings", path)
@@ -136,26 +211,14 @@ def patch_mpv_options_apply(path: Path) -> None:
         print("[mod] no sub-ass-override string in", path.name)
 
 
-
 def main() -> None:
     patch_exo(ROOT / "app/src/main/java/com/fongmi/android/tv/player/exo/ExoUtil.java")
-    patch_mpv_player(ROOT / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java")
-    patch_mpv_options_apply(ROOT / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java")
+    mpv = ROOT / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java"
+    patch_mpv_player(mpv)
+    patch_mpv_options_apply(mpv)
     patch_ass_policy(ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java")
     print("[mod] inject_subtitle_style done")
 
 
 if __name__ == "__main__":
     main()
-
-
-def patch_mpv_override(path: Path) -> None:
-    if not path.exists():
-        return
-    t = path.read_text(encoding="utf-8")
-    orig = t
-    t = t.replace('public static final String ASS_OVERRIDE = "scale";', 'public static final String ASS_OVERRIDE = "force";')
-    t = t.replace("public static final String ASS_OVERRIDE = \"scale\";", 'public static final String ASS_OVERRIDE = "force";')
-    if t != orig:
-        path.write_text(t, encoding="utf-8")
-        print("[mod] ASS_OVERRIDE force", path)

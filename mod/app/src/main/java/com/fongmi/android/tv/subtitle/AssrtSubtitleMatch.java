@@ -200,8 +200,8 @@ public final class AssrtSubtitleMatch {
         if (f.contains("vtt") || fn.endsWith(".vtt")) return ".vtt";
         if (f.contains("ttml") || fn.endsWith(".ttml")) return ".ttml";
         if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) return ".srt";
-        if (f.contains("ssa") || fn.endsWith(".ssa")) return ".ssa";
-        if (f.contains("ass") || fn.endsWith(".ass") || f.contains("text/x-ssa") || f.contains("text/x-ass")) return ".ass";
+        if (f.contains("ssa") || f.contains("ass") || fn.endsWith(".ssa") || fn.endsWith(".ass")
+                || f.contains("text/x-ssa") || f.contains("text/x-ass")) return ".ass";
         int dot = fn.lastIndexOf('.');
         if (dot > 0) return fn.substring(dot);
         return ".srt";
