@@ -24,12 +24,17 @@ public static CaptionStyleCompat getCaptionStyle() {
 MPV_DEFAULT_STYLE = r"""
 private CaptionStyle defaultCaptionStyle() {
         int fg = Color.YELLOW;
-        String font = "cursive";
+        String font = "sans-serif";
         try {
             fg = Setting.getSubtitleColorArgb();
-            font = Setting.getSubtitleFontFamily();
         } catch (Throwable ignored) {
         }
+        try {
+            String fam = Setting.getSubtitleFontFamily();
+            if (fam != null && !fam.isEmpty()) font = fam;
+        } catch (Throwable ignored) {
+        }
+        // outline 保证自定义颜色在深色画面上可见；ASS 需 ass-style-override=force 才生效
         return new CaptionStyle(font, false, false, fg, Color.BLACK, Color.TRANSPARENT, "outline-and-shadow", 3.0, 0.0);
     }
 """.strip()
@@ -107,9 +112,35 @@ def patch_ass_policy(path: Path) -> None:
         print("[mod] ASS_OVERRIDE -> force", path)
 
 
+
+
+def patch_mpv_options_apply(path: Path) -> None:
+    """若上游在某方法里设置 sub-ass-override，改为 force 并尽量写入 force-style/sub-color。"""
+    if not path.exists():
+        return
+    t = path.read_text(encoding="utf-8")
+    orig = t
+    # common string forms
+    for a, b in [
+        ('"sub-ass-override", "scale"', '"sub-ass-override", "force"'),
+        ("'sub-ass-override', 'scale'", "'sub-ass-override', 'force'"),
+        ('"sub-ass-override", "yes"', '"sub-ass-override", "force"'),
+        ('"ass-style-override", "scale"', '"ass-style-override", "force"'),
+    ]:
+        t = t.replace(a, b)
+    # If there is applySubtitleStyle or similar empty, skip — reflection-based apply is upstream job
+    if t != orig:
+        path.write_text(t, encoding="utf-8")
+        print("[mod] patched mpv option strings", path)
+    else:
+        print("[mod] no sub-ass-override string in", path.name)
+
+
+
 def main() -> None:
     patch_exo(ROOT / "app/src/main/java/com/fongmi/android/tv/player/exo/ExoUtil.java")
     patch_mpv_player(ROOT / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java")
+    patch_mpv_options_apply(ROOT / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java")
     patch_ass_policy(ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java")
     print("[mod] inject_subtitle_style done")
 

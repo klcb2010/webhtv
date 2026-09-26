@@ -117,7 +117,18 @@ public final class AssrtSubtitleMatch {
         if (TextUtils.isEmpty(format)) {
             format = com.fongmi.android.tv.player.PlayerHelper.getSubtitleMimeType(file.getName());
         }
-        if (TextUtils.isEmpty(display)) display = file.getName();
+        if (TextUtils.isEmpty(display) || looksLikeHashFileName(display)) {
+            String kw = lastKeyword();
+            if (!TextUtils.isEmpty(kw)) display = kw;
+            else if (sLastHistory != null) {
+                try {
+                    String vn = sLastHistory.getVodName();
+                    if (!TextUtils.isEmpty(vn)) display = vn;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (TextUtils.isEmpty(display)) display = file.getName();
+        }
         String trackLabel = trackLabelFor(display, format, file.getName());
         Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
@@ -148,24 +159,70 @@ public final class AssrtSubtitleMatch {
     }
 
 
-    /** 与字幕列表 UI 对齐：奥德赛，SRT */
+    /** 列表显示：影片名，ASS（去掉扩展名；hash 文件名回退到搜索关键词） */
     private static String trackLabelFor(String display, String format, String fileName) {
         String base = !TextUtils.isEmpty(display) ? display.trim() : "";
-        if (TextUtils.isEmpty(base) && !TextUtils.isEmpty(fileName)) {
-            base = fileName;
-            int dot = base.lastIndexOf('.');
-            if (dot > 0) base = base.substring(0, dot);
+        if (TextUtils.isEmpty(base) && !TextUtils.isEmpty(fileName)) base = fileName.trim();
+        base = stripSubtitleExtension(base);
+        // md5 式缓存名无意义 → 用最近搜索/片名
+        if (looksLikeHashFileName(base)) {
+            String kw = lastKeyword();
+            if (!TextUtils.isEmpty(kw)) base = stripSubtitleExtension(kw.trim());
+            else if (sLastHistory != null) {
+                try {
+                    String vn = sLastHistory.getVodName();
+                    if (!TextUtils.isEmpty(vn)) base = vn.trim();
+                } catch (Throwable ignored) {
+                }
+            }
         }
-        String tag = "SRT";
+        String tag = subtitleFormatTag(format, fileName);
+        if (TextUtils.isEmpty(base)) return tag;
+        String upper = base.toUpperCase(Locale.ROOT);
+        // 已带 ，ASS / ,SRT 等则不再追加
+        if (upper.endsWith("，" + tag) || upper.endsWith("," + tag) || upper.endsWith(" " + tag)) return base;
+        if (upper.contains("，" + tag) || upper.contains("," + tag)) return base;
+        return base + "，" + tag;
+    }
+
+    private static String stripSubtitleExtension(String name) {
+        if (TextUtils.isEmpty(name)) return "";
+        String n = name.trim();
+        // 反复去掉 .ass/.ssa/.srt 等，避免 name.ass，ASS
+        for (int i = 0; i < 3; i++) {
+            int dot = n.lastIndexOf('.');
+            if (dot <= 0) break;
+            String ext = n.substring(dot + 1).toLowerCase(Locale.ROOT);
+            if (ext.equals("ass") || ext.equals("ssa") || ext.equals("srt") || ext.equals("vtt")
+                    || ext.equals("ttml") || ext.equals("sub") || ext.equals("idx")) {
+                n = n.substring(0, dot).trim();
+            } else break;
+        }
+        // 去掉末尾已有的 ，SSA / ,ASS
+        n = n.replaceAll("(?i)[，,]\s*(ASS|SSA|SRT|VTT|TTML)\s*$", "").trim();
+        return n;
+    }
+
+    private static boolean looksLikeHashFileName(String base) {
+        if (TextUtils.isEmpty(base)) return true;
+        String b = base.trim();
+        // 32/40 hex 或带扩展的缓存名
+        String core = stripSubtitleExtension(b);
+        if (core.matches("(?i)[a-f0-9]{16,40}")) return true;
+        if (core.length() >= 20 && core.matches("(?i)[a-f0-9._-]+") && !core.contains(" ")) return true;
+        return false;
+    }
+
+    private static String subtitleFormatTag(String format, String fileName) {
         String f = format == null ? "" : format.toLowerCase(Locale.ROOT);
         String fn = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
-        if (f.contains("vtt") || fn.endsWith(".vtt")) tag = "VTT";
-        else if (f.contains("ssa") || f.contains("ass") || fn.endsWith(".ass") || fn.endsWith(".ssa")) tag = "ASS";
-        else if (f.contains("ttml") || fn.endsWith(".ttml")) tag = "TTML";
-        else if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) tag = "SRT";
-        if (!TextUtils.isEmpty(base) && base.toUpperCase(Locale.ROOT).contains(tag)) return base;
-        if (TextUtils.isEmpty(base)) return tag;
-        return base + "，" + tag;
+        if (f.contains("vtt") || fn.endsWith(".vtt")) return "VTT";
+        if (f.contains("ttml") || fn.endsWith(".ttml")) return "TTML";
+        if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) return "SRT";
+        // ass/ssa 统一显示 ASS，避免 .ass,SSA 重复观感
+        if (f.contains("ssa") || f.contains("ass") || fn.endsWith(".ass") || fn.endsWith(".ssa")
+                || f.contains("text/x-ssa") || f.contains("text/x-ass")) return "ASS";
+        return "SRT";
     }
 
     private static void persistTextTrackSelection(PlayerManager player, String display, String format) {
@@ -988,9 +1045,13 @@ public final class AssrtSubtitleMatch {
 
     /** 显示名 = 片名 集数（与预填一致），不用远程乱文件名、不带来源前缀 */
     public static String displayNameForKeyword(Item item, String keyword) {
-        if (!TextUtils.isEmpty(keyword)) return keyword.trim();
+        if (!TextUtils.isEmpty(keyword)) return stripSubtitleExtension(keyword.trim());
+        String last = lastKeyword();
+        if (!TextUtils.isEmpty(last)) return stripSubtitleExtension(last);
         if (item == null) return "";
-        if (!TextUtils.isEmpty(item.name)) return item.name;
+        if (!TextUtils.isEmpty(item.name) && !looksLikeHashFileName(item.name)) {
+            return stripSubtitleExtension(item.name.trim());
+        }
         return item.id == null ? "" : item.id;
     }
 
