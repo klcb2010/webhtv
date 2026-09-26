@@ -114,6 +114,7 @@ def patch_mpv_player(path: Path) -> None:
     t = path.read_text(encoding="utf-8")
     orig = t
 
+    # --- imports ---
     if "import com.fongmi.android.tv.setting.Setting;" not in t:
         if "import com.fongmi.android.tv.setting.PlayerSetting;" in t:
             t = t.replace(
@@ -140,28 +141,32 @@ def patch_mpv_player(path: Path) -> None:
                 1,
             )
 
-    pat = re.compile(r"private CaptionStyle defaultCaptionStyle\(\)\s*\{[\s\S]*?\n    \}", re.M)
-    if pat.search(t):
-        t = pat.sub(MPV_DEFAULT_STYLE, t, count=1)
-    else:
-        print("[mod] WARN: defaultCaptionStyle not found")
-
-    if "applyUserAssStyle" not in t:
+    # --- 1) 先插入方法定义（在类最后的 } 前）---
+    if "private void applyUserAssStyle" not in t:
         idx = t.rfind("\n}")
         if idx > 0:
             t = t[:idx] + "\n" + APPLY_METHOD + t[idx:]
-            print("[mod] inserted applyUserAssStyle")
+            print("[mod] inserted applyUserAssStyle method")
+        else:
+            print("[mod] WARN cannot find class end for applyUserAssStyle")
 
-    # 仅在方法入口 / defaultCaptionStyle 体内调用，不改 return 语句
-    if "applyUserAssStyle();" not in t:
+    # --- 2) 替换 defaultCaptionStyle 体（内含调用）---
+    pat = re.compile(r"private CaptionStyle defaultCaptionStyle\(\)\s*\{[\s\S]*?\n    \}", re.M)
+    if pat.search(t):
+        t = pat.sub(MPV_DEFAULT_STYLE, t, count=1)
+        print("[mod] replaced defaultCaptionStyle")
+    else:
+        print("[mod] WARN: defaultCaptionStyle not found")
+
+    # --- 3) 若方法体里还没有调用，在 captionStyle 入口补一次 ---
+    if "try { applyUserAssStyle(); }" not in t:
         hooked = False
-        for pat, name in [
+        for pat2, name in [
             (r"(CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)", "captionStyle"),
             (r"(private\s+CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)", "captionStyle-priv"),
-            (r"(public\s+CaptionStyle\s+captionStyle\s*\([^)]*\)\s*\{)", "captionStyle-pub"),
         ]:
             t3, n3 = re.subn(
-                pat,
+                pat2,
                 r"\1\n        try { applyUserAssStyle(); } catch (Throwable ignoredAss) {}",
                 t,
                 count=1,
@@ -198,6 +203,7 @@ def patch_mpv_player(path: Path) -> None:
         print("[mod] patched", path)
     else:
         print("[mod] no change", path)
+
 
 
 def patch_ass_policy(path: Path) -> None:
