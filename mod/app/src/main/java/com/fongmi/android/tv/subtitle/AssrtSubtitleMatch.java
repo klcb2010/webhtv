@@ -160,8 +160,12 @@ public final class AssrtSubtitleMatch {
         final String fmt = format;
         final PlayerManager pm = player;
         // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
-        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 600);
-        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 2500);
+        // 立即 + 多段延迟：MPV setSub 后轨常晚出现，解码切换后也要重选
+        try { persistAndSelectText(pm, disp, fmt); } catch (Throwable ignored) {}
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 300);
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 800);
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 1800);
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 3500);
     }
 
 
@@ -1099,6 +1103,38 @@ public final class AssrtSubtitleMatch {
             Log.i(TAG, "attachRememberedSub " + name);
         } catch (Throwable e) {
             Log.w(TAG, "attachRememberedSub failed: " + e.getMessage());
+        }
+    }
+
+
+    /** 切换解码/内核后重新挂外挂字幕（从 remember 缓存） */
+    public static void reapplyAfterPlayerChange(PlayerProvider playerProvider) {
+        try {
+            History h = sLastHistory;
+            Episode ep = sLastEpisode;
+            if (h == null && ep == null) return;
+            PlayerManager player = playerProvider == null ? null : playerProvider.get();
+            if (player == null || player.isEmpty()) {
+                App.post(() -> reapplyAfterPlayerChange(playerProvider), 600);
+                return;
+            }
+            // 优先 pending 名，再 tryRestore
+            if (!TextUtils.isEmpty(sPendingSelectName) || sPreferExternal) {
+                boolean ok = tryRestoreSub(null, h, ep, playerProvider);
+                if (!ok) {
+                    App.post(() -> {
+                        try {
+                            tryRestoreSub(null, sLastHistory, sLastEpisode, playerProvider);
+                        } catch (Throwable ignored) {
+                        }
+                    }, 1200);
+                }
+            } else {
+                tryRestoreSub(null, h, ep, playerProvider);
+            }
+            Log.i(TAG, "reapplyAfterPlayerChange done prefer=" + sPreferExternal + " pending=" + sPendingSelectName);
+        } catch (Throwable e) {
+            Log.w(TAG, "reapplyAfterPlayerChange: " + e.getMessage());
         }
     }
 

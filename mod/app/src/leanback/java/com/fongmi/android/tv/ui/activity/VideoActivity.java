@@ -3589,7 +3589,24 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
         if (mOsd != null) mOsd.setControlsVisible(true);
         forceHideConfiguredActionButtons();
-        view.requestFocus();
+        View focus = view;
+        if (focus == null || focus.getVisibility() != View.VISIBLE || !focus.isFocusable()) {
+            focus = findFirstFocusableControlAction();
+        }
+        final View target = focus;
+        if (target != null) {
+            target.requestFocus();
+            // 部分机顶盒首帧焦点未落地，再补一次
+            App.post(() -> {
+                try {
+                    if (isVisible(mBinding.control.getRoot()) && (getCurrentFocus() == null
+                            || getCurrentFocus() == mBinding.video)) {
+                        target.requestFocus();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }, 50);
+        }
         setR1Callback();
     }
 
@@ -6036,7 +6053,46 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private View getFocus2() {
-        return mFocus2 == null || mFocus2.getVisibility() != View.VISIBLE || mFocus2 == mBinding.control.action.opening || mFocus2 == mBinding.control.action.ending ? mBinding.control.action.next : mFocus2;
+        if (mFocus2 != null && mFocus2.getVisibility() == View.VISIBLE
+                && mFocus2 != mBinding.control.action.opening
+                && mFocus2 != mBinding.control.action.ending
+                && mFocus2.isFocusable()) {
+            return mFocus2;
+        }
+        return findFirstFocusableControlAction();
+    }
+
+    /** 底栏呼出时定焦：取第一个可见可焦的控制按钮（避免 next 被隐藏时无焦点） */
+    private View findFirstFocusableControlAction() {
+        try {
+            android.view.ViewGroup container = mBinding.control.action.container;
+            if (container != null) {
+                for (int i = 0; i < container.getChildCount(); i++) {
+                    View child = container.getChildAt(i);
+                    if (child == null || child.getVisibility() != View.VISIBLE) continue;
+                    if (!child.isFocusable() || !child.isEnabled()) continue;
+                    if (child == mBinding.control.action.opening || child == mBinding.control.action.ending) continue;
+                    return child;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        // 回退顺序
+        View[] fallbacks = new View[]{
+                mBinding.control.action.player,
+                mBinding.control.action.decode,
+                mBinding.control.action.text,
+                mBinding.control.action.next,
+                mBinding.control.action.prev,
+                mBinding.control.action.episodes
+        };
+        for (View v : fallbacks) {
+            try {
+                if (v != null && v.getVisibility() == View.VISIBLE && v.isFocusable()) return v;
+            } catch (Throwable ignored) {
+            }
+        }
+        return mBinding.control.action.player;
     }
 
     private boolean dispatchOpeningEndingAdjust(KeyEvent event) {

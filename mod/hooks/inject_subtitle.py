@@ -126,6 +126,45 @@ def insert_after_on_subtitle_click(t: str) -> str:
     return t[:end] + "\n" + SHOW + t[end:]
 
 
+
+def inject_reapply_on_decode(t: str) -> str:
+    """切换解码/内核后重挂外挂字幕。"""
+    if "AssrtSubtitleMatch.reapplyAfterPlayerChange" in t:
+        return t
+    # onDecode end: typically setDecode(); }
+    patterns = [
+        (
+            r"(private void onDecode\(\) \{[\s\S]*?setDecode\(\);)",
+            r"\1\n        try { AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player()); } catch (Throwable ignored) {}",
+        ),
+        (
+            r"(private void switchPlayerKernel\(int type\) \{[\s\S]*?setDecode\(\);)",
+            r"\1\n        try { AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player()); } catch (Throwable ignored) {}",
+        ),
+    ]
+    for pat, repl in patterns:
+        t2, n = re.subn(pat, repl, t, count=1)
+        if n:
+            t = t2
+            print("[mod] hooked decode/kernel reapply")
+    # also switchPlayerKernelWithResult after startPlayer if present
+    if "reapplyAfterPlayerChange" not in t or t.count("reapplyAfterPlayerChange") < 1:
+        # fallback: any setDecode(); that is alone on line inside onDecode already tried
+        pass
+    # After switchPlayer with result - look for setPlayerKernel after switch
+    if "switchPlayerKernelWithResult" in t and "reapplyAfterPlayerChange" in t:
+        t2, n = re.subn(
+            r"(private void switchPlayerKernelWithResult\([\s\S]*?setDecode\(\);)",
+            r"\1\n        try { AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player()); } catch (Throwable ignored) {}",
+            t,
+            count=1,
+        )
+        if n:
+            t = t2
+            print("[mod] hooked switchPlayerKernelWithResult")
+    return t
+
+
 for rel in [
     "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
     "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
@@ -199,6 +238,7 @@ for rel in [
     )
 
     t = insert_after_on_subtitle_click(t)
+    t = inject_reapply_on_decode(t)
     t = inject_set_player(t)
 
     t = re.sub(
