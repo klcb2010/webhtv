@@ -72,7 +72,8 @@ APPLY_METHOD = r"""
                 } catch (Throwable ignoredCmd) {
                 }
             }
-            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " color=" + color);
+            if (ok) android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok color=" + color);
+            else android.util.Log.d("MpvSubStyle", "applyUserAssStyle reflect-skip (CaptionStyle path may still apply) color=" + color);
         } catch (Throwable e) {
             android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
         }

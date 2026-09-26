@@ -156,6 +156,16 @@ public class PlayerButtonSetting {
         }
     }
 
+    /** 业务侧想显示某按钮时调用：若用户在设置里隐藏则仍 GONE */
+    public static void setVisibleIfAllowed(String id, View view, boolean wantVisible) {
+        if (view == null) return;
+        if (!wantVisible || isHidden(id)) {
+            view.setVisibility(View.GONE);
+        } else {
+            view.setVisibility(View.VISIBLE);
+        }
+    }
+
     /** 对已登记按钮强制再应用一次隐藏（避免后续逻辑又 setVisible） */
     public static void forceHidden(Map<String, View> views) {
         applyVisibility(views);

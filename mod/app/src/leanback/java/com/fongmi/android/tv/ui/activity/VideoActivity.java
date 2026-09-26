@@ -1365,7 +1365,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setEpisodeAdapter(List<Episode> items, boolean scrollToCurrent) {
-        mBinding.control.action.episodes.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes, items.size() >= 2);
+        try { PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.NEXT, mBinding.control.action.next, items.size() >= 2); } catch (Throwable ignored) {}
+        try { PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.PREV, mBinding.control.action.prev, items.size() >= 2); } catch (Throwable ignored) {}
         applyActionButtonVisibility();
         mBinding.episode.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
         boolean audioList = isMusicLike();
@@ -5723,7 +5725,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setTrackVisible() {
-        mBinding.control.action.text.setVisibility(player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() ? View.VISIBLE : View.GONE);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.TEXT, mBinding.control.action.text,
+                player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() || (player() != null && !player().isEmpty()));
         mBinding.control.action.audio.setVisibility(player().haveTrack(C.TRACK_TYPE_AUDIO) ? View.VISIBLE : View.GONE);
         mBinding.control.action.video.setVisibility(player().haveTrack(C.TRACK_TYPE_VIDEO) ? View.VISIBLE : View.GONE);
         applyActionButtonVisibility();

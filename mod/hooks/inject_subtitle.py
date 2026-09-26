@@ -12,8 +12,11 @@ SHOW = r"""
     public String getSubtitleSearchKeyword() {
         String title = "";
         String ep = "";
+        // 优先站源上方片名（详情标题），更贴近用户看到的名字
         try {
-            if (mHistory != null && mHistory.getVodName() != null) title = mHistory.getVodName().trim();
+            if (mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
+                title = mBinding.name.getText().toString().trim();
+            }
         } catch (Throwable ignored) {
         }
         try {
@@ -24,9 +27,7 @@ SHOW = r"""
         } catch (Throwable ignored) {
         }
         try {
-            if (title.isEmpty() && mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
-                title = mBinding.name.getText().toString().trim();
-            }
+            if (title.isEmpty() && mHistory != null && mHistory.getVodName() != null) title = mHistory.getVodName().trim();
         } catch (Throwable ignored) {
         }
         try {

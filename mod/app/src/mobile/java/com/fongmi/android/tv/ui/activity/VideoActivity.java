@@ -1492,9 +1492,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setEpisodeAdapter(List<Episode> items) {
         int size = items.size();
-        mBinding.control.action.episodes.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
-        mBinding.control.action.next.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
-        mBinding.control.action.prev.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes, size >= 2);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.NEXT, mBinding.control.action.next, size >= 2);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.PREV, mBinding.control.action.prev, size >= 2);
         applyActionButtonVisibility();
         mBinding.control.next.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
         mBinding.control.prev.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
@@ -6040,7 +6040,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setTrackVisible() {
-        mBinding.control.action.text.setVisibility(player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() ? View.VISIBLE : View.GONE);
+        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.TEXT, mBinding.control.action.text,
+                player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() || (player() != null && !player().isEmpty()));
         mBinding.control.action.audio.setVisibility(player().haveTrack(C.TRACK_TYPE_AUDIO) ? View.VISIBLE : View.GONE);
         mBinding.control.action.video.setVisibility(player().haveTrack(C.TRACK_TYPE_VIDEO) ? View.VISIBLE : View.GONE);
         applyActionButtonVisibility();
