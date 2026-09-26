@@ -842,7 +842,7 @@ jobs:
           if manual:
               parts.append(manual)
           else:
-              parts.append("基于鱼壳同步构建的魔改版")
+              parts.append("基于鱼壳移植默壳同步构建的魔改版")
 
           if up_body:
               parts.append("")
@@ -941,20 +941,6 @@ jobs:
 
           ls -lh dist/
 
-      # ============================================================
-      # Create GitHub Release
-      #
-      # 重要：
-      #
-      # --repo "${GITHUB_REPOSITORY}"
-      #
-      # 强制指定目标仓库为：
-      #
-      # klcb2010/webhtv
-      #
-      # 即使存在 upstream remote，也不会去：
-      #
-      # fish2018/webhtv/releases
       # ============================================================
       - name: Create GitHub Release
         if: steps.should_build.outputs.build == 'true'
