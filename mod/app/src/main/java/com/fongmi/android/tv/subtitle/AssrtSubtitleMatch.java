@@ -130,9 +130,15 @@ public final class AssrtSubtitleMatch {
             if (TextUtils.isEmpty(display)) display = file.getName();
         }
         String trackLabel = trackLabelFor(display, format, file.getName());
-        Sub sub = Sub.create(trackLabel, file.getAbsolutePath(), lang == null ? "" : lang, format);
+        // 轨道列表常显示「文件名 + 格式」，把实体文件改成友好名，避免 hash.ass, SSA
+        File playFile = ensureFriendlySubFile(file, trackLabel, format);
+        Sub sub = Sub.create(trackLabel, playFile.getAbsolutePath(), lang == null ? "" : lang, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
+        try {
+            applyMpvSubtitleStyle(player);
+        } catch (Throwable ignored) {
+        }
         try {
             if (sLastHistory != null) {
                 SubtitleRestoreCoordinator.remember(sLastHistory, sub);
@@ -154,10 +160,134 @@ public final class AssrtSubtitleMatch {
         final String fmt = format;
         final PlayerManager pm = player;
         // 少次延迟即可；过密 setTrack/Override 会触发 reprepare，续播时「拉扯」
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 600);
-        App.post(() -> persistAndSelectText(pm, disp, fmt), 2500);
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 600);
+        App.post(() -> { persistAndSelectText(pm, disp, fmt); try { applyMpvSubtitleStyle(pm); } catch (Throwable ignored) {} }, 2500);
     }
 
+
+
+    /** 复制为「显示名.扩展名」，供播放器轨名使用（避免 md5.ass, SSA） */
+    private static File ensureFriendlySubFile(File src, String trackLabel, String format) {
+        try {
+            if (src == null || !src.isFile()) return src;
+            String base = stripSubtitleExtension(trackLabel);
+            base = base.replaceAll("(?i)[，,]\\s*(ASS|SSA|SRT|VTT|TTML)\\s*$", "").trim();
+            if (TextUtils.isEmpty(base) || looksLikeHashFileName(base)) {
+                base = "subtitle";
+            }
+            base = base.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1f]", "_").trim();
+            if (base.length() > 40) base = base.substring(0, 40).trim();
+            String ext = extensionForFormat(format, src.getName());
+            File dir = new File(com.fongmi.android.tv.App.get().getFilesDir(), "sub_named");
+            if (!dir.exists() && !dir.mkdirs()) return src;
+            File dst = new File(dir, base + ext);
+            if (dst.isFile() && dst.length() != src.length()) {
+                String h = Util.md5(src.getAbsolutePath());
+                dst = new File(dir, base + "_" + h.substring(0, Math.min(6, h.length())) + ext);
+            }
+            if (!dst.isFile() || dst.length() != src.length()) {
+                copyFileBytes(src, dst);
+            }
+            return dst.isFile() ? dst : src;
+        } catch (Throwable e) {
+            return src;
+        }
+    }
+
+    private static String extensionForFormat(String format, String fileName) {
+        String f = format == null ? "" : format.toLowerCase(Locale.ROOT);
+        String fn = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
+        if (f.contains("vtt") || fn.endsWith(".vtt")) return ".vtt";
+        if (f.contains("ttml") || fn.endsWith(".ttml")) return ".ttml";
+        if (f.contains("subrip") || fn.endsWith(".srt") || f.contains("application/x-subrip")) return ".srt";
+        if (f.contains("ssa") || fn.endsWith(".ssa")) return ".ssa";
+        if (f.contains("ass") || fn.endsWith(".ass") || f.contains("text/x-ssa") || f.contains("text/x-ass")) return ".ass";
+        int dot = fn.lastIndexOf('.');
+        if (dot > 0) return fn.substring(dot);
+        return ".srt";
+    }
+
+    private static void copyFileBytes(File src, File dst) throws Exception {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(src);
+             java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.flush();
+        }
+    }
+
+    /**
+     * MPV：反射写入 sub-ass-override / force-style / sub-color（对齐社区脚本）。
+     */
+    public static void applyMpvSubtitleStyle(PlayerManager player) {
+        if (player == null) return;
+        try {
+            Object engine = null;
+            try {
+                java.lang.reflect.Field f = player.getClass().getDeclaredField("engine");
+                f.setAccessible(true);
+                engine = f.get(player);
+            } catch (Throwable ignored) {
+            }
+            if (engine == null) return;
+            Object target = engine;
+            try {
+                Object exo = engine.getClass().getMethod("getPlayer").invoke(engine);
+                if (exo != null) target = exo;
+            } catch (Throwable ignored) {
+            }
+            java.lang.reflect.Method setProp = null;
+            Object invokeOn = target;
+            for (Object cand : new Object[]{target, engine}) {
+                if (cand == null) continue;
+                for (String mn : new String[]{"setProperty", "setOption"}) {
+                    try {
+                        setProp = cand.getClass().getMethod(mn, String.class, String.class);
+                        invokeOn = cand;
+                        break;
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (setProp != null) break;
+                for (java.lang.reflect.Field f : cand.getClass().getDeclaredFields()) {
+                    try {
+                        f.setAccessible(true);
+                        Object v = f.get(cand);
+                        if (v == null) continue;
+                        for (String mn : new String[]{"setProperty", "setOption"}) {
+                            try {
+                                setProp = v.getClass().getMethod(mn, String.class, String.class);
+                                invokeOn = v;
+                                break;
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        if (setProp != null) break;
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (setProp != null) break;
+            }
+            if (setProp == null) {
+                Log.w(TAG, "applyMpvSubtitleStyle: no setProperty");
+                return;
+            }
+            String style = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getAssForceStyle();
+            String color = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubColorProperty();
+            String border = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubBorderColorProperty();
+            String font = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubFontProperty();
+            setProp.invoke(invokeOn, "sub-ass-override", com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.ASS_OVERRIDE);
+            setProp.invoke(invokeOn, "sub-ass-force-style", style);
+            setProp.invoke(invokeOn, "sub-color", color);
+            setProp.invoke(invokeOn, "sub-border-color", border);
+            setProp.invoke(invokeOn, "sub-shadow-color", border);
+            if (!TextUtils.isEmpty(font)) setProp.invoke(invokeOn, "sub-font", font);
+            Log.i(TAG, "applyMpvSubtitleStyle ok color=" + color);
+        } catch (Throwable e) {
+            Log.w(TAG, "applyMpvSubtitleStyle: " + e.getMessage());
+        }
+    }
 
     /** 列表显示：影片名，ASS（去掉扩展名；hash 文件名回退到搜索关键词） */
     private static String trackLabelFor(String display, String format, String fileName) {
