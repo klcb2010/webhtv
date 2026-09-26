@@ -9,7 +9,7 @@ ROOT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
 HOOK = r"""
     // ---- mod: stalled playback auto-change ----
     private int mStallWatchGen;
-    private static final long STALL_AUTO_CHANGE_MS = 16000L;
+    private static final long STALL_AUTO_CHANGE_MS = 15000L;
     private static final long STALL_FAST_MS = 8000L;
 
     private void cancelStallWatch() {

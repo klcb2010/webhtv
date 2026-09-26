@@ -10,6 +10,69 @@ HOOK = r"""
     private com.fongmi.android.tv.bean.Vod mAiRecommendVod;
     private String mAiRecommendTitle = "";
 
+    /** 去掉季/集后缀，得到快搜用的系列名，如「流人 第六季」→「流人」 */
+    private String cleanSeriesKeywordForRecommend(String title) {
+        if (title == null) return "";
+        String t = title.trim();
+        t = t.replaceAll("(?i)[\\s\\-_]*第[0-9一二三四五六七八九十百千]+季.*$", "").trim();
+        t = t.replaceAll("(?i)[\\s\\-_]*Season\\s*\\d+.*$", "").trim();
+        t = t.replaceAll("(?i)[\\s\\-_]*S\\d{1,2}(?:E\\d{1,3})?.*$", "").trim();
+        t = t.replaceAll("(?i)[\\s\\-_]*第?[0-9一二三四五六七八九十百]+[集期话].*$", "").trim();
+        if (t.isEmpty()) t = title.trim();
+        return t;
+    }
+
+    /** 从快搜结果里抽出与系列相关的片名，作为个性推荐首段（真实站源结果，不瞎编季） */
+    private java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> collectQuickSearchRecommendItems(String seriesKw, String excludeTitle) {
+        java.util.LinkedHashMap<String, com.fongmi.android.tv.service.AiRecommendService.Item> map = new java.util.LinkedHashMap<>();
+        try {
+            if (mQuickAdapter == null || mQuickAdapter.getItemCount() <= 0) return new java.util.ArrayList<>();
+            String kw = seriesKw == null ? "" : seriesKw.trim().toLowerCase(java.util.Locale.ROOT);
+            String ex = excludeTitle == null ? "" : excludeTitle.trim().toLowerCase(java.util.Locale.ROOT);
+            for (int i = 0; i < mQuickAdapter.getItemCount(); i++) {
+                com.fongmi.android.tv.bean.Vod vod = mQuickAdapter.get(i);
+                if (vod == null) continue;
+                String name = vod.getName() == null ? "" : vod.getName().trim();
+                if (name.isEmpty()) continue;
+                String low = name.toLowerCase(java.util.Locale.ROOT);
+                if (!ex.isEmpty() && low.equals(ex)) continue;
+                // 与系列名相关，或包含系列关键词
+                if (!kw.isEmpty() && !low.contains(kw) && !kw.contains(low)) {
+                    // 宽松：去空格再比
+                    String kw2 = kw.replace(" ", "");
+                    String low2 = low.replace(" ", "");
+                    if (!low2.contains(kw2) && !kw2.contains(low2)) continue;
+                }
+                if (!map.containsKey(low)) {
+                    map.put(low, new com.fongmi.android.tv.service.AiRecommendService.Item(name, 0, "site", "快搜"));
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return new java.util.ArrayList<>(map.values());
+    }
+
+    private java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> mergeRecommendPreferQuick(
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> quick,
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> remote) {
+        java.util.LinkedHashMap<String, com.fongmi.android.tv.service.AiRecommendService.Item> map = new java.util.LinkedHashMap<>();
+        if (quick != null) {
+            for (com.fongmi.android.tv.service.AiRecommendService.Item it : quick) {
+                if (it == null || it.title == null || it.title.trim().isEmpty()) continue;
+                map.put(it.title.trim().toLowerCase(java.util.Locale.ROOT), it);
+            }
+        }
+        if (remote != null) {
+            for (com.fongmi.android.tv.service.AiRecommendService.Item it : remote) {
+                if (it == null || it.title == null || it.title.trim().isEmpty()) continue;
+                String k = it.title.trim().toLowerCase(java.util.Locale.ROOT);
+                if (!map.containsKey(k)) map.put(k, it);
+            }
+        }
+        return new java.util.ArrayList<>(map.values());
+    }
+
+
     private void scheduleAiForDetail(com.fongmi.android.tv.bean.Vod item) {
         if (item == null) return;
         final String rawName = item.getName() == null ? "" : item.getName().trim();
@@ -23,6 +86,18 @@ HOOK = r"""
             hideAiRecommendPanel();
             return;
         }
+
+        // 静默快搜系列名：结果并入个性推荐（真实站源，优于纯猜）
+        try {
+            final String seriesKw = cleanSeriesKeywordForRecommend(rawName);
+            if (!seriesKw.isEmpty()) {
+                com.fongmi.android.tv.App.post(() -> {
+                    if (gen != mAiRecommendGen || isFinishing()) return;
+                    try { startSearch(seriesKw); } catch (Throwable ignored) {}
+                }, 200);
+            }
+        } catch (Throwable ignored) {}
+
         // 稍晚再请求，避免详情 UI 尚未完成导致 panel 绑定失败
         com.fongmi.android.tv.App.post(() -> {
             if (gen != mAiRecommendGen || isFinishing()) return;
@@ -97,7 +172,7 @@ HOOK = r"""
             com.fongmi.android.tv.App.post(() -> {
                 if (gen != mAiRecommendGen || isFinishing()) return;
                 if (result != null && !result.isEmpty()) {
-                    bindAiRecommendList(gen, result);
+                    bindAiRecommendListDelayed(gen, result, 600L);
                 } else if (com.fongmi.android.tv.setting.Setting.getRecommendSource()
                         == com.fongmi.android.tv.setting.Setting.RECOMMEND_AUTO) {
                     // 自动：豆瓣无结果 → AI 兜底
@@ -156,7 +231,7 @@ HOOK = r"""
             com.fongmi.android.tv.App.post(() -> {
                 if (gen != mAiRecommendGen || isFinishing()) return;
                 if (result != null && !result.isEmpty()) {
-                    bindAiRecommendList(gen, result);
+                    bindAiRecommendListDelayed(gen, result, 600L);
                 } else {
                     showAiRecommendRetry(gen, reqVod, reqTitle, error);
                 }
@@ -183,15 +258,34 @@ HOOK = r"""
         }
     }
 
+
+    private void bindAiRecommendListDelayed(int gen, java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> remote, long delayMs) {
+        com.fongmi.android.tv.App.post(() -> bindAiRecommendList(gen, remote), delayMs);
+        // 快搜稍后到：再刷一次合并
+        com.fongmi.android.tv.App.post(() -> {
+            if (gen != mAiRecommendGen || isFinishing()) return;
+            bindAiRecommendList(gen, remote);
+        }, delayMs + 1500L);
+    }
+
     private void bindAiRecommendList(int gen, java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> items) {
         if (gen != mAiRecommendGen || isFinishing()) return;
         try {
+            // 快搜同系列结果优先，再拼豆瓣/AI，去重
+            String seriesKw = cleanSeriesKeywordForRecommend(mAiRecommendTitle);
+            java.util.List<com.fongmi.android.tv.service.AiRecommendService.Item> quick =
+                    collectQuickSearchRecommendItems(seriesKw, mAiRecommendTitle);
+            items = mergeRecommendPreferQuick(quick, items);
             if (items == null || items.isEmpty()) {
                 hideAiRecommendPanel();
                 return;
             }
             mBinding.aiRecommendPanel.setVisibility(android.view.View.VISIBLE);
-            mBinding.aiRecommendLabel.setText(getString(R.string.personal_recommend_section));
+            String label = getString(R.string.personal_recommend_section);
+            if (quick != null && !quick.isEmpty()) {
+                label = label + " · 含快搜";
+            }
+            mBinding.aiRecommendLabel.setText(label);
             mBinding.aiRecommendList.removeAllViews();
             float density = getResources().getDisplayMetrics().density;
             int pad = (int) (10 * density);
