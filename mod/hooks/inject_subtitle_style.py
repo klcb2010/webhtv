@@ -55,7 +55,6 @@ APPLY_METHOD = r"""
             try { id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId(); } catch (Throwable ignored) {}
             boolean ok = false;
             String lastErr = "none";
-            // --- A) 本对象 setOption / setProperty ---
             for (String mn : new String[]{"setOption", "setProperty", "setOptionString", "setPropertyString", "option"}) {
                 try {
                     java.lang.reflect.Method m = null;
@@ -81,7 +80,6 @@ APPLY_METHOD = r"""
                     lastErr = mn + ":" + e.getClass().getSimpleName();
                 }
             }
-            // --- B) command ---
             if (!ok) {
                 try {
                     java.lang.reflect.Method cmd = null;
@@ -103,74 +101,7 @@ APPLY_METHOD = r"""
                     lastErr = "cmd:" + e.getClass().getSimpleName();
                 }
             }
-            // --- C) 仅写入「值全是 String」的 Map（避免 ClassCastException）---
-            if (!ok) {
-                try {
-                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
-                        try {
-                            if (!java.util.Map.class.isAssignableFrom(f.getType())) continue;
-                            f.setAccessible(true);
-                            Object mapObj = f.get(this);
-                            if (!(mapObj instanceof java.util.Map)) continue;
-                            java.util.Map<?, ?> raw = (java.util.Map<?, ?>) mapObj;
-                            boolean stringMap = true;
-                            for (Object val : raw.values()) {
-                                if (val != null && !(val instanceof String)) {
-                                    stringMap = false;
-                                    break;
-                                }
-                            }
-                            // 空 Map 也允许（启动前 options）
-                            if (!stringMap) continue;
-                            @SuppressWarnings("unchecked")
-                            java.util.Map<Object, Object> map = (java.util.Map<Object, Object>) mapObj;
-                            map.put("sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                            map.put("sub-ass-force-style", style);
-                            map.put("sub-color", color);
-                            map.put("sub-border-color", border);
-                            if (fontsDir != null && !fontsDir.isEmpty()) {
-                                map.put("sub-fonts-dir", fontsDir);
-                                map.put("osd-fonts-dir", fontsDir);
-                            }
-                            if (font != null) map.put("sub-font", font);
-                            if (id != null) map.put("sub-font", id);
-                            if (font != null) map.put("sub-font", font);
-                            ok = true;
-                            lastErr = "via StringMap " + f.getName();
-                            break;
-                        } catch (Throwable e) {
-                            lastErr = "map:" + f.getName() + ":" + e.getClass().getSimpleName();
-                        }
-                    }
-                } catch (Throwable e) {
-                    lastErr = "maps:" + e.getClass().getSimpleName();
-                }
-            }
-            // --- D) 嵌套对象 setOption（跳过 Map）---
-            if (!ok) {
-                try {
-                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
-                        f.setAccessible(true);
-                        Object v = f.get(this);
-                        if (v == null || v instanceof java.util.Map) continue;
-                        for (String mn : new String[]{"setOption", "setProperty", "setOptionString"}) {
-                            try {
-                                java.lang.reflect.Method m = v.getClass().getMethod(mn, String.class, String.class);
-                                m.invoke(v, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                                m.invoke(v, "sub-ass-force-style", style);
-                                m.invoke(v, "sub-font", font);
-                                if (fontsDir != null) m.invoke(v, "sub-fonts-dir", fontsDir);
-                                ok = true;
-                                lastErr = "via field." + f.getName() + "." + mn;
-                                break;
-                            } catch (Throwable ignored) {}
-                        }
-                        if (ok) break;
-                    }
-                } catch (Throwable e) {
-                    lastErr = "field:" + e.getClass().getSimpleName();
-                }
-            }
+            // 禁止写任何 Map，避免 ClassCastException
             android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " id=" + id + " dir=" + fontsDir + " how=" + lastErr);
         } catch (Throwable e) {
             android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
@@ -307,6 +238,58 @@ def patch_mpv_player(path: Path) -> None:
         t = t[: semi + 1] + insert + t[semi + 1 :]
         print("[mod] hooked after hwdec option")
         break
+
+
+
+    # 源码级：在已有 setOption/setProperty("hwdec" 旁注入字体 option（与上游同 API，不用 Map）
+    def _inject_after_call(src: str, key: str) -> str:
+        idx = 0
+        while True:
+            pos = src.find(key, idx)
+            if pos < 0:
+                return src
+            # 找到方法名前缀 setOption / setProperty
+            line_start = src.rfind("\n", 0, pos) + 1
+            semi = src.find(";", pos)
+            if semi < 0:
+                return src
+            line = src[line_start:semi + 1]
+            # 解析 receiver.method(
+            mcall = re.search(r'((?:this\.)?[A-Za-z_][\w\.]*)\s*\(\s*"hwdec"', line)
+            if not mcall:
+                idx = semi + 1
+                continue
+            callee = mcall.group(1)  # e.g. setOption or this.setOption or options.set
+            # 若是 Map.put 则跳过
+            if ".put" in callee or callee.endswith("put"):
+                idx = semi + 1
+                continue
+            block = (
+                "\n        try {"
+                "\n            " + callee + "(\"sub-ass-override\", MpvSubtitleStylePolicy.ASS_OVERRIDE);"
+                "\n            " + callee + "(\"sub-fonts-dir\", MpvSubtitleStylePolicy.getSubFontsDirProperty());"
+                "\n            " + callee + "(\"sub-font\", MpvSubtitleStylePolicy.getSubFontProperty());"
+                "\n            " + callee + "(\"sub-ass-force-style\", MpvSubtitleStylePolicy.getAssForceStyle());"
+                "\n            " + callee + "(\"sub-color\", MpvSubtitleStylePolicy.getSubColorProperty());"
+                "\n        } catch (Throwable ignoredModFont) {}"
+            )
+            if "ignoredModFont" in src[semi:semi+400]:
+                return src
+            src = src[: semi + 1] + block + src[semi + 1 :]
+            print("[mod] source-inject font options after", key)
+            return src
+
+    for key in (
+        'setOption("hwdec"',
+        'setProperty("hwdec"',
+        'setOptionString("hwdec"',
+        'option("hwdec"',
+        "setOption(\"hwdec\"",
+    ):
+        t2 = _inject_after_call(t, key)
+        if t2 != t:
+            t = t2
+            break
 
 
     t = t.replace('"sub-ass-override", "scale"', '"sub-ass-override", "force"')
