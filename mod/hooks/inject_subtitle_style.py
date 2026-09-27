@@ -282,23 +282,19 @@ def patch_mpv_player(path: Path) -> None:
             print("[mod] WARN: no applyUserAssStyle call site")
 
 
-    for pat_opt in [
-        r'(setOption\s*\(\s*"hwdec"',
-        r'(setProperty\s*\(\s*"hwdec"',
-        r'(option\s*\(\s*"hwdec"',
-        r'(setOptionString\s*\(\s*"hwdec"',
-    ]:
-        if re.search(pat_opt, t):
-            t2, n = re.subn(
-                pat_opt + r'[^;]*;',
-                lambda m: m.group(0) + "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAssOpt) {}",
-                t,
-                count=1,
-            )
-            if n:
-                t = t2
-                print("[mod] hooked after hwdec option")
-                break
+    # optional: after hwdec option write, re-apply style (safe plain-string search)
+    for key in ('setOption("hwdec"', 'setProperty("hwdec"', 'option("hwdec"', 'setOptionString("hwdec"'):
+        idx = t.find(key)
+        if idx < 0:
+            continue
+        semi = t.find(';', idx)
+        if semi < 0:
+            continue
+        insert = "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAssOpt) {}"
+        t = t[: semi + 1] + insert + t[semi + 1 :]
+        print("[mod] hooked after hwdec option")
+        break
+
 
     t = t.replace('"sub-ass-override", "scale"', '"sub-ass-override", "force"')
     t = t.replace('"ass-style-override", "scale"', '"ass-style-override", "force"')
