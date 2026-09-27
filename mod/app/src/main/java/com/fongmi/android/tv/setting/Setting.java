@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.setting;
 
+import com.fongmi.android.tv.subtitle.SubtitleFontManager;
+
 import com.fongmi.android.tv.update.UpdateSource;
 
 import com.fongmi.android.tv.update.OciMirror;
@@ -948,71 +950,62 @@ public class Setting {
         putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
     }
 
-    /** 字幕字体：0楷体 1黑体(默认) 2宋体 3仿宋 4等宽；描边固定黑色 */
+    /**
+     * 字幕字体：内置 yahei/youyuan/kaiti（雅黑/幼圆/楷体）。
+     * 仍用 subtitle_font_index；旧 0~4 会映射到三选一。
+     */
     public static int getSubtitleFontIndex() {
-        int v = Prefers.getInt("subtitle_font_index", 1); // 默认黑体
-        if (v < 0 || v > 4) return 0;
-        return v;
+        int v = Prefers.getInt("subtitle_font_index", 0); // 默认雅黑
+        // 旧版 5 档 → 新 3 档
+        if (v < 0) v = 0;
+        if (v > 2) {
+            // 旧：0楷 1黑 2宋 3仿 4等宽
+            if (v == 0) v = 2; // 楷体
+            else if (v == 1 || v == 4) v = 0; // 黑/等宽 → 雅黑
+            else v = 0; // 宋/仿 → 雅黑
+            try { Prefers.put("subtitle_font_index", v); } catch (Throwable ignored) {}
+        }
+        return SubtitleFontManager.normalizeIndex(v);
     }
 
     public static void putSubtitleFontIndex(int index) {
-        if (index < 0 || index > 4) index = 0;
-        Prefers.put("subtitle_font_index", index);
+        Prefers.put("subtitle_font_index", SubtitleFontManager.normalizeIndex(index));
     }
 
     public static void cycleSubtitleFont() {
-        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % 5);
+        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % SubtitleFontManager.count());
+    }
+
+    /** 稳定 ID：yahei / youyuan / kaiti */
+    public static String getSubtitleFontId() {
+        return SubtitleFontManager.idOf(getSubtitleFontIndex());
     }
 
     /**
-     * MPV sub-font / fontconfig 族名。
-     * 楷体 cursive；黑体 sans；宋体 serif；仿宋 serif 斜体名；等宽 monospace。
+     * MPV sub-font：优先中文族名（与 TTF 内部名接近），否则用 id。
      */
     public static String getSubtitleFontFamily() {
-        int i = getSubtitleFontIndex();
-        if (i == 1) return "sans-serif";
-        if (i == 2) return "serif";
-        if (i == 3) return "serif"; // 仿宋接近宋体族，设备有 FangSong 时仍靠 Typeface 侧
-        if (i == 4) return "monospace";
-        return "cursive";
+        try {
+            return SubtitleFontManager.displayNameOf(getSubtitleFontIndex());
+        } catch (Throwable ignored) {
+        }
+        return SubtitleFontManager.idOf(0);
     }
 
     public static android.graphics.Typeface getSubtitleTypeface() {
-        int i = getSubtitleFontIndex();
         try {
-            if (i == 1) return android.graphics.Typeface.SANS_SERIF;
-            if (i == 2) return android.graphics.Typeface.SERIF;
-            if (i == 3) {
-                android.graphics.Typeface fang = android.graphics.Typeface.create("serif", android.graphics.Typeface.ITALIC);
-                if (fang != null) return fang;
-                return android.graphics.Typeface.SERIF;
-            }
-            if (i == 4) return android.graphics.Typeface.MONOSPACE;
-            android.graphics.Typeface kai = android.graphics.Typeface.create("cursive", android.graphics.Typeface.NORMAL);
-            if (kai != null) return kai;
-        } catch (Throwable ignored) {
+            return SubtitleFontManager.getTypeface(getSubtitleFontIndex());
+        } catch (Throwable e) {
+            return android.graphics.Typeface.SANS_SERIF;
         }
-        return android.graphics.Typeface.SERIF;
     }
 
     public static String getSubtitleFontLabel(boolean zh) {
-        int i = getSubtitleFontIndex();
-        if (zh) {
-            switch (i) {
-                case 1: return "黑体";
-                case 2: return "宋体";
-                case 3: return "仿宋";
-                case 4: return "等宽";
-                default: return "楷体";
-            }
+        try {
+            return SubtitleFontManager.labelOf(getSubtitleFontIndex(), zh);
+        } catch (Throwable ignored) {
         }
-        switch (i) {
-            case 1: return "Heiti";
-            case 2: return "Song";
-            case 3: return "FangSong";
-            case 4: return "Mono";
-            default: return "Kai";
-        }
+        return zh ? "雅黑" : "YaHei";
     }
 
     public static int getExitClearCacheGb() {

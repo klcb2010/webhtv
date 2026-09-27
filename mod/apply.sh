@@ -4,6 +4,30 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MOD="$(cd "$(dirname "$0")" && pwd)"
 echo "[mod] root=$ROOT"
 
+# 同步根目录 fonts/ 到 assets（若有 yahei/youyuan/kaiti）
+sync_subtitle_fonts() {
+  local src_dir="$MOD/fonts"
+  local dst_dir="$MOD/app/src/main/assets/fonts"
+  mkdir -p "$dst_dir"
+  if [[ -d "$src_dir" ]]; then
+    for id in yahei youyuan kaiti; do
+      for ext in ttf otf TTF OTF ttc TTC ""; do
+        local f
+        if [[ -n "$ext" ]]; then f="$src_dir/${id}.${ext}"; else f="$src_dir/${id}"; fi
+        if [[ -f "$f" ]]; then
+          local base
+          base="$(basename "$f")"
+          cp -f "$f" "$dst_dir/$base"
+          echo "[mod] font sync $base -> assets/fonts/"
+          break
+        fi
+      done
+    done
+  fi
+}
+sync_subtitle_fonts
+
+
 while IFS= read -r -d '' src; do
   rel="${src#"$MOD/"}"
   case "$rel" in

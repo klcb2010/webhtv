@@ -57,6 +57,11 @@ APPLY_METHOD = r"""
                     m.invoke(this, "sub-border-color", border);
                     m.invoke(this, "sub-shadow-color", border);
                     if (font != null && !font.isEmpty()) m.invoke(this, "sub-font", font);
+                    try {
+                        String fontsDir = MpvSubtitleStylePolicy.getSubFontsDirProperty();
+                        if (fontsDir != null && !fontsDir.isEmpty()) m.invoke(this, "sub-fonts-dir", fontsDir);
+                    } catch (Throwable ignoredDir) {}
+
                     ok = true;
                     break;
                 } catch (Throwable ignoredProp) {

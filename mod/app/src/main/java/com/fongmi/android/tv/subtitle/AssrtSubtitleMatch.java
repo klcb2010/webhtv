@@ -318,6 +318,11 @@ public final class AssrtSubtitleMatch {
             setProp.invoke(invokeOn, "sub-border-color", border);
             setProp.invoke(invokeOn, "sub-shadow-color", border);
             if (!TextUtils.isEmpty(font)) setProp.invoke(invokeOn, "sub-font", font);
+            try {
+                String fontsDir = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubFontsDirProperty();
+                if (!TextUtils.isEmpty(fontsDir)) setProp.invoke(invokeOn, "sub-fonts-dir", fontsDir);
+            } catch (Throwable ignored) {}
+
             Log.i(TAG, "applyMpvSubtitleStyle ok color=" + color);
         } catch (Throwable e) {
             Log.w(TAG, "applyMpvSubtitleStyle: " + e.getMessage());
