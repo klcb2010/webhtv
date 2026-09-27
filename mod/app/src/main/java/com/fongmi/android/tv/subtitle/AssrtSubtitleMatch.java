@@ -130,30 +130,61 @@ public final class AssrtSubtitleMatch {
             if (TextUtils.isEmpty(display)) display = file.getName();
         }
         String trackLabel = trackLabelFor(display, format, file.getName());
-        // 轨道列表常显示「文件名 + 格式」，把实体文件改成友好名，避免 hash.ass, SSA
-        File playFile = ensureFriendlySubFile(file, trackLabel, format);
-        Sub sub = Sub.create(trackLabel, playFile.getAbsolutePath(), lang == null ? "" : lang, format);
+        // 先用原文件立刻 setSub（避免友好重命名/拷贝阻塞几秒才出现字幕）
+        final File srcFile = file;
+        final String trackLabelF = trackLabel;
+        final String formatF = format;
+        final String displayF = display;
+        final String langF = lang == null ? "" : lang;
+        Sub sub = Sub.create(trackLabel, srcFile.getAbsolutePath(), langF, format);
         sub.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
         player.setSub(sub);
         try {
             applyMpvSubtitleStyle(player);
         } catch (Throwable ignored) {
         }
-        try {
-            if (sLastHistory != null) {
-                SubtitleRestoreCoordinator.remember(sLastHistory, sub);
-            } else if (sLastEpisode != null) {
-                SubtitleRestoreCoordinator.remember("", sLastEpisode.getUrl(), sub);
-            }
-        } catch (Throwable ignored) {}
         sPendingSelectName = trackLabel;
         sPendingSelectFormat = format;
         sPreferExternal = true;
         sForceSettled = false;
         persistTextTrackSelection(player, trackLabel, format);
+        // 后台：耐久拷贝 + 友好名 + 记忆（不挡主线程启用）
+        final History hist = sLastHistory;
+        final Episode epis = sLastEpisode;
+        final PlayerManager pm0 = player;
         try {
-            rememberSub(sLastHistory, sLastEpisode, file, display, lang, format);
-        } catch (Throwable ignored) {
+            Task.execute(() -> {
+                try {
+                    File durable = durableCopy(srcFile);
+                    if (durable == null || !durable.isFile()) durable = srcFile;
+                    File friendly = ensureFriendlySubFile(durable, trackLabelF, formatF);
+                    if (friendly == null || !friendly.isFile()) friendly = durable;
+                    rememberSub(hist, epis, durable, displayF, langF, formatF);
+                    try {
+                        Sub sub2 = Sub.create(trackLabelF, friendly.getAbsolutePath(), langF, formatF);
+                        sub2.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+                        if (hist != null) SubtitleRestoreCoordinator.remember(hist, sub2);
+                    } catch (Throwable ignored) {
+                    }
+                    // 友好路径就绪后再 setSub 一次，刷新轨名
+                    final File ff = friendly;
+                    App.post(() -> {
+                        try {
+                            if (pm0 == null || pm0.isEmpty()) return;
+                            Sub s3 = Sub.create(trackLabelF, ff.getAbsolutePath(), langF, formatF);
+                            s3.setFlag(C.SELECTION_FLAG_DEFAULT | C.SELECTION_FLAG_FORCED);
+                            pm0.setSub(s3);
+                            persistAndSelectText(pm0, trackLabelF, formatF);
+                        } catch (Throwable ignored) {
+                        }
+                    });
+                } catch (Throwable e) {
+                    Log.w(TAG, "bg remember/rename: " + e.getMessage());
+                    try { rememberSub(hist, epis, srcFile, displayF, langF, formatF); } catch (Throwable ignored) {}
+                }
+            });
+        } catch (Throwable e) {
+            try { rememberSub(sLastHistory, sLastEpisode, srcFile, display, lang, format); } catch (Throwable ignored) {}
         }
         // setMediaItem 后轨道恢复可能先选内嵌，延迟再强制选外挂名
         final String disp = trackLabel;
@@ -1110,29 +1141,36 @@ public final class AssrtSubtitleMatch {
     /** 切换解码/内核后重新挂外挂字幕（从 remember 缓存） */
     public static void reapplyAfterPlayerChange(PlayerProvider playerProvider) {
         try {
-            History h = sLastHistory;
-            Episode ep = sLastEpisode;
-            if (h == null && ep == null) return;
-            PlayerManager player = playerProvider == null ? null : playerProvider.get();
-            if (player == null || player.isEmpty()) {
-                App.post(() -> reapplyAfterPlayerChange(playerProvider), 600);
-                return;
-            }
-            // 优先 pending 名，再 tryRestore
-            if (!TextUtils.isEmpty(sPendingSelectName) || sPreferExternal) {
-                boolean ok = tryRestoreSub(null, h, ep, playerProvider);
-                if (!ok) {
-                    App.post(() -> {
-                        try {
-                            tryRestoreSub(null, sLastHistory, sLastEpisode, playerProvider);
-                        } catch (Throwable ignored) {
+            sPreferExternal = true;
+            sForceSettled = false;
+            Runnable once = () -> {
+                try {
+                    History h = sLastHistory;
+                    Episode ep = sLastEpisode;
+                    PlayerManager player = playerProvider == null ? null : playerProvider.get();
+                    if (player == null || player.isEmpty()) return;
+                    boolean ok = tryRestoreSub(null, h, ep, playerProvider);
+                    if (!ok) {
+                        String[] parts = loadCachedSubPayload(h, ep);
+                        if (parts != null && parts.length >= 1) {
+                            File f = new File(parts[0]);
+                            if (f.isFile()) {
+                                String name = parts.length > 1 ? parts[1] : f.getName();
+                                String lang = parts.length > 2 ? parts[2] : "";
+                                String fmt = parts.length > 3 ? parts[3] : "";
+                                applyToPlayer(player, f, name, lang, fmt);
+                            }
                         }
-                    }, 1200);
+                    }
+                    Log.i(TAG, "reapplyAfterPlayerChange tick prefer=" + sPreferExternal + " pending=" + sPendingSelectName);
+                } catch (Throwable e) {
+                    Log.w(TAG, "reapply tick: " + e.getMessage());
                 }
-            } else {
-                tryRestoreSub(null, h, ep, playerProvider);
-            }
-            Log.i(TAG, "reapplyAfterPlayerChange done prefer=" + sPreferExternal + " pending=" + sPendingSelectName);
+            };
+            once.run();
+            App.post(once, 400);
+            App.post(once, 1200);
+            App.post(once, 2800);
         } catch (Throwable e) {
             Log.w(TAG, "reapplyAfterPlayerChange: " + e.getMessage());
         }
