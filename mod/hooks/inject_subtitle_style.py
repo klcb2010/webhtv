@@ -30,7 +30,10 @@ private CaptionStyle defaultCaptionStyle() {
         } catch (Throwable ignored) {
         }
         try {
-            String fam = Setting.getSubtitleFontFamily();
+            // 优先文件主名 yahei，再中文名
+            String fam = MpvSubtitleStylePolicy.getSubFontProperty();
+            if (fam == null || fam.isEmpty()) fam = Setting.getSubtitleFontId();
+            if (fam == null || fam.isEmpty()) fam = Setting.getSubtitleFontFamily();
             if (fam != null && !fam.isEmpty()) font = fam;
         } catch (Throwable ignored) {
         }
@@ -40,45 +43,92 @@ private CaptionStyle defaultCaptionStyle() {
 """.strip()
 
 APPLY_METHOD = r"""
-    /** mod: user subtitle color/font -> MPV props (force + force-style + sub-color) */
     private void applyUserAssStyle() {
         try {
+            com.fongmi.android.tv.subtitle.SubtitleFontManager.prepareAllFonts();
             String style = MpvSubtitleStylePolicy.getAssForceStyle();
             String color = MpvSubtitleStylePolicy.getSubColorProperty();
             String border = MpvSubtitleStylePolicy.getSubBorderColorProperty();
             String font = MpvSubtitleStylePolicy.getSubFontProperty();
+            String fontsDir = MpvSubtitleStylePolicy.getSubFontsDirProperty();
             boolean ok = false;
+            // strategy 1: setProperty / setOption (String, String)
             for (String mn : new String[]{"setProperty", "setOption", "option"}) {
                 try {
-                    java.lang.reflect.Method m = getClass().getMethod(mn, String.class, String.class);
+                    java.lang.reflect.Method m = null;
+                    try { m = getClass().getMethod(mn, String.class, String.class); } catch (Throwable ignoredM) {}
+                    if (m == null) {
+                        try { m = getClass().getDeclaredMethod(mn, String.class, String.class); m.setAccessible(true); } catch (Throwable ignoredM2) {}
+                    }
+                    if (m == null) continue;
                     m.invoke(this, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
                     m.invoke(this, "sub-ass-force-style", style);
                     m.invoke(this, "sub-color", color);
                     m.invoke(this, "sub-border-color", border);
                     m.invoke(this, "sub-shadow-color", border);
-                    if (font != null && !font.isEmpty()) m.invoke(this, "sub-font", font);
-                    try {
-                        String fontsDir = MpvSubtitleStylePolicy.getSubFontsDirProperty();
-                        if (fontsDir != null && !fontsDir.isEmpty()) m.invoke(this, "sub-fonts-dir", fontsDir);
-                    } catch (Throwable ignoredDir) {}
-
+                    if (font != null && !font.isEmpty()) {
+                        m.invoke(this, "sub-font", font);
+                        // 再试 id / 文件名（部分 MPV 认文件名不认中文族名）
+                        try {
+                            String id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId();
+                            if (id != null) m.invoke(this, "sub-font", id);
+                        } catch (Throwable ignoredId) {}
+                    }
+                    if (fontsDir != null && !fontsDir.isEmpty()) {
+                        m.invoke(this, "sub-fonts-dir", fontsDir);
+                        m.invoke(this, "osd-fonts-dir", fontsDir);
+                    }
                     ok = true;
                     break;
-                } catch (Throwable ignoredProp) {
+                } catch (Throwable ignored) {
                 }
             }
+            // strategy 2: command("set", key, value)
             if (!ok) {
                 try {
-                    java.lang.reflect.Method cmd = getClass().getMethod("command", String[].class);
-                    cmd.invoke(this, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
-                    cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
-                    cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
-                    ok = true;
-                } catch (Throwable ignoredCmd) {
+                    java.lang.reflect.Method cmd = null;
+                    try { cmd = getClass().getMethod("command", String[].class); } catch (Throwable ignoredC) {}
+                    if (cmd == null) {
+                        try { cmd = getClass().getDeclaredMethod("command", String[].class); cmd.setAccessible(true); } catch (Throwable ignoredC2) {}
+                    }
+                    if (cmd != null) {
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
+                        if (font != null) cmd.invoke(this, (Object) new String[]{"set", "sub-font", font});
+                        if (fontsDir != null && !fontsDir.isEmpty()) {
+                            cmd.invoke(this, (Object) new String[]{"set", "sub-fonts-dir", fontsDir});
+                        }
+                        ok = true;
+                    }
+                } catch (Throwable ignored) {
                 }
             }
-            if (ok) android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok color=" + color);
-            else android.util.Log.d("MpvSubStyle", "applyUserAssStyle reflect-skip (CaptionStyle path may still apply) color=" + color);
+            // strategy 3: walk fields for nested mpv handle
+            if (!ok) {
+                try {
+                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
+                        f.setAccessible(true);
+                        Object v = f.get(this);
+                        if (v == null) continue;
+                        for (String mn : new String[]{"setProperty", "setOption"}) {
+                            try {
+                                java.lang.reflect.Method m = v.getClass().getMethod(mn, String.class, String.class);
+                                m.invoke(v, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                                m.invoke(v, "sub-ass-force-style", style);
+                                m.invoke(v, "sub-font", font);
+                                if (fontsDir != null && !fontsDir.isEmpty()) m.invoke(v, "sub-fonts-dir", fontsDir);
+                                ok = true;
+                                break;
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        if (ok) break;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " dir=" + fontsDir);
         } catch (Throwable e) {
             android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
         }

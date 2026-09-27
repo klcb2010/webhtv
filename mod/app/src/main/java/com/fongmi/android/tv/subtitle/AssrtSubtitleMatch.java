@@ -255,6 +255,17 @@ public final class AssrtSubtitleMatch {
     /**
      * MPV：反射写入 sub-ass-override / force-style / sub-color（对齐社区脚本）。
      */
+
+    /** 设置里切换字幕字体/颜色后调用：对当前播放器重写 MPV 属性 */
+    public static void notifySubtitleStyleChanged() {
+        try {
+            com.fongmi.android.tv.subtitle.SubtitleFontManager.prepareAllFonts();
+        } catch (Throwable ignored) {
+        }
+        // 无全局 Player 引用时仅准备字体；播放中由 onPlayerReady / applyToPlayer 延迟路径生效
+        Log.i(TAG, "notifySubtitleStyleChanged font prepared");
+    }
+
     public static void applyMpvSubtitleStyle(PlayerManager player) {
         if (player == null) return;
         try {
@@ -312,6 +323,8 @@ public final class AssrtSubtitleMatch {
             String color = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubColorProperty();
             String border = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubBorderColorProperty();
             String font = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubFontProperty();
+            // 确保字体已解压到 filesDir
+            try { com.fongmi.android.tv.subtitle.SubtitleFontManager.prepareAllFonts(); } catch (Throwable ignoredPrep) {}
             setProp.invoke(invokeOn, "sub-ass-override", com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.ASS_OVERRIDE);
             setProp.invoke(invokeOn, "sub-ass-force-style", style);
             setProp.invoke(invokeOn, "sub-color", color);
@@ -319,11 +332,18 @@ public final class AssrtSubtitleMatch {
             setProp.invoke(invokeOn, "sub-shadow-color", border);
             if (!TextUtils.isEmpty(font)) setProp.invoke(invokeOn, "sub-font", font);
             try {
-                String fontsDir = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubFontsDirProperty();
-                if (!TextUtils.isEmpty(fontsDir)) setProp.invoke(invokeOn, "sub-fonts-dir", fontsDir);
-            } catch (Throwable ignored) {}
-
-            Log.i(TAG, "applyMpvSubtitleStyle ok color=" + color);
+                String id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId();
+                if (!TextUtils.isEmpty(id)) setProp.invoke(invokeOn, "sub-font", id);
+            } catch (Throwable ignoredId) {}
+            String fontsDir = "";
+            try {
+                fontsDir = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.getSubFontsDirProperty();
+                if (!TextUtils.isEmpty(fontsDir)) {
+                    setProp.invoke(invokeOn, "sub-fonts-dir", fontsDir);
+                    setProp.invoke(invokeOn, "osd-fonts-dir", fontsDir);
+                }
+            } catch (Throwable ignoredDir) {}
+            Log.i(TAG, "applyMpvSubtitleStyle ok color=" + color + " font=" + font + " dir=" + fontsDir);
         } catch (Throwable e) {
             Log.w(TAG, "applyMpvSubtitleStyle: " + e.getMessage());
         }

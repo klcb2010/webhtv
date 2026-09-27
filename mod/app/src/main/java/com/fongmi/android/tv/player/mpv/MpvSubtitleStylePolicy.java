@@ -18,9 +18,12 @@ public final class MpvSubtitleStylePolicy {
     public static String getAssForceStyle() {
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
-        String fontName = Setting.getSubtitleFontFamily();
-        if (fontName == null || fontName.isEmpty()) fontName = "雅黑";
-        return "FontName=" + fontName
+        // FontName 同时写中文名与 id，提高 libass 命中率
+        String zh = Setting.getSubtitleFontFamily();
+        String id = Setting.getSubtitleFontId();
+        if (zh == null || zh.isEmpty()) zh = "雅黑";
+        if (id == null || id.isEmpty()) id = "yahei";
+        return "FontName=" + zh
                 + ",PrimaryColour=" + primary
                 + ",SecondaryColour=" + primary
                 + ",OutlineColour=&H000000&,BackColour=&H000000&"
@@ -39,16 +42,33 @@ public final class MpvSubtitleStylePolicy {
         return "0.0/0.0/0.0";
     }
 
+    /**
+     * MPV sub-font：优先用解压后的文件主名（yahei），再中文名。
+     */
     public static String getSubFontProperty() {
+        try {
+            File f = SubtitleFontManager.getFontFile(Setting.getSubtitleFontIndex());
+            if (f != null && f.isFile()) {
+                String name = f.getName();
+                int dot = name.lastIndexOf('.');
+                if (dot > 0) name = name.substring(0, dot);
+                return name;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            String id = Setting.getSubtitleFontId();
+            if (id != null && !id.isEmpty()) return id;
+        } catch (Throwable ignored) {
+        }
         try {
             String fam = Setting.getSubtitleFontFamily();
             if (fam != null && !fam.isEmpty()) return fam;
         } catch (Throwable ignored) {
         }
-        return "雅黑";
+        return "yahei";
     }
 
-    /** MPV sub-fonts-dir：解压后的内置字体目录 */
     public static String getSubFontsDirProperty() {
         try {
             SubtitleFontManager.prepareAllFonts();

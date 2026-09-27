@@ -359,6 +359,81 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         Notify.dismissToast();
         String channel = selected == null ? Update.CHANNEL_STABLE : selected.channel;
         dialog = UpdateDialog.create().stable(stable).beta(beta).selected(channel).listener(this).show(activity);
+        final UpdateDialog dlg = dialog;
+        App.post(() -> focusUpdateConfirm(dlg), 80);
+        App.post(() -> focusUpdateConfirm(dlg), 250);
+        App.post(() -> focusUpdateConfirm(dlg), 500);
+    }
+
+    private void focusUpdateConfirm(UpdateDialog dlg) {
+        if (dlg == null) return;
+        try {
+            android.view.View root = dlg.getView();
+            if (root == null) {
+                try {
+                    java.lang.reflect.Method m = dlg.getClass().getMethod("getDialog");
+                    Object d = m.invoke(dlg);
+                    if (d instanceof android.app.Dialog) {
+                        android.view.Window w = ((android.app.Dialog) d).getWindow();
+                        if (w != null) root = w.getDecorView();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            if (root == null) return;
+            android.view.View target = null;
+            for (String name : new String[]{"confirm", "update", "positive", "btnUpdate", "btn_update", "download"}) {
+                try {
+                    int id = root.getResources().getIdentifier(name, "id", root.getContext().getPackageName());
+                    if (id != 0) {
+                        android.view.View v = root.findViewById(id);
+                        if (v != null && v.getVisibility() == android.view.View.VISIBLE) {
+                            target = v;
+                            break;
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            if (target == null) {
+                try {
+                    target = root.findViewById(com.fongmi.android.tv.R.id.confirm);
+                } catch (Throwable ignored) {
+                }
+            }
+            if (target == null) {
+                target = findButtonByText(root, "更新", "Update", "升级");
+            }
+            if (target != null) {
+                target.setFocusable(true);
+                target.setFocusableInTouchMode(true);
+                target.requestFocus();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private android.view.View findButtonByText(android.view.View root, String... keywords) {
+        if (root == null) return null;
+        if (root instanceof android.widget.TextView) {
+            CharSequence cs = ((android.widget.TextView) root).getText();
+            if (cs != null) {
+                String s = cs.toString();
+                for (String k : keywords) {
+                    if (s.contains(k) && root.getVisibility() == android.view.View.VISIBLE && root.isEnabled()) {
+                        return root;
+                    }
+                }
+            }
+        }
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) root;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                android.view.View found = findButtonByText(g.getChildAt(i), keywords);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     @Override

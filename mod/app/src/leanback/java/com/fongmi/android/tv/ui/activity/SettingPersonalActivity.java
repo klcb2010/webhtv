@@ -186,6 +186,7 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setSubtitleFont(View view) {
         Setting.cycleSubtitleFont();
+        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
         refreshTexts();
     }
 
