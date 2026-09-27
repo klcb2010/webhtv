@@ -15,9 +15,10 @@ public final class MpvSubtitleStylePolicy {
     public static String getAssForceStyle() {
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
-        String zh = Setting.getSubtitleFontFamily(); // 雅黑/幼圆/楷体
+        String zh = Setting.getSubtitleFontFamily();
+        String id = Setting.getSubtitleFontId();
         if (zh == null || zh.isEmpty()) zh = "雅黑";
-        // FontName 用中文名（与别名文件 楷体.ttf 对应）
+        // 同时指定中文名（别名文件）——libass FontName
         return "FontName=" + zh
                 + ",PrimaryColour=" + primary
                 + ",SecondaryColour=" + primary
@@ -38,20 +39,20 @@ public final class MpvSubtitleStylePolicy {
     }
 
     /**
-     * sub-font：中文族名优先（配合 楷体.ttf 别名），再 id。
+     * sub-font：先 id（youyuan 曾生效），再中文名。
      */
     public static String getSubFontProperty() {
-        try {
-            String zh = Setting.getSubtitleFontFamily();
-            if (zh != null && !zh.isEmpty()) return zh;
-        } catch (Throwable ignored) {
-        }
         try {
             String id = Setting.getSubtitleFontId();
             if (id != null && !id.isEmpty()) return id;
         } catch (Throwable ignored) {
         }
-        return "雅黑";
+        try {
+            String zh = Setting.getSubtitleFontFamily();
+            if (zh != null && !zh.isEmpty()) return zh;
+        } catch (Throwable ignored) {
+        }
+        return "yahei";
     }
 
     public static String getSubFontsDirProperty() {

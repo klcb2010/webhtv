@@ -54,8 +54,8 @@ APPLY_METHOD = r"""
             String id = null;
             try { id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId(); } catch (Throwable ignored) {}
             boolean ok = false;
-            String lastErr = "";
-            // 只对「本对象」的 setOption/setProperty 算真正成功（Map 写入不算 ok）
+            String lastErr = "none";
+            // --- A) 本对象 setOption / setProperty ---
             for (String mn : new String[]{"setOption", "setProperty", "setOptionString", "setPropertyString", "option"}) {
                 try {
                     java.lang.reflect.Method m = null;
@@ -73,16 +73,15 @@ APPLY_METHOD = r"""
                     }
                     if (font != null) m.invoke(this, "sub-font", font);
                     if (id != null) try { m.invoke(this, "sub-font", id); } catch (Throwable ignored) {}
-                    // 再写回中文名（最终 sub-font）
                     if (font != null) m.invoke(this, "sub-font", font);
                     ok = true;
                     lastErr = "via this." + mn;
                     break;
                 } catch (Throwable e) {
-                    lastErr = mn + ":" + e.getMessage();
+                    lastErr = mn + ":" + e.getClass().getSimpleName();
                 }
             }
-            // command 路径
+            // --- B) command ---
             if (!ok) {
                 try {
                     java.lang.reflect.Method cmd = null;
@@ -101,10 +100,53 @@ APPLY_METHOD = r"""
                         lastErr = "via this.command";
                     }
                 } catch (Throwable e) {
-                    lastErr = "cmd:" + e.getMessage();
+                    lastErr = "cmd:" + e.getClass().getSimpleName();
                 }
             }
-            // 嵌套字段上的 setOption（非 Map）
+            // --- C) 仅写入「值全是 String」的 Map（避免 ClassCastException）---
+            if (!ok) {
+                try {
+                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
+                        try {
+                            if (!java.util.Map.class.isAssignableFrom(f.getType())) continue;
+                            f.setAccessible(true);
+                            Object mapObj = f.get(this);
+                            if (!(mapObj instanceof java.util.Map)) continue;
+                            java.util.Map<?, ?> raw = (java.util.Map<?, ?>) mapObj;
+                            boolean stringMap = true;
+                            for (Object val : raw.values()) {
+                                if (val != null && !(val instanceof String)) {
+                                    stringMap = false;
+                                    break;
+                                }
+                            }
+                            // 空 Map 也允许（启动前 options）
+                            if (!stringMap) continue;
+                            @SuppressWarnings("unchecked")
+                            java.util.Map<Object, Object> map = (java.util.Map<Object, Object>) mapObj;
+                            map.put("sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                            map.put("sub-ass-force-style", style);
+                            map.put("sub-color", color);
+                            map.put("sub-border-color", border);
+                            if (fontsDir != null && !fontsDir.isEmpty()) {
+                                map.put("sub-fonts-dir", fontsDir);
+                                map.put("osd-fonts-dir", fontsDir);
+                            }
+                            if (font != null) map.put("sub-font", font);
+                            if (id != null) map.put("sub-font", id);
+                            if (font != null) map.put("sub-font", font);
+                            ok = true;
+                            lastErr = "via StringMap " + f.getName();
+                            break;
+                        } catch (Throwable e) {
+                            lastErr = "map:" + f.getName() + ":" + e.getClass().getSimpleName();
+                        }
+                    }
+                } catch (Throwable e) {
+                    lastErr = "maps:" + e.getClass().getSimpleName();
+                }
+            }
+            // --- D) 嵌套对象 setOption（跳过 Map）---
             if (!ok) {
                 try {
                     for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
@@ -119,14 +161,14 @@ APPLY_METHOD = r"""
                                 m.invoke(v, "sub-font", font);
                                 if (fontsDir != null) m.invoke(v, "sub-fonts-dir", fontsDir);
                                 ok = true;
-                                lastErr = "via field " + f.getName() + "." + mn;
+                                lastErr = "via field." + f.getName() + "." + mn;
                                 break;
                             } catch (Throwable ignored) {}
                         }
                         if (ok) break;
                     }
                 } catch (Throwable e) {
-                    lastErr = "field:" + e.getMessage();
+                    lastErr = "field:" + e.getClass().getSimpleName();
                 }
             }
             android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " id=" + id + " dir=" + fontsDir + " how=" + lastErr);
