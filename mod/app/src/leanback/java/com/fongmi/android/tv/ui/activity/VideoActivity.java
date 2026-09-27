@@ -3444,6 +3444,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         player().switchPlayer(type);
         setPlayerKernel();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
     }
 
     private boolean refreshAndSwitchPlayerKernel(int type) {
@@ -3488,6 +3492,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
         setPlayerKernel();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
     }
 
     private void onDecode() {
@@ -3495,6 +3503,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         clearLyrics();
         player().toggleDecode();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
     }
 
     private void onTrack(View view) {
@@ -6064,6 +6076,31 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     /** 底栏呼出时定焦：取第一个可见可焦的控制按钮（避免 next 被隐藏时无焦点） */
     private View findFirstFocusableControlAction() {
+        // 固定视觉顺序：播放器内核 → 解码 → …（不要按 container 子序，避免定到第3个）
+        View[] preferred = new View[]{
+                mBinding.control.action.player,
+                mBinding.control.action.decode,
+                mBinding.control.action.playParams,
+                mBinding.control.action.speed,
+                mBinding.control.action.scale,
+                mBinding.control.action.text,
+                mBinding.control.action.audio,
+                mBinding.control.action.video,
+                mBinding.control.action.next,
+                mBinding.control.action.prev,
+                mBinding.control.action.episodes,
+                mBinding.control.action.reset,
+                mBinding.control.action.repeat
+        };
+        for (View v : preferred) {
+            try {
+                if (v == null || v.getVisibility() != View.VISIBLE) continue;
+                if (!v.isFocusable() || !v.isEnabled()) continue;
+                if (v == mBinding.control.action.opening || v == mBinding.control.action.ending) continue;
+                return v;
+            } catch (Throwable ignored) {
+            }
+        }
         try {
             android.view.ViewGroup container = mBinding.control.action.container;
             if (container != null) {
@@ -6076,21 +6113,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 }
             }
         } catch (Throwable ignored) {
-        }
-        // 回退顺序
-        View[] fallbacks = new View[]{
-                mBinding.control.action.player,
-                mBinding.control.action.decode,
-                mBinding.control.action.text,
-                mBinding.control.action.next,
-                mBinding.control.action.prev,
-                mBinding.control.action.episodes
-        };
-        for (View v : fallbacks) {
-            try {
-                if (v != null && v.getVisibility() == View.VISIBLE && v.isFocusable()) return v;
-            } catch (Throwable ignored) {
-            }
         }
         return mBinding.control.action.player;
     }
@@ -6437,7 +6459,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     public void onKeyDown() {
-        showControl(getFocus2());
+        // 每次下键呼出底栏都定到第一个可见按钮（不要粘在上次的第3个）
+        mFocus2 = null;
+        showControl(findFirstFocusableControlAction());
     }
 
     @Override

@@ -9,4 +9,3 @@
 7. 全局历史
 
 `bash mod/apply.sh` 后打包。
-yahei=雅黑  youyuan=幼圆   kaiti=楷体

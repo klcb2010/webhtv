@@ -3870,6 +3870,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         player().toggleDecode();
         setR1Callback();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
     }
 
     private boolean refreshAndSwitchDecode() {
@@ -3978,6 +3982,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         player().switchPlayer(type);
         setPlayerKernel();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
         setR1Callback();
     }
 
@@ -4033,6 +4041,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         setPlayerKernel();
         setDecode();
+        try {
+            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
+        } catch (Throwable ignored) {
+        }
         setR1Callback();
     }
 
