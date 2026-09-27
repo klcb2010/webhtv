@@ -135,28 +135,7 @@ APPLY_METHOD = r"""
                 } catch (Throwable e) {
                     lastErr = "cmd:" + e.getMessage();
                 }
-                // Map 字段塞选项（init 前）
-                try {
-                    for (java.lang.reflect.Field f : cls.getDeclaredFields()) {
-                        if (!java.util.Map.class.isAssignableFrom(f.getType())) continue;
-                        f.setAccessible(true);
-                        Object mapObj = f.get(inv);
-                        if (!(mapObj instanceof java.util.Map)) continue;
-                        @SuppressWarnings("unchecked")
-                        java.util.Map<Object, Object> map = (java.util.Map<Object, Object>) mapObj;
-                        map.put("sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                        map.put("sub-ass-force-style", style);
-                        map.put("sub-color", color);
-                        if (font != null) map.put("sub-font", font);
-                        if (fontsDir != null && !fontsDir.isEmpty()) map.put("sub-fonts-dir", fontsDir);
-                        ok = true;
-                        lastErr = "via Map field " + f.getName();
-                        break;
-                    }
-                } catch (Throwable e) {
-                    lastErr = "map:" + e.getMessage();
-                }
-                if (ok) break;
+                // 禁止往内部 Map 写 String（会 ClassCastException）
             }
             android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " dir=" + fontsDir + " how=" + lastErr);
         } catch (Throwable e) {

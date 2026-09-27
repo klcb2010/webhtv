@@ -211,6 +211,7 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
                 // 字幕轨：隐藏未重命名的 hash 文件名；显示名去掉重复扩展
                 if (type == C.TRACK_TYPE_TEXT) {
                     try {
+                        // hash 缓存名不展示；显示统一成「片名，ASS/SRT」
                         if (AssrtSubtitleMatch.shouldHideTextTrackLabel(name)) continue;
                         if (format.label != null && AssrtSubtitleMatch.shouldHideTextTrackLabel(format.label)) continue;
                         name = AssrtSubtitleMatch.sanitizeTrackDisplayName(name);
