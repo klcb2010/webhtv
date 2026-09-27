@@ -51,93 +51,85 @@ APPLY_METHOD = r"""
             String border = MpvSubtitleStylePolicy.getSubBorderColorProperty();
             String font = MpvSubtitleStylePolicy.getSubFontProperty();
             String fontsDir = MpvSubtitleStylePolicy.getSubFontsDirProperty();
+            String id = null;
+            try { id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId(); } catch (Throwable ignored) {}
             boolean ok = false;
             String lastErr = "";
-            // 候选：本对象、字段嵌套、常见 MPVLib 类
-            java.util.ArrayList<Object> targets = new java.util.ArrayList<>();
-            targets.add(this);
-            try {
-                for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
-                    try {
-                        f.setAccessible(true);
-                        Object v = f.get(this);
-                        if (v != null) targets.add(v);
-                    } catch (Throwable ignored) {}
-                }
-            } catch (Throwable ignored) {}
-            for (String cn : new String[]{
-                    "is.xyz.mpv.MPVLib",
-                    "dev.jdtech.mpv.MPVLib",
-                    "androidx.media3.mpvplayer.MpvLib",
-                    "androidx.media3.mpvplayer.MPV",
-                    "com.fongmi.android.tv.player.mpv.MpvLib"
-            }) {
+            // 只对「本对象」的 setOption/setProperty 算真正成功（Map 写入不算 ok）
+            for (String mn : new String[]{"setOption", "setProperty", "setOptionString", "setPropertyString", "option"}) {
                 try {
-                    Class<?> c = Class.forName(cn);
-                    targets.add(c); // static methods
-                } catch (Throwable ignored) {}
-            }
-            // 写属性
-            for (Object tgt : targets) {
-                if (tgt == null) continue;
-                Class<?> cls = (tgt instanceof Class) ? (Class<?>) tgt : tgt.getClass();
-                Object inv = (tgt instanceof Class) ? null : tgt;
-                // setOptionString / setPropertyString 等
-                for (String mn : new String[]{"setOptionString", "setPropertyString", "setOption", "setProperty", "option", "setConfig"}) {
-                    try {
-                        java.lang.reflect.Method m = null;
-                        try { m = cls.getMethod(mn, String.class, String.class); }
-                        catch (Throwable e1) {
-                            try { m = cls.getDeclaredMethod(mn, String.class, String.class); m.setAccessible(true); } catch (Throwable e2) {}
-                        }
-                        if (m == null) continue;
-                        // static?
-                        Object receiver = java.lang.reflect.Modifier.isStatic(m.getModifiers()) ? null : inv;
-                        if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && receiver == null) continue;
-                        m.invoke(receiver, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                        m.invoke(receiver, "sub-ass-force-style", style);
-                        m.invoke(receiver, "sub-color", color);
-                        m.invoke(receiver, "sub-border-color", border);
-                        if (font != null) m.invoke(receiver, "sub-font", font);
-                        if (fontsDir != null && !fontsDir.isEmpty()) {
-                            m.invoke(receiver, "sub-fonts-dir", fontsDir);
-                            try { m.invoke(receiver, "osd-fonts-dir", fontsDir); } catch (Throwable ignored) {}
-                        }
-                        ok = true;
-                        lastErr = "via " + cls.getName() + "." + mn;
-                        break;
-                    } catch (Throwable e) {
-                        lastErr = mn + ":" + e.getClass().getSimpleName() + " " + String.valueOf(e.getMessage());
+                    java.lang.reflect.Method m = null;
+                    try { m = getClass().getMethod(mn, String.class, String.class); } catch (Throwable e1) {
+                        try { m = getClass().getDeclaredMethod(mn, String.class, String.class); m.setAccessible(true); } catch (Throwable e2) {}
                     }
+                    if (m == null) continue;
+                    m.invoke(this, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                    m.invoke(this, "sub-ass-force-style", style);
+                    m.invoke(this, "sub-color", color);
+                    m.invoke(this, "sub-border-color", border);
+                    if (fontsDir != null && !fontsDir.isEmpty()) {
+                        m.invoke(this, "sub-fonts-dir", fontsDir);
+                        try { m.invoke(this, "osd-fonts-dir", fontsDir); } catch (Throwable ignored) {}
+                    }
+                    if (font != null) m.invoke(this, "sub-font", font);
+                    if (id != null) try { m.invoke(this, "sub-font", id); } catch (Throwable ignored) {}
+                    // 再写回中文名（最终 sub-font）
+                    if (font != null) m.invoke(this, "sub-font", font);
+                    ok = true;
+                    lastErr = "via this." + mn;
+                    break;
+                } catch (Throwable e) {
+                    lastErr = mn + ":" + e.getMessage();
                 }
-                if (ok) break;
-                // command(String[])
+            }
+            // command 路径
+            if (!ok) {
                 try {
                     java.lang.reflect.Method cmd = null;
-                    try { cmd = cls.getMethod("command", String[].class); }
-                    catch (Throwable e1) {
-                        try { cmd = cls.getDeclaredMethod("command", String[].class); cmd.setAccessible(true); } catch (Throwable e2) {}
+                    try { cmd = getClass().getMethod("command", String[].class); } catch (Throwable e1) {
+                        try { cmd = getClass().getDeclaredMethod("command", String[].class); cmd.setAccessible(true); } catch (Throwable e2) {}
                     }
                     if (cmd != null) {
-                        Object receiver = java.lang.reflect.Modifier.isStatic(cmd.getModifiers()) ? null : inv;
-                        if (java.lang.reflect.Modifier.isStatic(cmd.getModifiers()) || receiver != null) {
-                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
-                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-ass-force-style", style});
-                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-color", color});
-                            if (font != null) cmd.invoke(receiver, (Object) new String[]{"set", "sub-font", font});
-                            if (fontsDir != null && !fontsDir.isEmpty())
-                                cmd.invoke(receiver, (Object) new String[]{"set", "sub-fonts-dir", fontsDir});
-                            ok = true;
-                            lastErr = "via command " + cls.getName();
-                            break;
-                        }
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
+                        cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
+                        if (fontsDir != null && !fontsDir.isEmpty())
+                            cmd.invoke(this, (Object) new String[]{"set", "sub-fonts-dir", fontsDir});
+                        if (font != null)
+                            cmd.invoke(this, (Object) new String[]{"set", "sub-font", font});
+                        ok = true;
+                        lastErr = "via this.command";
                     }
                 } catch (Throwable e) {
                     lastErr = "cmd:" + e.getMessage();
                 }
-                // 禁止往内部 Map 写 String（会 ClassCastException）
             }
-            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " dir=" + fontsDir + " how=" + lastErr);
+            // 嵌套字段上的 setOption（非 Map）
+            if (!ok) {
+                try {
+                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
+                        f.setAccessible(true);
+                        Object v = f.get(this);
+                        if (v == null || v instanceof java.util.Map) continue;
+                        for (String mn : new String[]{"setOption", "setProperty", "setOptionString"}) {
+                            try {
+                                java.lang.reflect.Method m = v.getClass().getMethod(mn, String.class, String.class);
+                                m.invoke(v, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                                m.invoke(v, "sub-ass-force-style", style);
+                                m.invoke(v, "sub-font", font);
+                                if (fontsDir != null) m.invoke(v, "sub-fonts-dir", fontsDir);
+                                ok = true;
+                                lastErr = "via field " + f.getName() + "." + mn;
+                                break;
+                            } catch (Throwable ignored) {}
+                        }
+                        if (ok) break;
+                    }
+                } catch (Throwable e) {
+                    lastErr = "field:" + e.getMessage();
+                }
+            }
+            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " id=" + id + " dir=" + fontsDir + " how=" + lastErr);
         } catch (Throwable e) {
             android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
         }

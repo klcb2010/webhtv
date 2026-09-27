@@ -5,9 +5,6 @@ import com.fongmi.android.tv.subtitle.SubtitleFontManager;
 
 import java.io.File;
 
-/**
- * MPV 字幕样式：颜色 + 内置字体（yahei/youyuan/kaiti）。
- */
 public final class MpvSubtitleStylePolicy {
 
     public static final String ASS_OVERRIDE = "force";
@@ -18,11 +15,9 @@ public final class MpvSubtitleStylePolicy {
     public static String getAssForceStyle() {
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
-        // FontName 同时写中文名与 id，提高 libass 命中率
-        String zh = Setting.getSubtitleFontFamily();
-        String id = Setting.getSubtitleFontId();
+        String zh = Setting.getSubtitleFontFamily(); // 雅黑/幼圆/楷体
         if (zh == null || zh.isEmpty()) zh = "雅黑";
-        if (id == null || id.isEmpty()) id = "yahei";
+        // FontName 用中文名（与别名文件 楷体.ttf 对应）
         return "FontName=" + zh
                 + ",PrimaryColour=" + primary
                 + ",SecondaryColour=" + primary
@@ -43,17 +38,12 @@ public final class MpvSubtitleStylePolicy {
     }
 
     /**
-     * MPV sub-font：优先用解压后的文件主名（yahei），再中文名。
+     * sub-font：中文族名优先（配合 楷体.ttf 别名），再 id。
      */
     public static String getSubFontProperty() {
         try {
-            File f = SubtitleFontManager.getFontFile(Setting.getSubtitleFontIndex());
-            if (f != null && f.isFile()) {
-                String name = f.getName();
-                int dot = name.lastIndexOf('.');
-                if (dot > 0) name = name.substring(0, dot);
-                return name;
-            }
+            String zh = Setting.getSubtitleFontFamily();
+            if (zh != null && !zh.isEmpty()) return zh;
         } catch (Throwable ignored) {
         }
         try {
@@ -61,12 +51,7 @@ public final class MpvSubtitleStylePolicy {
             if (id != null && !id.isEmpty()) return id;
         } catch (Throwable ignored) {
         }
-        try {
-            String fam = Setting.getSubtitleFontFamily();
-            if (fam != null && !fam.isEmpty()) return fam;
-        } catch (Throwable ignored) {
-        }
-        return "yahei";
+        return "雅黑";
     }
 
     public static String getSubFontsDirProperty() {

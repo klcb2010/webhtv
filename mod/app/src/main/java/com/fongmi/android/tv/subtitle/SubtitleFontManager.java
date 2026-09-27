@@ -129,6 +129,41 @@ public final class SubtitleFontManager {
                 Log.w(TAG, "prepare " + id + ": " + e.getMessage());
             }
         }
+        try {
+            createAliases();
+        } catch (Throwable e) {
+            Log.w(TAG, "aliases: " + e.getMessage());
+        }
+    }
+
+    /** libass 常按中文族名查找：复制别名文件 雅黑.ttf / 幼圆.ttf / 楷体.ttf */
+    private static void createAliases() {
+        File dir = getFontsDir();
+        if (dir == null) return;
+        String[][] pairs = new String[][]{
+                {ID_YAHEI, "雅黑"},
+                {ID_YOUYUAN, "幼圆"},
+                {ID_KAITI, "楷体"},
+                {ID_YAHEI, "Microsoft YaHei"},
+                {ID_YAHEI, "YaHei"},
+                {ID_YOUYUAN, "YouYuan"},
+                {ID_KAITI, "KaiTi"},
+                {ID_KAITI, "STKaiti"},
+        };
+        for (String[] p : pairs) {
+            File src = ensureFontFile(p[0]);
+            if (src == null || !src.isFile()) continue;
+            File dst = new File(dir, p[1] + ".ttf");
+            if (dst.isFile() && dst.length() == src.length()) continue;
+            try (java.io.FileInputStream in = new java.io.FileInputStream(src);
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            } catch (Throwable e) {
+                Log.w(TAG, "alias " + p[1] + ": " + e.getMessage());
+            }
+        }
     }
 
     private static Typeface loadTypeface(String id) {
