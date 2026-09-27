@@ -208,9 +208,15 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
                 Format format = trackGroup.getTrackFormat(j);
                 String name = provider.getTrackName(format);
                 Log.d("TrackDialog", "track type=" + type + " id=" + format.id + " label=" + format.label + " lang=" + format.language + " codec=" + format.codecs + " mime=" + format.sampleMimeType + " name=" + name);
-                // Keep the player's native track id with the visible item. Runtime track
-                // switching must target this stable id directly; the formatted description
-                // is only persisted for restoring a preference on the next playback.
+                // 字幕轨：隐藏未重命名的 hash 文件名；显示名去掉重复扩展
+                if (type == C.TRACK_TYPE_TEXT) {
+                    try {
+                        if (AssrtSubtitleMatch.shouldHideTextTrackLabel(name)) continue;
+                        if (format.label != null && AssrtSubtitleMatch.shouldHideTextTrackLabel(format.label)) continue;
+                        name = AssrtSubtitleMatch.sanitizeTrackDisplayName(name);
+                    } catch (Throwable ignored) {
+                    }
+                }
                 Track item = new Track(type, name, PlayerHelper.describeFormat(format)).playerId(format.id);
                 item.setSelected(secondarySubtitle ? player.isSecondarySubtitleSelected(format) : trackGroup.isTrackSelected(j));
                 items.add(item);

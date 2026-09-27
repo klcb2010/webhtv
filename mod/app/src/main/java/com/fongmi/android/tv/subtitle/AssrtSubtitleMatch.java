@@ -393,6 +393,52 @@ public final class AssrtSubtitleMatch {
         return n;
     }
 
+
+    /** 轨列表：hash / 缓存文件名的外挂轨不展示（已有友好名副本时） */
+    public static boolean shouldHideTextTrackLabel(String name) {
+        try {
+            if (TextUtils.isEmpty(name)) return true;
+            String core = stripSubtitleExtension(name.trim());
+            // 去掉 ，ASS / ,SRT 后缀再判断
+            core = core.replaceAll("(?i)[，,]\\s*(ASS|SSA|SRT|VTT|TTML)\\s*$", "").trim();
+            if (looksLikeHashFileName(core)) return true;
+            // 纯 hex + 扩展 出现在整串
+            if (name.matches("(?i).*[a-f0-9]{20,}.*\\.(ass|ssa|srt|vtt).*")) return true;
+            if (core.matches("(?i)[a-f0-9]{16,}")) return true;
+            return false;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    /** 轨列表显示：去掉重复扩展名，统一「片名，ASS」 */
+    public static String sanitizeTrackDisplayName(String name) {
+        try {
+            if (TextUtils.isEmpty(name)) return name;
+            String n = name.trim();
+            String tag = "";
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)[，,]\\s*(ASS|SSA|SRT|VTT|TTML)\\s*$").matcher(n);
+            if (m.find()) {
+                tag = m.group(1).toUpperCase(java.util.Locale.ROOT);
+                if ("SSA".equals(tag)) tag = "ASS";
+                n = n.substring(0, m.start()).trim();
+            }
+            n = stripSubtitleExtension(n);
+            if (TextUtils.isEmpty(tag)) {
+                // 从原文猜
+                String low = name.toLowerCase(java.util.Locale.ROOT);
+                if (low.contains("srt")) tag = "SRT";
+                else if (low.contains("vtt")) tag = "VTT";
+                else if (low.contains("ass") || low.contains("ssa")) tag = "ASS";
+            }
+            if (TextUtils.isEmpty(n)) return name;
+            if (TextUtils.isEmpty(tag)) return n;
+            return n + "，" + tag;
+        } catch (Throwable e) {
+            return name;
+        }
+    }
+
     private static boolean looksLikeHashFileName(String base) {
         if (TextUtils.isEmpty(base)) return true;
         String b = base.trim();

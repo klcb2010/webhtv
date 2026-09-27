@@ -52,83 +52,113 @@ APPLY_METHOD = r"""
             String font = MpvSubtitleStylePolicy.getSubFontProperty();
             String fontsDir = MpvSubtitleStylePolicy.getSubFontsDirProperty();
             boolean ok = false;
-            // strategy 1: setProperty / setOption (String, String)
-            for (String mn : new String[]{"setProperty", "setOption", "option"}) {
-                try {
-                    java.lang.reflect.Method m = null;
-                    try { m = getClass().getMethod(mn, String.class, String.class); } catch (Throwable ignoredM) {}
-                    if (m == null) {
-                        try { m = getClass().getDeclaredMethod(mn, String.class, String.class); m.setAccessible(true); } catch (Throwable ignoredM2) {}
-                    }
-                    if (m == null) continue;
-                    m.invoke(this, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                    m.invoke(this, "sub-ass-force-style", style);
-                    m.invoke(this, "sub-color", color);
-                    m.invoke(this, "sub-border-color", border);
-                    m.invoke(this, "sub-shadow-color", border);
-                    if (font != null && !font.isEmpty()) {
-                        m.invoke(this, "sub-font", font);
-                        // 再试 id / 文件名（部分 MPV 认文件名不认中文族名）
-                        try {
-                            String id = com.fongmi.android.tv.setting.Setting.getSubtitleFontId();
-                            if (id != null) m.invoke(this, "sub-font", id);
-                        } catch (Throwable ignoredId) {}
-                    }
-                    if (fontsDir != null && !fontsDir.isEmpty()) {
-                        m.invoke(this, "sub-fonts-dir", fontsDir);
-                        m.invoke(this, "osd-fonts-dir", fontsDir);
-                    }
-                    ok = true;
-                    break;
-                } catch (Throwable ignored) {
-                }
-            }
-            // strategy 2: command("set", key, value)
-            if (!ok) {
-                try {
-                    java.lang.reflect.Method cmd = null;
-                    try { cmd = getClass().getMethod("command", String[].class); } catch (Throwable ignoredC) {}
-                    if (cmd == null) {
-                        try { cmd = getClass().getDeclaredMethod("command", String[].class); cmd.setAccessible(true); } catch (Throwable ignoredC2) {}
-                    }
-                    if (cmd != null) {
-                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
-                        cmd.invoke(this, (Object) new String[]{"set", "sub-ass-force-style", style});
-                        cmd.invoke(this, (Object) new String[]{"set", "sub-color", color});
-                        if (font != null) cmd.invoke(this, (Object) new String[]{"set", "sub-font", font});
-                        if (fontsDir != null && !fontsDir.isEmpty()) {
-                            cmd.invoke(this, (Object) new String[]{"set", "sub-fonts-dir", fontsDir});
-                        }
-                        ok = true;
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-            // strategy 3: walk fields for nested mpv handle
-            if (!ok) {
-                try {
-                    for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
+            String lastErr = "";
+            // 候选：本对象、字段嵌套、常见 MPVLib 类
+            java.util.ArrayList<Object> targets = new java.util.ArrayList<>();
+            targets.add(this);
+            try {
+                for (java.lang.reflect.Field f : getClass().getDeclaredFields()) {
+                    try {
                         f.setAccessible(true);
                         Object v = f.get(this);
-                        if (v == null) continue;
-                        for (String mn : new String[]{"setProperty", "setOption"}) {
-                            try {
-                                java.lang.reflect.Method m = v.getClass().getMethod(mn, String.class, String.class);
-                                m.invoke(v, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
-                                m.invoke(v, "sub-ass-force-style", style);
-                                m.invoke(v, "sub-font", font);
-                                if (fontsDir != null && !fontsDir.isEmpty()) m.invoke(v, "sub-fonts-dir", fontsDir);
-                                ok = true;
-                                break;
-                            } catch (Throwable ignored) {
-                            }
-                        }
-                        if (ok) break;
-                    }
-                } catch (Throwable ignored) {
+                        if (v != null) targets.add(v);
+                    } catch (Throwable ignored) {}
                 }
+            } catch (Throwable ignored) {}
+            for (String cn : new String[]{
+                    "is.xyz.mpv.MPVLib",
+                    "dev.jdtech.mpv.MPVLib",
+                    "androidx.media3.mpvplayer.MpvLib",
+                    "androidx.media3.mpvplayer.MPV",
+                    "com.fongmi.android.tv.player.mpv.MpvLib"
+            }) {
+                try {
+                    Class<?> c = Class.forName(cn);
+                    targets.add(c); // static methods
+                } catch (Throwable ignored) {}
             }
-            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " dir=" + fontsDir);
+            // 写属性
+            for (Object tgt : targets) {
+                if (tgt == null) continue;
+                Class<?> cls = (tgt instanceof Class) ? (Class<?>) tgt : tgt.getClass();
+                Object inv = (tgt instanceof Class) ? null : tgt;
+                // setOptionString / setPropertyString 等
+                for (String mn : new String[]{"setOptionString", "setPropertyString", "setOption", "setProperty", "option", "setConfig"}) {
+                    try {
+                        java.lang.reflect.Method m = null;
+                        try { m = cls.getMethod(mn, String.class, String.class); }
+                        catch (Throwable e1) {
+                            try { m = cls.getDeclaredMethod(mn, String.class, String.class); m.setAccessible(true); } catch (Throwable e2) {}
+                        }
+                        if (m == null) continue;
+                        // static?
+                        Object receiver = java.lang.reflect.Modifier.isStatic(m.getModifiers()) ? null : inv;
+                        if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) && receiver == null) continue;
+                        m.invoke(receiver, "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                        m.invoke(receiver, "sub-ass-force-style", style);
+                        m.invoke(receiver, "sub-color", color);
+                        m.invoke(receiver, "sub-border-color", border);
+                        if (font != null) m.invoke(receiver, "sub-font", font);
+                        if (fontsDir != null && !fontsDir.isEmpty()) {
+                            m.invoke(receiver, "sub-fonts-dir", fontsDir);
+                            try { m.invoke(receiver, "osd-fonts-dir", fontsDir); } catch (Throwable ignored) {}
+                        }
+                        ok = true;
+                        lastErr = "via " + cls.getName() + "." + mn;
+                        break;
+                    } catch (Throwable e) {
+                        lastErr = mn + ":" + e.getClass().getSimpleName() + " " + String.valueOf(e.getMessage());
+                    }
+                }
+                if (ok) break;
+                // command(String[])
+                try {
+                    java.lang.reflect.Method cmd = null;
+                    try { cmd = cls.getMethod("command", String[].class); }
+                    catch (Throwable e1) {
+                        try { cmd = cls.getDeclaredMethod("command", String[].class); cmd.setAccessible(true); } catch (Throwable e2) {}
+                    }
+                    if (cmd != null) {
+                        Object receiver = java.lang.reflect.Modifier.isStatic(cmd.getModifiers()) ? null : inv;
+                        if (java.lang.reflect.Modifier.isStatic(cmd.getModifiers()) || receiver != null) {
+                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE});
+                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-ass-force-style", style});
+                            cmd.invoke(receiver, (Object) new String[]{"set", "sub-color", color});
+                            if (font != null) cmd.invoke(receiver, (Object) new String[]{"set", "sub-font", font});
+                            if (fontsDir != null && !fontsDir.isEmpty())
+                                cmd.invoke(receiver, (Object) new String[]{"set", "sub-fonts-dir", fontsDir});
+                            ok = true;
+                            lastErr = "via command " + cls.getName();
+                            break;
+                        }
+                    }
+                } catch (Throwable e) {
+                    lastErr = "cmd:" + e.getMessage();
+                }
+                // Map 字段塞选项（init 前）
+                try {
+                    for (java.lang.reflect.Field f : cls.getDeclaredFields()) {
+                        if (!java.util.Map.class.isAssignableFrom(f.getType())) continue;
+                        f.setAccessible(true);
+                        Object mapObj = f.get(inv);
+                        if (!(mapObj instanceof java.util.Map)) continue;
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<Object, Object> map = (java.util.Map<Object, Object>) mapObj;
+                        map.put("sub-ass-override", MpvSubtitleStylePolicy.ASS_OVERRIDE);
+                        map.put("sub-ass-force-style", style);
+                        map.put("sub-color", color);
+                        if (font != null) map.put("sub-font", font);
+                        if (fontsDir != null && !fontsDir.isEmpty()) map.put("sub-fonts-dir", fontsDir);
+                        ok = true;
+                        lastErr = "via Map field " + f.getName();
+                        break;
+                    }
+                } catch (Throwable e) {
+                    lastErr = "map:" + e.getMessage();
+                }
+                if (ok) break;
+            }
+            android.util.Log.i("MpvSubStyle", "applyUserAssStyle ok=" + ok + " font=" + font + " dir=" + fontsDir + " how=" + lastErr);
         } catch (Throwable e) {
             android.util.Log.w("MpvSubStyle", "applyUserAssStyle: " + e.getMessage());
         }
@@ -250,6 +280,25 @@ def patch_mpv_player(path: Path) -> None:
                 break
         if not hooked:
             print("[mod] WARN: no applyUserAssStyle call site")
+
+
+    for pat_opt in [
+        r'(setOption\s*\(\s*"hwdec"',
+        r'(setProperty\s*\(\s*"hwdec"',
+        r'(option\s*\(\s*"hwdec"',
+        r'(setOptionString\s*\(\s*"hwdec"',
+    ]:
+        if re.search(pat_opt, t):
+            t2, n = re.subn(
+                pat_opt + r'[^;]*;',
+                lambda m: m.group(0) + "\n        try { applyUserAssStyle(); } catch (Throwable ignoredAssOpt) {}",
+                t,
+                count=1,
+            )
+            if n:
+                t = t2
+                print("[mod] hooked after hwdec option")
+                break
 
     t = t.replace('"sub-ass-override", "scale"', '"sub-ass-override", "force"')
     t = t.replace('"ass-style-override", "scale"', '"ass-style-override", "force"')
