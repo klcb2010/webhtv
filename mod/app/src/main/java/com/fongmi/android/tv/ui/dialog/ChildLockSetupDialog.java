@@ -185,4 +185,31 @@ public final class ChildLockSetupDialog {
             v.invalidate();
         });
     }
+    /** 开关或行获焦时，行保持 selected 深蓝高亮 */
+    private static void bindSwitchRowHighlight(View switchRow, SwitchCompat sw, TextView enableLabel) {
+        if (switchRow == null && sw == null) return;
+        View.OnFocusChangeListener listener = (v, hasFocus) -> syncSwitchRowHighlight(switchRow, sw, enableLabel);
+        if (switchRow != null) switchRow.setOnFocusChangeListener(listener);
+        if (sw != null) sw.setOnFocusChangeListener(listener);
+        syncSwitchRowHighlight(switchRow, sw, enableLabel);
+    }
+
+    private static void syncSwitchRowHighlight(View switchRow, SwitchCompat sw, TextView enableLabel) {
+        boolean on = false;
+        try {
+            if (switchRow != null && switchRow.hasFocus()) on = true;
+            if (sw != null && sw.hasFocus()) on = true;
+        } catch (Throwable ignored) {
+        }
+        if (switchRow != null) {
+            switchRow.setSelected(on);
+            switchRow.setActivated(on);
+            switchRow.refreshDrawableState();
+            switchRow.invalidate();
+        }
+        if (enableLabel != null) {
+            enableLabel.setTextColor(on ? 0xFFFFFFFF : 0xFF212121);
+        }
+    }
+
 }
