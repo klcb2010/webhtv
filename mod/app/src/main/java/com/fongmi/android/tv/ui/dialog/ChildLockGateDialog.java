@@ -41,6 +41,7 @@ public final class ChildLockGateDialog {
         TextView unlock = root.findViewById(R.id.childLockGateUnlock);
         TextView exit = root.findViewById(R.id.childLockGateExit);
         bindPasswordToggle(pwd, toggle);
+        enhancePasswordFocus(pwd);
         bindFocusLabel(unlock, 0xFF1565C0, 0xFFFFFFFF);
         bindFocusLabel(exit, 0xFF1565C0, 0xFFFFFFFF);
 

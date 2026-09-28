@@ -69,7 +69,7 @@
             android:hint="@string/child_lock_password_hint"
             android:textColor="#FF212121"
             android:textColorHint="#99212121"
-            android:backgroundTint="#FF90CAF9"
+            android:background="@drawable/selector_child_lock_edit"
             android:nextFocusUp="@+id/childLockSwitchRow"
             android:nextFocusDown="@+id/childLockPasswordConfirm" />
 
@@ -106,7 +106,7 @@
             android:hint="@string/child_lock_password_confirm_hint"
             android:textColor="#FF212121"
             android:textColorHint="#99212121"
-            android:backgroundTint="#FF90CAF9"
+            android:background="@drawable/selector_child_lock_edit"
             android:nextFocusUp="@+id/childLockPassword"
             android:nextFocusDown="@+id/childLockSave" />
 

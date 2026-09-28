@@ -42,6 +42,8 @@ public final class ChildLockSetupDialog {
         sw.setChecked(enabled);
         updateConfirmVisibility(sw, confirm, confirmRow);
         bindPasswordToggle(pwd, togglePwd);
+        enhancePasswordFocus(pwd);
+        enhancePasswordFocus(confirm);
         bindPasswordToggle(confirm, toggleConfirm);
         bindFocusLabel(btnCancel, btnCancel instanceof TextView ? (TextView) btnCancel : null, 0xFF1565C0, 0xFFFFFFFF);
         bindFocusLabel(btnSave, btnSave instanceof TextView ? (TextView) btnSave : null, 0xFF1565C0, 0xFFFFFFFF);
