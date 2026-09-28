@@ -138,4 +138,5 @@
     <string name="child_lock_disabled">Child lock disabled</string>
     <string name="setting_child_lock">Child Lock</string>
     <string name="child_lock_toggle_password">Show / hide password</string>
+    <string name="child_lock_exit">Exit</string>
 </resources>

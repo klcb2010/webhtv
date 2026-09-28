@@ -138,4 +138,5 @@
     <string name="child_lock_disabled">已关闭儿童管理</string>
     <string name="setting_child_lock">儿童管理</string>
     <string name="child_lock_toggle_password">显示/隐藏密码</string>
+    <string name="child_lock_exit">退出</string>
 </resources>

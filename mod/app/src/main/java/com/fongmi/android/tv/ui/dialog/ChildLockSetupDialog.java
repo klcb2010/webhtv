@@ -19,9 +19,6 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Notify;
 
-/**
- * 个性设置 → 儿童管理。功能逻辑不变；TV 可焦点 + 眼睛开闭图标 + 获焦深蓝。
- */
 public final class ChildLockSetupDialog {
 
     private ChildLockSetupDialog() {
@@ -35,7 +32,6 @@ public final class ChildLockSetupDialog {
         TextView enableLabel = root.findViewById(R.id.childLockEnableLabel);
         EditText pwd = root.findViewById(R.id.childLockPassword);
         EditText confirm = root.findViewById(R.id.childLockPasswordConfirm);
-        View confirmLabel = root.findViewById(R.id.childLockConfirmLabel);
         View confirmRow = root.findViewById(R.id.childLockConfirmRow);
         ImageButton togglePwd = root.findViewById(R.id.childLockPasswordToggle);
         ImageButton toggleConfirm = root.findViewById(R.id.childLockPasswordConfirmToggle);
@@ -44,27 +40,26 @@ public final class ChildLockSetupDialog {
 
         boolean enabled = Setting.isChildLockEnabled();
         sw.setChecked(enabled);
-        updateConfirmVisibility(sw, confirm, confirmLabel, confirmRow);
+        updateConfirmVisibility(sw, confirm, confirmRow);
         bindPasswordToggle(pwd, togglePwd);
         bindPasswordToggle(confirm, toggleConfirm);
-        bindFocusTextColor(switchRow, enableLabel);
-        bindFocusTextColor(btnCancel, btnCancel instanceof TextView ? (TextView) btnCancel : null);
-        bindFocusTextColor(btnSave, btnSave instanceof TextView ? (TextView) btnSave : null);
+        bindFocusLabel(btnCancel, btnCancel instanceof TextView ? (TextView) btnCancel : null, 0xFF1565C0, 0xFFFFFFFF);
+        bindFocusLabel(btnSave, btnSave instanceof TextView ? (TextView) btnSave : null, 0xFF1565C0, 0xFFFFFFFF);
+        // 开关或整行任一获焦 → 行高亮 + 标签白字（下移再回来落在开关上也能亮）
+        bindSwitchRowHighlight(switchRow, sw, enableLabel);
 
-        // 整行或开关都可切换（方便 TV）
-        View.OnClickListener toggleSw = v -> sw.setChecked(!sw.isChecked());
-        if (switchRow != null) switchRow.setOnClickListener(toggleSw);
+        if (switchRow != null) {
+            switchRow.setOnClickListener(v -> sw.setChecked(!sw.isChecked()));
+        }
         sw.setOnCheckedChangeListener((buttonView, isChecked) ->
-                updateConfirmVisibility(sw, confirm, confirmLabel, confirmRow));
+                updateConfirmVisibility(sw, confirm, confirmRow));
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
                 .setCancelable(true)
                 .create();
 
-        if (btnCancel != null) {
-            btnCancel.setOnClickListener(v -> dialog.dismiss());
-        }
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
         if (btnSave != null) {
             btnSave.setOnClickListener(v -> {
                 boolean wantEnable = sw.isChecked();
@@ -120,8 +115,18 @@ public final class ChildLockSetupDialog {
             } catch (Throwable ignored) {
             }
             try {
-                if (switchRow != null) switchRow.requestFocus();
-                else if (sw != null) sw.requestFocus();
+                // 默认焦点落在开关上，行同步高亮
+                if (sw != null) {
+                    sw.setFocusable(true);
+                    sw.setFocusableInTouchMode(true);
+                    sw.requestFocus();
+                    sw.post(() -> {
+                        sw.requestFocus();
+                        syncSwitchRowHighlight(switchRow, sw, enableLabel);
+                    });
+                } else if (switchRow != null) {
+                    switchRow.requestFocus();
+                }
             } catch (Throwable ignored) {
             }
         });
@@ -136,15 +141,13 @@ public final class ChildLockSetupDialog {
         }
     }
 
-    private static void updateConfirmVisibility(SwitchCompat sw, EditText confirm, View confirmLabel, View confirmRow) {
-        boolean showConfirm = sw.isChecked();
-        int vis = showConfirm ? View.VISIBLE : View.GONE;
+    private static void updateConfirmVisibility(SwitchCompat sw, EditText confirm, View confirmRow) {
+        boolean show = sw.isChecked();
+        int vis = show ? View.VISIBLE : View.GONE;
         if (confirm != null) confirm.setVisibility(vis);
-        if (confirmLabel != null) confirmLabel.setVisibility(vis);
         if (confirmRow != null) confirmRow.setVisibility(vis);
     }
 
-    /** 闭眼=隐藏密码，睁眼=显示明文 */
     private static void bindPasswordToggle(EditText edit, ImageButton toggle) {
         if (edit == null || toggle == null) return;
         final boolean[] visible = {false};
@@ -169,13 +172,17 @@ public final class ChildLockSetupDialog {
         });
     }
 
-    private static void bindFocusTextColor(View focusView, TextView label) {
+    private static void bindFocusLabel(View focusView, TextView label, int normalColor, int focusColor) {
         if (focusView == null) return;
-        final int normal = 0xFF1565C0;
-        final int onFocus = 0xFFFFFFFF;
+        if (label != null) label.setTextColor(normalColor);
+        else if (focusView instanceof TextView) ((TextView) focusView).setTextColor(normalColor);
         focusView.setOnFocusChangeListener((v, hasFocus) -> {
-            if (label != null) label.setTextColor(hasFocus ? onFocus : normal);
-            else if (v instanceof TextView) ((TextView) v).setTextColor(hasFocus ? onFocus : normal);
+            int c = hasFocus ? focusColor : normalColor;
+            if (label != null) label.setTextColor(c);
+            else if (v instanceof TextView) ((TextView) v).setTextColor(c);
+            // 强制刷新背景 selector（部分 TV 回焦不重绘）
+            v.refreshDrawableState();
+            v.invalidate();
         });
     }
 }

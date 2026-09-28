@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Process;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
@@ -21,9 +22,6 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.ChildLock;
 import com.fongmi.android.tv.utils.Notify;
 
-/**
- * 启动锁。解锁在内容区；眼睛开闭区分；获焦深蓝。
- */
 public final class ChildLockGateDialog {
 
     private static boolean showing;
@@ -41,8 +39,10 @@ public final class ChildLockGateDialog {
         EditText pwd = root.findViewById(R.id.childLockGatePassword);
         ImageButton toggle = root.findViewById(R.id.childLockGatePasswordToggle);
         TextView unlock = root.findViewById(R.id.childLockGateUnlock);
+        TextView exit = root.findViewById(R.id.childLockGateExit);
         bindPasswordToggle(pwd, toggle);
-        bindFocusTextColor(unlock);
+        bindFocusLabel(unlock, 0xFF1565C0, 0xFFFFFFFF);
+        bindFocusLabel(exit, 0xFF1565C0, 0xFFFFFFFF);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
@@ -63,6 +63,26 @@ public final class ChildLockGateDialog {
                 }
                 ChildLock.unlock();
                 dialog.dismiss();
+            });
+        }
+        if (exit != null) {
+            exit.setOnClickListener(v -> {
+                try {
+                    dialog.dismiss();
+                } catch (Throwable ignored) {
+                }
+                try {
+                    activity.finishAffinity();
+                } catch (Throwable ignored) {
+                    try {
+                        activity.finish();
+                    } catch (Throwable ignored2) {
+                    }
+                }
+                try {
+                    Process.killProcess(Process.myPid());
+                } catch (Throwable ignored) {
+                }
             });
         }
 
@@ -113,10 +133,13 @@ public final class ChildLockGateDialog {
         });
     }
 
-    private static void bindFocusTextColor(TextView tv) {
+    private static void bindFocusLabel(TextView tv, int normal, int focus) {
         if (tv == null) return;
-        final int normal = 0xFF1565C0;
-        final int onFocus = 0xFFFFFFFF;
-        tv.setOnFocusChangeListener((v, hasFocus) -> tv.setTextColor(hasFocus ? onFocus : normal));
+        tv.setTextColor(normal);
+        tv.setOnFocusChangeListener((v, hasFocus) -> {
+            tv.setTextColor(hasFocus ? focus : normal);
+            v.refreshDrawableState();
+            v.invalidate();
+        });
     }
 }
