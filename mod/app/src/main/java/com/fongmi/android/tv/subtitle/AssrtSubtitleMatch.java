@@ -786,10 +786,10 @@ public final class AssrtSubtitleMatch {
             sPendingSelectFormat = item.getFormat() == null ? "" : item.getFormat();
             String fmt = sPendingSelectFormat.toLowerCase(Locale.ROOT);
             String nl = name.toLowerCase(Locale.ROOT);
-            boolean external = fmt.contains("subrip") || fmt.contains("vtt") || fmt.contains("ssa")
-                    || fmt.contains("ttml") || fmt.contains("text/")
-                    || nl.contains("srt") || nl.contains("vtt") || nl.contains("ass")
-                    || nl.contains("外挂");
+            // 仅明确外挂才标 external。「中文…，SRT」多为内封文本轨，勿误判
+            boolean external = nl.contains("外挂") || nl.contains("external")
+                    || nl.contains(".srt") || nl.contains(".ass") || nl.contains(".ssa") || nl.contains(".vtt")
+                    || looksLikeHashFileName(name);
             sPreferExternal = external;
             sForceSettled = false;
 
@@ -838,15 +838,19 @@ public final class AssrtSubtitleMatch {
 
             // History 维度：名 + kind + 内封序号/语言
             try {
+                java.util.List<String> keys = new java.util.ArrayList<>();
                 if (sLastHistory != null) {
-                    for (String key : subCacheKeys(sLastHistory, sLastEpisode)) {
-                        putCommit(key + "_name", name);
-                        putCommit(key + "_kind", external ? "external" : "embedded");
-                        if (!external) {
-                            putCommit(key + "_emb", index + "\u0001" + name + "\u0001" + (lang == null ? "" : lang));
-                        }
-                    }
+                    keys.addAll(subCacheKeys(sLastHistory, sLastEpisode));
                     Prefers.put("ext_sub_name_" + Util.md5(sLastHistory.getKey()), name);
+                }
+                if (player != null && !TextUtils.isEmpty(player.getKey())) {
+                    keys.add("trk_" + Util.md5(player.getKey()));
+                }
+                keys.add("trk_last");
+                for (String key : keys) {
+                    putCommit(key + "_name", name);
+                    putCommit(key + "_kind", external ? "external" : "embedded");
+                    putCommit(key + "_emb", index + "" + name + "" + (lang == null ? "" : lang));
                 }
             } catch (Throwable ignored) {
             }
@@ -896,18 +900,24 @@ public final class AssrtSubtitleMatch {
                 sPendingSelectFormat = payload[3];
             }
             // 用户上次明确选了内封 → 不要被外挂文件缓存抢回
-            if ("embedded".equals(kind)) {
-                sPreferExternal = false;
-                loadEmbeddedMemory(sLastHistory, sLastEpisode);
-                Log.i(TAG, "onTracksReady embedded name=" + sPendingSelectName + " idx=" + sPendingSelectIndex);
-                tryRestoreEmbedded(player);
-                final PlayerManager pm = player;
-                App.post(() -> tryRestoreEmbedded(pm), 600);
-                return;
-            }
             if ("off".equals(kind)) {
                 sPreferExternal = false;
                 return;
+            }
+            // 内封，或误标 external 但无外挂文件 → 按名/序号恢复内封
+            if ("embedded".equals(kind) || ("external".equals(kind) && !hasExtFile) || (!hasExtFile && !sPreferExternal)) {
+                sPreferExternal = false;
+                loadEmbeddedMemory(sLastHistory, sLastEpisode);
+                if (TextUtils.isEmpty(sPendingSelectName)) {
+                    String n = loadRememberedTrackName(sLastHistory, sLastEpisode);
+                    if (!TextUtils.isEmpty(n)) sPendingSelectName = n;
+                }
+                Log.i(TAG, "onTracksReady embedded/try name=" + sPendingSelectName + " idx=" + sPendingSelectIndex + " kind=" + kind);
+                tryRestoreEmbedded(player);
+                final PlayerManager pm = player;
+                App.post(() -> tryRestoreEmbedded(pm), 600);
+                App.post(() -> tryRestoreEmbedded(pm), 1500);
+                if ("embedded".equals(kind) || !hasExtFile) return;
             }
             if (hasExtFile) sPreferExternal = true;
             if (!sPreferExternal && TextUtils.isEmpty(sPendingSelectName) && !hasExtFile) {
@@ -1802,16 +1812,19 @@ public final class AssrtSubtitleMatch {
 
     private static void loadEmbeddedMemory(History history, Episode episode) {
         try {
-            if (history == null) return;
-            for (String key : subCacheKeys(history, episode)) {
+            java.util.List<String> keys = new java.util.ArrayList<>();
+            if (history != null) keys.addAll(subCacheKeys(history, episode));
+            keys.add("trk_last");
+            for (String key : keys) {
                 String emb = Prefers.getString(key + "_emb");
                 if (TextUtils.isEmpty(emb)) continue;
-                String[] parts = emb.split("\u0001", -1);
+                String[] parts = emb.split("", -1);
                 if (parts.length >= 1) {
                     try { sPendingSelectIndex = Integer.parseInt(parts[0].trim()); } catch (Throwable ignored) {}
                 }
                 if (parts.length >= 2 && !TextUtils.isEmpty(parts[1])) sPendingSelectName = parts[1];
                 if (parts.length >= 3) sPendingSelectLang = parts[2] == null ? "" : parts[2];
+                Log.i(TAG, "loadEmbeddedMemory key=" + key + " name=" + sPendingSelectName + " idx=" + sPendingSelectIndex);
                 return;
             }
         } catch (Throwable ignored) {
@@ -1923,10 +1936,9 @@ public final class AssrtSubtitleMatch {
             sPendingSelectFormat = format == null ? "" : format;
             String fmt = sPendingSelectFormat.toLowerCase(Locale.ROOT);
             String nl = name.toLowerCase(Locale.ROOT);
-            sPreferExternal = fmt.contains("subrip") || fmt.contains("vtt") || fmt.contains("ssa")
-                    || fmt.contains("ttml") || fmt.contains("text/")
-                    || nl.contains("srt") || nl.contains("vtt") || nl.contains("ass")
-                    || nl.contains("外挂");
+            sPreferExternal = nl.contains("外挂") || nl.contains("external")
+                    || nl.contains(".srt") || nl.contains(".ass") || nl.contains(".ssa") || nl.contains(".vtt")
+                    || looksLikeHashFileName(name);
             sForceSettled = false;
             persistTextTrackSelection(null, name, format);
             if (sLastHistory != null) {
