@@ -913,10 +913,9 @@ public final class AssrtSubtitleMatch {
                     if (!TextUtils.isEmpty(n)) sPendingSelectName = n;
                 }
                 Log.i(TAG, "onTracksReady embedded/try name=" + sPendingSelectName + " idx=" + sPendingSelectIndex + " kind=" + kind);
-                tryRestoreEmbedded(player);
+                // 只延迟一次，避免多次选轨卡顿
                 final PlayerManager pm = player;
-                App.post(() -> tryRestoreEmbedded(pm), 600);
-                App.post(() -> tryRestoreEmbedded(pm), 1500);
+                App.post(() -> tryRestoreEmbedded(pm), 5000);
                 if ("embedded".equals(kind) || !hasExtFile) return;
             }
             if (hasExtFile) sPreferExternal = true;
@@ -924,9 +923,8 @@ public final class AssrtSubtitleMatch {
                 // 可能只有内封序号记忆
                 loadEmbeddedMemory(sLastHistory, sLastEpisode);
                 if (sPendingSelectIndex >= 0 || !TextUtils.isEmpty(sPendingSelectName)) {
-                    tryRestoreEmbedded(player);
                     final PlayerManager pm = player;
-                    App.post(() -> tryRestoreEmbedded(pm), 600);
+                    App.post(() -> tryRestoreEmbedded(pm), 5000);
                 }
                 return;
             }
@@ -985,6 +983,17 @@ public final class AssrtSubtitleMatch {
                 }
                 // 多试几次：历史刚进时 episode 可能尚未对齐
                 selectPendingIfAny(player);
+                // 内封记忆：起播后多次尝试（轨晚到 / 默认轨抢选）
+                try {
+                    String kind0 = loadTrackKind(history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode);
+                    if ("embedded".equals(kind0) || ("external".equals(kind0) && loadCachedSubPayload(history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode) == null)) {
+                        sPreferExternal = false;
+                        loadEmbeddedMemory(history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode);
+                        final PlayerManager pmE = player;
+                        App.post(() -> tryRestoreEmbedded(pmE), 5000);
+                    }
+                } catch (Throwable ignoredEmb) {
+                }
                 if (tryRestoreSub(activity, history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode, playerProvider)) {
                     selectPendingIfAny(player);
                     return;
@@ -1831,7 +1840,7 @@ public final class AssrtSubtitleMatch {
         }
     }
 
-    /** 恢复内封字幕：名 → 语言 → 序号；只选一次，失败不刷屏 */
+    /** 恢复内封字幕：名 → 语言 → 序号；Override + setTrack，防止被默认轨盖掉 */
     private static boolean tryRestoreEmbedded(PlayerManager player) {
         try {
             if (player == null || player.isEmpty()) return false;
@@ -1863,6 +1872,7 @@ public final class AssrtSubtitleMatch {
             Tracks.Group bestGroup = null;
             int bestIndex = -1;
             int bestScore = -1;
+            Format bestFmt = null;
             int ord = 0;
             for (Tracks.Group group : tracks.getGroups()) {
                 if (group.getType() != C.TRACK_TYPE_TEXT) continue;
@@ -1877,17 +1887,25 @@ public final class AssrtSubtitleMatch {
                     String id = f.id != null ? String.valueOf(f.id) : "";
                     int score = 0;
                     if (!TextUtils.isEmpty(wantName)) {
+                        String wn = wantName.toLowerCase(Locale.ROOT);
+                        String lab = label.toLowerCase(Locale.ROOT);
+                        // 列表名常带「，Simplified，SRT」后缀，与 Format.label 不完全一致
                         if (wantName.equals(label) || wantName.equals(id)) score += 100;
-                        else if (!TextUtils.isEmpty(label) && (wantName.contains(label) || label.contains(wantName))) score += 60;
+                        else if (!TextUtils.isEmpty(lab) && (wn.startsWith(lab) || lab.startsWith(wn) || wn.contains(lab) || lab.contains(wn.split("[，,]")[0].trim())))
+                            score += 70;
+                        else {
+                            String head = wantName.split("[，,]")[0].trim();
+                            if (!TextUtils.isEmpty(head) && (head.equals(label) || (!TextUtils.isEmpty(label) && label.contains(head))))
+                                score += 80;
+                        }
                     }
                     if (!TextUtils.isEmpty(wantLang) && wantLang.equalsIgnoreCase(lang)) score += 40;
-                    if (wantIdx >= 0 && ord == wantIdx) score += 30;
-                    String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
-                    if (mime.contains("subrip") || mime.contains("vtt") || mime.contains("text/x-ssa")) score -= 15;
+                    if (wantIdx >= 0 && ord == wantIdx) score += 50;
                     if (score > bestScore) {
                         bestScore = score;
                         bestGroup = group;
                         bestIndex = i;
+                        bestFmt = f;
                     }
                     ord++;
                 }
@@ -1896,38 +1914,46 @@ public final class AssrtSubtitleMatch {
                 Log.i(TAG, "tryRestoreEmbedded skip score=" + bestScore + " name=" + wantName + " idx=" + wantIdx);
                 return false;
             }
-            try {
-                if (bestGroup.isTrackSelected(bestIndex)) {
-                    Log.i(TAG, "tryRestoreEmbedded already selected");
-                    return true;
-                }
-            } catch (Throwable ignored) {
-            }
+            String selLabel = bestFmt != null && bestFmt.label != null ? bestFmt.label : wantName;
+            String selMime = bestFmt != null && bestFmt.sampleMimeType != null ? bestFmt.sampleMimeType : "";
+            // 1) Media3 Override
             if (pl != null) {
-                androidx.media3.common.TrackSelectionOverride override =
-                        new androidx.media3.common.TrackSelectionOverride(bestGroup.getMediaTrackGroup(), bestIndex);
-                androidx.media3.common.TrackSelectionParameters params = pl.getTrackSelectionParameters()
-                        .buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .setOverrideForType(override)
-                        .build();
-                pl.setTrackSelectionParameters(params);
-            } else {
-                Format f = bestGroup.getTrackFormat(bestIndex);
-                String label = f.label != null ? f.label : wantName;
+                try {
+                    androidx.media3.common.TrackSelectionOverride override =
+                            new androidx.media3.common.TrackSelectionOverride(bestGroup.getMediaTrackGroup(), bestIndex);
+                    androidx.media3.common.TrackSelectionParameters params = pl.getTrackSelectionParameters()
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                            .setOverrideForType(override)
+                            .build();
+                    pl.setTrackSelectionParameters(params);
+                } catch (Throwable e) {
+                    Log.w(TAG, "tryRestoreEmbedded override: " + e.getMessage());
+                }
+            }
+            // 2) 与 TrackDialog 相同：setTrack + save，防止随后被默认轨覆盖
+            try {
                 java.util.ArrayList<Track> list = new java.util.ArrayList<>();
-                Track tr = new Track(C.TRACK_TYPE_TEXT, label, f.sampleMimeType == null ? "" : f.sampleMimeType);
+                Track tr = new Track(C.TRACK_TYPE_TEXT, selLabel, selMime);
                 tr.setSelected(true);
+                if (player != null && !TextUtils.isEmpty(player.getKey())) {
+                    try { tr.setKey(player.getKey()); } catch (Throwable ignored) {}
+                }
+                try { tr.save(); } catch (Throwable ignored) {}
                 list.add(tr);
                 player.setTrack(list);
+            } catch (Throwable e) {
+                Log.w(TAG, "tryRestoreEmbedded setTrack: " + e.getMessage());
             }
-            Log.i(TAG, "tryRestoreEmbedded OK score=" + bestScore + " name=" + wantName + " idx=" + wantIdx);
+            Log.i(TAG, "tryRestoreEmbedded OK score=" + bestScore + " label=" + selLabel + " name=" + wantName + " idx=" + wantIdx);
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "tryRestoreEmbedded: " + e.getMessage());
             return false;
         }
     }
+
 
     public static void persistChosenNameOnly(String name, String format) {
         try {
