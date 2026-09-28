@@ -143,4 +143,20 @@ public final class ChildLockGateDialog {
             v.invalidate();
         });
     }
+    private static void enhancePasswordFocus(EditText edit) {
+        if (edit == null) return;
+        edit.setCursorVisible(true);
+        edit.setOnFocusChangeListener((v, hasFocus) -> {
+            edit.setCursorVisible(hasFocus);
+            if (hasFocus) {
+                try {
+                    edit.setSelection(edit.getText() != null ? edit.getText().length() : 0);
+                } catch (Throwable ignored) {
+                }
+            }
+            v.refreshDrawableState();
+            v.invalidate();
+        });
+    }
+
 }
