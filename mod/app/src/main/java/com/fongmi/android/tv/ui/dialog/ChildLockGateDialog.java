@@ -21,7 +21,11 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.ChildLock;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.Util;
 
+/**
+ * 启动锁。解锁/退出在内容区；TV 才启用遥控焦点高亮。
+ */
 public final class ChildLockGateDialog {
 
     private static boolean showing;
@@ -35,15 +39,43 @@ public final class ChildLockGateDialog {
         if (showing) return;
         showing = true;
 
+        final boolean tv = Util.isLeanback();
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_gate, null);
         EditText pwd = root.findViewById(R.id.childLockGatePassword);
         ImageButton toggle = root.findViewById(R.id.childLockGatePasswordToggle);
         TextView unlock = root.findViewById(R.id.childLockGateUnlock);
         TextView exit = root.findViewById(R.id.childLockGateExit);
         bindPasswordToggle(pwd, toggle);
-        enhancePasswordFocus(pwd);
-        bindFocusLabel(unlock, 0xFF1565C0, 0xFFFFFFFF);
-        bindFocusLabel(exit, 0xFF1565C0, 0xFFFFFFFF);
+
+        if (tv) {
+            bindFocusLabel(unlock, 0xFF1565C0, 0xFFFFFFFF);
+            bindFocusLabel(exit, 0xFF1565C0, 0xFFFFFFFF);
+            enhancePasswordFocus(pwd);
+            if (toggle != null) {
+                toggle.setFocusable(true);
+                toggle.setFocusableInTouchMode(true);
+            }
+        } else {
+            // 手机：触控为主，去掉 TV 焦点样式
+            if (unlock != null) {
+                unlock.setFocusable(false);
+                unlock.setFocusableInTouchMode(false);
+                unlock.setBackground(null);
+                unlock.setTextColor(0xFF1565C0);
+            }
+            if (exit != null) {
+                exit.setFocusable(false);
+                exit.setFocusableInTouchMode(false);
+                exit.setBackground(null);
+                exit.setTextColor(0xFF1565C0);
+            }
+            if (toggle != null) {
+                toggle.setFocusable(false);
+                toggle.setFocusableInTouchMode(false);
+                toggle.setBackground(null);
+            }
+            if (pwd != null) pwd.setCursorVisible(true);
+        }
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
@@ -56,10 +88,10 @@ public final class ChildLockGateDialog {
 
         if (unlock != null) {
             unlock.setOnClickListener(v -> {
-                String p = pwd.getText() != null ? pwd.getText().toString() : "";
+                String p = pwd != null && pwd.getText() != null ? pwd.getText().toString() : "";
                 if (TextUtils.isEmpty(p) || !Setting.verifyChildLockPassword(p)) {
                     Notify.show(R.string.child_lock_error_wrong);
-                    pwd.setText("");
+                    if (pwd != null) pwd.setText("");
                     return;
                 }
                 ChildLock.unlock();
@@ -93,9 +125,12 @@ public final class ChildLockGateDialog {
                 if (w != null) w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             } catch (Throwable ignored) {
             }
-            try {
-                if (pwd != null) pwd.requestFocus();
-            } catch (Throwable ignored) {
+            // 仅 TV 强制定焦到密码框
+            if (tv && pwd != null) {
+                try {
+                    pwd.requestFocus();
+                } catch (Throwable ignored) {
+                }
             }
         });
         try {
@@ -143,6 +178,7 @@ public final class ChildLockGateDialog {
             v.invalidate();
         });
     }
+
     private static void enhancePasswordFocus(EditText edit) {
         if (edit == null) return;
         edit.setCursorVisible(true);
@@ -158,5 +194,4 @@ public final class ChildLockGateDialog {
             v.invalidate();
         });
     }
-
 }
