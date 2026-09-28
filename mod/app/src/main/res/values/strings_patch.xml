@@ -137,4 +137,5 @@
     <string name="child_lock_saved">Saved. Will lock on next launch.</string>
     <string name="child_lock_disabled">Child lock disabled</string>
     <string name="setting_child_lock">Child Lock</string>
+    <string name="child_lock_toggle_password">Show / hide password</string>
 </resources>

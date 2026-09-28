@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="20dp"
+    android:background="@drawable/shape_child_lock_dialog">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/child_lock_title"
+        android:textColor="#FF1565C0"
         android:textSize="18sp"
         android:textStyle="bold"
         android:paddingBottom="12dp" />
@@ -25,6 +27,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/child_lock_enable"
+            android:textColor="#FF212121"
             android:textSize="16sp" />
 
         <androidx.appcompat.widget.SwitchCompat
@@ -38,44 +41,88 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/child_lock_password"
+        android:textColor="#FF424242"
         android:textSize="14sp"
         android:paddingBottom="4dp" />
 
-    <EditText
-        android:id="@+id/childLockPassword"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:inputType="textPassword"
-        android:maxLines="1"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:hint="@string/child_lock_password_hint"
-        android:paddingBottom="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <EditText
+            android:id="@+id/childLockPassword"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:hint="@string/child_lock_password_hint"
+            android:textColor="#FF212121"
+            android:textColorHint="#99212121"
+            android:backgroundTint="#FF90CAF9" />
+
+        <ImageButton
+            android:id="@+id/childLockPasswordToggle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/child_lock_toggle_password"
+            android:src="@android:drawable/ic_menu_view"
+            android:focusable="true" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/childLockConfirmLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/child_lock_password_confirm"
+        android:textColor="#FF424242"
         android:textSize="14sp"
         android:paddingBottom="4dp" />
 
-    <EditText
-        android:id="@+id/childLockPasswordConfirm"
+    <LinearLayout
+        android:id="@+id/childLockConfirmRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:inputType="textPassword"
-        android:maxLines="1"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:hint="@string/child_lock_password_confirm_hint"
-        android:paddingBottom="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <EditText
+            android:id="@+id/childLockPasswordConfirm"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:hint="@string/child_lock_password_confirm_hint"
+            android:textColor="#FF212121"
+            android:textColorHint="#99212121"
+            android:backgroundTint="#FF90CAF9" />
+
+        <ImageButton
+            android:id="@+id/childLockPasswordConfirmToggle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/child_lock_toggle_password"
+            android:src="@android:drawable/ic_menu_view"
+            android:focusable="true" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/childLockHint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/child_lock_setup_hint"
+        android:textColor="#FF546E7A"
         android:textSize="12sp"
         android:paddingTop="4dp" />
 </LinearLayout>

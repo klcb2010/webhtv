@@ -2,11 +2,13 @@ package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Activity;
 import android.content.DialogInterface;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageButton;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -17,6 +19,7 @@ import com.fongmi.android.tv.utils.Notify;
 
 /**
  * 启动锁：不可取消，密码正确后解锁本进程。
+ * UI 含密码显示/隐藏；功能逻辑不变。
  */
 public final class ChildLockGateDialog {
 
@@ -33,6 +36,8 @@ public final class ChildLockGateDialog {
 
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_gate, null);
         EditText pwd = root.findViewById(R.id.childLockGatePassword);
+        ImageButton toggle = root.findViewById(R.id.childLockGatePasswordToggle);
+        bindPasswordToggle(pwd, toggle);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
@@ -41,7 +46,6 @@ public final class ChildLockGateDialog {
                 .create();
         dialog.setCanceledOnTouchOutside(false);
         dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) -> {
-            // 拦截返回，不允许绕过
             return keyCode == KeyEvent.KEYCODE_BACK;
         });
         dialog.setOnDismissListener(d -> showing = false);
@@ -66,5 +70,24 @@ public final class ChildLockGateDialog {
         } catch (Throwable e) {
             showing = false;
         }
+    }
+
+    private static void bindPasswordToggle(EditText edit, ImageButton toggle) {
+        if (edit == null || toggle == null) return;
+        final boolean[] visible = {false};
+        toggle.setOnClickListener(v -> {
+            visible[0] = !visible[0];
+            int start = edit.getSelectionStart();
+            int end = edit.getSelectionEnd();
+            if (visible[0]) {
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+            } else {
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            }
+            try {
+                if (start >= 0) edit.setSelection(Math.min(start, edit.getText().length()), Math.min(end, edit.getText().length()));
+            } catch (Throwable ignored) {
+            }
+        });
     }
 }

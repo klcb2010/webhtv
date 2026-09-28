@@ -1,10 +1,12 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Activity;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageButton;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
@@ -15,6 +17,7 @@ import com.fongmi.android.tv.utils.Notify;
 
 /**
  * 个性设置 → 儿童管理：开关 + 设密 / 关锁验密。
+ * UI 含密码显示/隐藏；功能逻辑不变。
  */
 public final class ChildLockSetupDialog {
 
@@ -28,13 +31,18 @@ public final class ChildLockSetupDialog {
         EditText pwd = root.findViewById(R.id.childLockPassword);
         EditText confirm = root.findViewById(R.id.childLockPasswordConfirm);
         View confirmLabel = root.findViewById(R.id.childLockConfirmLabel);
+        View confirmRow = root.findViewById(R.id.childLockConfirmRow);
+        ImageButton togglePwd = root.findViewById(R.id.childLockPasswordToggle);
+        ImageButton toggleConfirm = root.findViewById(R.id.childLockPasswordConfirmToggle);
 
         boolean enabled = Setting.isChildLockEnabled();
         sw.setChecked(enabled);
-        // 已开启：关锁只需当前密码，隐藏确认框；开锁需设新密则显示
-        updateConfirmVisibility(sw, confirm, confirmLabel);
+        updateConfirmVisibility(sw, confirm, confirmLabel, confirmRow);
+        bindPasswordToggle(pwd, togglePwd);
+        bindPasswordToggle(confirm, toggleConfirm);
 
-        sw.setOnCheckedChangeListener((buttonView, isChecked) -> updateConfirmVisibility(sw, confirm, confirmLabel));
+        sw.setOnCheckedChangeListener((buttonView, isChecked) ->
+                updateConfirmVisibility(sw, confirm, confirmLabel, confirmRow));
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
@@ -52,7 +60,6 @@ public final class ChildLockSetupDialog {
                         return;
                     }
                     if (Setting.isChildLockEnabled()) {
-                        // 已开启再保存：可改密（需原逻辑：输入新密两次）或保持
                         if (!TextUtils.isEmpty(p1)) {
                             if (!p1.equals(p2)) {
                                 Notify.show(R.string.child_lock_error_mismatch);
@@ -65,7 +72,6 @@ public final class ChildLockSetupDialog {
                         dialog.dismiss();
                         return;
                     }
-                    // 首次开启
                     if (!p1.equals(p2)) {
                         Notify.show(R.string.child_lock_error_mismatch);
                         return;
@@ -75,7 +81,6 @@ public final class ChildLockSetupDialog {
                     Notify.show(R.string.child_lock_saved);
                     dialog.dismiss();
                 } else {
-                    // 关闭：必须验证当前密码
                     if (!Setting.isChildLockEnabled()) {
                         dialog.dismiss();
                         return;
@@ -94,10 +99,30 @@ public final class ChildLockSetupDialog {
         dialog.show();
     }
 
-    private static void updateConfirmVisibility(SwitchCompat sw, EditText confirm, View confirmLabel) {
+    private static void updateConfirmVisibility(SwitchCompat sw, EditText confirm, View confirmLabel, View confirmRow) {
         boolean showConfirm = sw.isChecked();
         int vis = showConfirm ? View.VISIBLE : View.GONE;
         if (confirm != null) confirm.setVisibility(vis);
         if (confirmLabel != null) confirmLabel.setVisibility(vis);
+        if (confirmRow != null) confirmRow.setVisibility(vis);
+    }
+
+    private static void bindPasswordToggle(EditText edit, ImageButton toggle) {
+        if (edit == null || toggle == null) return;
+        final boolean[] visible = {false};
+        toggle.setOnClickListener(v -> {
+            visible[0] = !visible[0];
+            int start = edit.getSelectionStart();
+            int end = edit.getSelectionEnd();
+            if (visible[0]) {
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+            } else {
+                edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            }
+            try {
+                if (start >= 0) edit.setSelection(Math.min(start, edit.getText().length()), Math.min(end, edit.getText().length()));
+            } catch (Throwable ignored) {
+            }
+        });
     }
 }
