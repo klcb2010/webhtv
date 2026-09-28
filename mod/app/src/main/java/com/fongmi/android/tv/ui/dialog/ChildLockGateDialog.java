@@ -2,11 +2,14 @@ package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Activity;
 import android.content.DialogInterface;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
 import android.widget.EditText;
 import android.widget.ImageButton;
 
@@ -19,7 +22,7 @@ import com.fongmi.android.tv.utils.Notify;
 
 /**
  * 启动锁：不可取消，密码正确后解锁本进程。
- * UI 含密码显示/隐藏；功能逻辑不变。
+ * 「解锁」在内容区内，无系统底部黑条按钮栏。
  */
 public final class ChildLockGateDialog {
 
@@ -37,29 +40,40 @@ public final class ChildLockGateDialog {
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_gate, null);
         EditText pwd = root.findViewById(R.id.childLockGatePassword);
         ImageButton toggle = root.findViewById(R.id.childLockGatePasswordToggle);
+        View unlock = root.findViewById(R.id.childLockGateUnlock);
         bindPasswordToggle(pwd, toggle);
 
+        // 无系统 Positive/Negative 按钮，避免底部黑框
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
                 .setCancelable(false)
-                .setPositiveButton(R.string.child_lock_unlock, null)
                 .create();
         dialog.setCanceledOnTouchOutside(false);
         dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) -> {
             return keyCode == KeyEvent.KEYCODE_BACK;
         });
         dialog.setOnDismissListener(d -> showing = false);
+
+        View.OnClickListener doUnlock = v -> {
+            String p = pwd.getText() != null ? pwd.getText().toString() : "";
+            if (TextUtils.isEmpty(p) || !Setting.verifyChildLockPassword(p)) {
+                Notify.show(R.string.child_lock_error_wrong);
+                pwd.setText("");
+                return;
+            }
+            ChildLock.unlock();
+            dialog.dismiss();
+        };
+        if (unlock != null) unlock.setOnClickListener(doUnlock);
+
         dialog.setOnShowListener(d -> {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                String p = pwd.getText() != null ? pwd.getText().toString() : "";
-                if (TextUtils.isEmpty(p) || !Setting.verifyChildLockPassword(p)) {
-                    Notify.show(R.string.child_lock_error_wrong);
-                    pwd.setText("");
-                    return;
+            try {
+                Window w = dialog.getWindow();
+                if (w != null) {
+                    w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                 }
-                ChildLock.unlock();
-                dialog.dismiss();
-            });
+            } catch (Throwable ignored) {
+            }
             try {
                 pwd.requestFocus();
             } catch (Throwable ignored) {
@@ -67,6 +81,13 @@ public final class ChildLockGateDialog {
         });
         try {
             dialog.show();
+            try {
+                Window w = dialog.getWindow();
+                if (w != null) {
+                    w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                }
+            } catch (Throwable ignored) {
+            }
         } catch (Throwable e) {
             showing = false;
         }

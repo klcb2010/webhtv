@@ -21,13 +21,14 @@
         android:text="@string/child_lock_gate_message"
         android:textColor="#FF424242"
         android:textSize="14sp"
-        android:paddingBottom="8dp" />
+        android:paddingBottom="12dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:paddingBottom="16dp">
 
         <EditText
             android:id="@+id/childLockGatePassword"
@@ -52,4 +53,19 @@
             android:src="@android:drawable/ic_menu_view"
             android:focusable="true" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/childLockGateUnlock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:text="@string/child_lock_unlock"
+        android:textColor="#FF1565C0"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:background="?attr/selectableItemBackground"
+        android:focusable="true"
+        android:clickable="true" />
 </LinearLayout>
