@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.ui.dialog.ChildLockGateDialog;
+
 import android.app.PendingIntent;
 import android.app.SearchManager;
 import android.content.Intent;
@@ -117,6 +119,12 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
                 } catch (Throwable ignored) {}
             }, 5000);
         } catch (Throwable ignored) {}
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
     }
 
     @Override

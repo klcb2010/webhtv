@@ -119,4 +119,22 @@
     <string name="setting_subtitle_color">Subtitle color</string>
     <string name="setting_subtitle_font">Subtitle font</string>
     <string name="setting_global_toast">Global toast</string>
+    <string name="child_lock_title">Child Lock</string>
+    <string name="child_lock_enable">Enable</string>
+    <string name="child_lock_password">Password</string>
+    <string name="child_lock_password_hint">Enter password</string>
+    <string name="child_lock_password_confirm">Confirm password</string>
+    <string name="child_lock_password_confirm_hint">Enter password again</string>
+    <string name="child_lock_setup_hint">Takes effect on next app launch. Closing requires current password.</string>
+    <string name="child_lock_gate_title">Child Lock</string>
+    <string name="child_lock_gate_message">Enter password to use the app</string>
+    <string name="child_lock_unlock">Unlock</string>
+    <string name="child_lock_save">Save</string>
+    <string name="child_lock_cancel">Cancel</string>
+    <string name="child_lock_error_mismatch">Passwords do not match</string>
+    <string name="child_lock_error_empty">Password cannot be empty</string>
+    <string name="child_lock_error_wrong">Wrong password</string>
+    <string name="child_lock_saved">Saved. Will lock on next launch.</string>
+    <string name="child_lock_disabled">Child lock disabled</string>
+    <string name="setting_child_lock">Child Lock</string>
 </resources>

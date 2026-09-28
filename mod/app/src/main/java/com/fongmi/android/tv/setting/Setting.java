@@ -1160,4 +1160,43 @@ public class Setting {
         Prefers.put("update_oci_mirror_url", url == null ? "" : url.trim());
     }
 
+
+    // ---------- 儿童管理（启动密码锁，非内容过滤）----------
+    public static boolean isChildLockEnabled() {
+        return Prefers.getBoolean("child_lock_enabled", false);
+    }
+
+    public static void putChildLockEnabled(boolean enabled) {
+        Prefers.put("child_lock_enabled", enabled);
+    }
+
+    public static String getChildLockPasswordHash() {
+        return Prefers.getString("child_lock_password_hash", "");
+    }
+
+    public static void putChildLockPasswordHash(String hash) {
+        Prefers.put("child_lock_password_hash", hash == null ? "" : hash);
+    }
+
+    /** SHA-256 hex of password; empty input -> empty */
+    public static String hashChildLockPassword(String password) {
+        if (password == null || password.isEmpty()) return "";
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] dig = md.digest(password.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(dig.length * 2);
+            for (byte b : dig) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    public static boolean verifyChildLockPassword(String password) {
+        String saved = getChildLockPasswordHash();
+        if (saved == null || saved.isEmpty()) return false;
+        String h = hashChildLockPassword(password);
+        return saved.equalsIgnoreCase(h);
+    }
+
 }

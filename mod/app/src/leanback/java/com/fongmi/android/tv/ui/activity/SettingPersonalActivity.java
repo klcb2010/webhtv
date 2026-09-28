@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.ui.dialog.ChildLockSetupDialog;
+
 import android.app.Activity;
 import android.os.Bundle;
 import android.content.Intent;
@@ -64,6 +66,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeSiteLock.setOnClickListener(this::setHomeSiteLock);
         mBinding.homeVodAutoLoad.setOnClickListener(this::setHomeVodAutoLoad);
         mBinding.homeHistory.setOnClickListener(this::setHomeHistory);
+        try { mBinding.childLock.setOnClickListener(this::setChildLock); } catch (Throwable ignored) {}
         try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -104,6 +107,7 @@ public class SettingPersonalActivity extends BaseActivity {
         mBinding.homeSiteLockText.setText(getSwitch(Setting.isHomeSiteLock()));
         mBinding.homeVodAutoLoadText.setText(getSwitch(Setting.isHomeVodAutoLoad()));
         mBinding.homeHistoryText.setText(getSwitch(Setting.isHomeHistory()));
+        try { mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled())); } catch (Throwable ignored) {}
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -275,6 +279,20 @@ public class SettingPersonalActivity extends BaseActivity {
         src = (src + 1) % 4;
         Setting.putRecommendSource(src);
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+    }
+
+
+    private void setChildLock(View view) {
+        try {
+            ChildLockSetupDialog.show(this);
+            view.postDelayed(() -> {
+                try {
+                    mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled()));
+                } catch (Throwable ignored) {
+                }
+            }, 400);
+        } catch (Throwable ignored) {
+        }
     }
 
 }

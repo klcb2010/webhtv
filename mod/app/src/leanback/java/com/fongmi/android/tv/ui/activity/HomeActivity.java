@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
+import com.fongmi.android.tv.ui.dialog.ChildLockGateDialog;
+
 import android.annotation.SuppressLint;
 import android.app.SearchManager;
 import android.content.Intent;
@@ -794,6 +796,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     @Override
     protected void onResume() {
         super.onResume();
+        try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
         mClock.start();
         if (mWeb != null) mWeb.onResume();
     }
