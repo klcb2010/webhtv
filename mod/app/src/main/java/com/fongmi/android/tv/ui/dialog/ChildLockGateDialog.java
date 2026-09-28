@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.Window;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -21,8 +22,7 @@ import com.fongmi.android.tv.utils.ChildLock;
 import com.fongmi.android.tv.utils.Notify;
 
 /**
- * 启动锁：不可取消，密码正确后解锁本进程。
- * 「解锁」在内容区内，无系统底部黑条按钮栏。
+ * 启动锁。解锁在内容区；眼睛开闭区分；获焦深蓝。
  */
 public final class ChildLockGateDialog {
 
@@ -40,42 +40,40 @@ public final class ChildLockGateDialog {
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_gate, null);
         EditText pwd = root.findViewById(R.id.childLockGatePassword);
         ImageButton toggle = root.findViewById(R.id.childLockGatePasswordToggle);
-        View unlock = root.findViewById(R.id.childLockGateUnlock);
+        TextView unlock = root.findViewById(R.id.childLockGateUnlock);
         bindPasswordToggle(pwd, toggle);
+        bindFocusTextColor(unlock);
 
-        // 无系统 Positive/Negative 按钮，避免底部黑框
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setView(root)
                 .setCancelable(false)
                 .create();
         dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) -> {
-            return keyCode == KeyEvent.KEYCODE_BACK;
-        });
+        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) ->
+                keyCode == KeyEvent.KEYCODE_BACK);
         dialog.setOnDismissListener(d -> showing = false);
 
-        View.OnClickListener doUnlock = v -> {
-            String p = pwd.getText() != null ? pwd.getText().toString() : "";
-            if (TextUtils.isEmpty(p) || !Setting.verifyChildLockPassword(p)) {
-                Notify.show(R.string.child_lock_error_wrong);
-                pwd.setText("");
-                return;
-            }
-            ChildLock.unlock();
-            dialog.dismiss();
-        };
-        if (unlock != null) unlock.setOnClickListener(doUnlock);
+        if (unlock != null) {
+            unlock.setOnClickListener(v -> {
+                String p = pwd.getText() != null ? pwd.getText().toString() : "";
+                if (TextUtils.isEmpty(p) || !Setting.verifyChildLockPassword(p)) {
+                    Notify.show(R.string.child_lock_error_wrong);
+                    pwd.setText("");
+                    return;
+                }
+                ChildLock.unlock();
+                dialog.dismiss();
+            });
+        }
 
         dialog.setOnShowListener(d -> {
             try {
                 Window w = dialog.getWindow();
-                if (w != null) {
-                    w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                }
+                if (w != null) w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             } catch (Throwable ignored) {
             }
             try {
-                pwd.requestFocus();
+                if (pwd != null) pwd.requestFocus();
             } catch (Throwable ignored) {
             }
         });
@@ -83,9 +81,7 @@ public final class ChildLockGateDialog {
             dialog.show();
             try {
                 Window w = dialog.getWindow();
-                if (w != null) {
-                    w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                }
+                if (w != null) w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             } catch (Throwable ignored) {
             }
         } catch (Throwable e) {
@@ -96,19 +92,31 @@ public final class ChildLockGateDialog {
     private static void bindPasswordToggle(EditText edit, ImageButton toggle) {
         if (edit == null || toggle == null) return;
         final boolean[] visible = {false};
+        toggle.setImageResource(R.drawable.ic_child_lock_eye_closed);
         toggle.setOnClickListener(v -> {
             visible[0] = !visible[0];
             int start = edit.getSelectionStart();
             int end = edit.getSelectionEnd();
             if (visible[0]) {
                 edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+                toggle.setImageResource(R.drawable.ic_child_lock_eye_open);
             } else {
                 edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                toggle.setImageResource(R.drawable.ic_child_lock_eye_closed);
             }
             try {
-                if (start >= 0) edit.setSelection(Math.min(start, edit.getText().length()), Math.min(end, edit.getText().length()));
+                if (start >= 0) {
+                    edit.setSelection(Math.min(start, edit.getText().length()), Math.min(end, edit.getText().length()));
+                }
             } catch (Throwable ignored) {
             }
         });
+    }
+
+    private static void bindFocusTextColor(TextView tv) {
+        if (tv == null) return;
+        final int normal = 0xFF1565C0;
+        final int onFocus = 0xFFFFFFFF;
+        tv.setOnFocusChangeListener((v, hasFocus) -> tv.setTextColor(hasFocus ? onFocus : normal));
     }
 }

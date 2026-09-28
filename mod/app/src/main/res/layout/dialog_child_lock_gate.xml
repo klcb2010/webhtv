@@ -46,12 +46,15 @@
 
         <ImageButton
             android:id="@+id/childLockGatePasswordToggle"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/selector_child_lock_focus"
             android:contentDescription="@string/child_lock_toggle_password"
-            android:src="@android:drawable/ic_menu_view"
-            android:focusable="true" />
+            android:src="@drawable/ic_child_lock_eye_closed"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
     </LinearLayout>
 
     <TextView
@@ -65,7 +68,8 @@
         android:textColor="#FF1565C0"
         android:textSize="16sp"
         android:textStyle="bold"
-        android:background="?attr/selectableItemBackground"
+        android:background="@drawable/selector_child_lock_focus"
         android:focusable="true"
+        android:focusableInTouchMode="true"
         android:clickable="true" />
 </LinearLayout>
