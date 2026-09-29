@@ -295,16 +295,15 @@ public class SettingPersonalActivity extends BaseActivity {
             view.post(() -> {
                 try {
                     if (isFinishing()) return;
-                    ChildLockSetupDialog.show(SettingPersonalActivity.this);
+                    ChildLockSetupDialog.show(SettingPersonalActivity.this, () -> {
+                        try {
+                            mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled()));
+                        } catch (Throwable ignored) {
+                        }
+                    });
                 } catch (Throwable ignored) {
                 }
             });
-            view.postDelayed(() -> {
-                try {
-                    mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled()));
-                } catch (Throwable ignored) {
-                }
-            }, 500);
         } catch (Throwable ignored) {
         }
     }

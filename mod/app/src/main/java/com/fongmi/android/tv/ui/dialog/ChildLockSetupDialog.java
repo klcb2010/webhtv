@@ -29,6 +29,11 @@ public final class ChildLockSetupDialog {
     }
 
     public static void show(Activity activity) {
+        show(activity, null);
+    }
+
+    /** @param onClosed 弹窗关闭后回调（保存/取消均触发），用于刷新列表状态 */
+    public static void show(Activity activity, Runnable onClosed) {
         if (activity == null || activity.isFinishing()) return;
         final boolean tv = Util.isLeanback();
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_setup, null);
@@ -76,6 +81,14 @@ public final class ChildLockSetupDialog {
         if (btnSave != null) {
             btnSave.setOnClickListener(v -> onSave(dialog, sw, pwd, confirm));
         }
+        dialog.setOnDismissListener(d -> {
+            if (onClosed != null) {
+                try {
+                    onClosed.run();
+                } catch (Throwable ignored) {
+                }
+            }
+        });
 
         dialog.setOnShowListener(d -> {
             try {
