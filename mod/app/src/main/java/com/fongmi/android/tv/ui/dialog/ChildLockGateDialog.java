@@ -11,6 +11,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -24,11 +25,12 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Util;
 
 /**
- * 启动锁。解锁/退出在内容区；TV 才启用遥控焦点高亮。
+ * 启动锁：不可取消、不可点外部关闭；仅解锁成功或主动退出。
  */
 public final class ChildLockGateDialog {
 
     private static boolean showing;
+    private static boolean unlockedOk;
 
     private ChildLockGateDialog() {
     }
@@ -38,6 +40,7 @@ public final class ChildLockGateDialog {
         if (!ChildLock.needsGate()) return;
         if (showing) return;
         showing = true;
+        unlockedOk = false;
 
         final boolean tv = Util.isLeanback();
         View root = LayoutInflater.from(activity).inflate(R.layout.dialog_child_lock_gate, null);
@@ -56,7 +59,6 @@ public final class ChildLockGateDialog {
                 toggle.setFocusableInTouchMode(true);
             }
         } else {
-            // 手机：触控为主，去掉 TV 焦点样式
             if (unlock != null) {
                 unlock.setFocusable(false);
                 unlock.setFocusableInTouchMode(false);
@@ -81,10 +83,34 @@ public final class ChildLockGateDialog {
                 .setView(root)
                 .setCancelable(false)
                 .create();
+        // 必须在 create 后、show 前后都设一次，部分机型只认其一
+        dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) ->
-                keyCode == KeyEvent.KEYCODE_BACK);
-        dialog.setOnDismissListener(d -> showing = false);
+        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) -> {
+            // 拦截返回键，不允许绕过
+            if (keyCode == KeyEvent.KEYCODE_BACK) return true;
+            return false;
+        });
+        dialog.setOnCancelListener(d -> {
+            // 理论上 cancelable=false 不会进；若进了则阻止
+        });
+        dialog.setOnDismissListener(d -> {
+            showing = false;
+            // 未解锁却被关掉（异常路径）→ 立刻再弹
+            if (!unlockedOk && ChildLock.needsGate()) {
+                try {
+                    if (activity != null && !activity.isFinishing() && !activity.isDestroyed()) {
+                        activity.getWindow().getDecorView().post(() -> {
+                            try {
+                                showIfNeeded(activity);
+                            } catch (Throwable ignored) {
+                            }
+                        });
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        });
 
         if (unlock != null) {
             unlock.setOnClickListener(v -> {
@@ -94,12 +120,14 @@ public final class ChildLockGateDialog {
                     if (pwd != null) pwd.setText("");
                     return;
                 }
+                unlockedOk = true;
                 ChildLock.unlock();
                 dialog.dismiss();
             });
         }
         if (exit != null) {
             exit.setOnClickListener(v -> {
+                unlockedOk = true; // 主动退出，不必再弹
                 try {
                     dialog.dismiss();
                 } catch (Throwable ignored) {
@@ -120,12 +148,7 @@ public final class ChildLockGateDialog {
         }
 
         dialog.setOnShowListener(d -> {
-            try {
-                Window w = dialog.getWindow();
-                if (w != null) w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            } catch (Throwable ignored) {
-            }
-            // 仅 TV 强制定焦到密码框
+            hardenWindow(dialog);
             if (tv && pwd != null) {
                 try {
                     pwd.requestFocus();
@@ -135,13 +158,42 @@ public final class ChildLockGateDialog {
         });
         try {
             dialog.show();
-            try {
-                Window w = dialog.getWindow();
-                if (w != null) w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            } catch (Throwable ignored) {
-            }
+            dialog.setCancelable(false);
+            dialog.setCanceledOnTouchOutside(false);
+            hardenWindow(dialog);
         } catch (Throwable e) {
             showing = false;
+        }
+    }
+
+    /** 禁止点外部关闭、吃掉外部触摸、半透明遮罩 */
+    private static void hardenWindow(AlertDialog dialog) {
+        try {
+            Window w = dialog.getWindow();
+            if (w == null) return;
+            // 内容区透明圆角，但窗口仍拦截外部触摸
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            WindowManager.LayoutParams lp = w.getAttributes();
+            if (lp != null) {
+                lp.dimAmount = 0.65f;
+                w.setAttributes(lp);
+            }
+            // 部分 ROM：外部点击仍 dismiss，再挡一层
+            View decor = w.getDecorView();
+            if (decor != null) {
+                decor.setOnTouchListener((v, event) -> {
+                    // 消费 decor 边缘区域触摸，不往下传成 cancel
+                    return false; // false 让子 View 仍可点；cancel 由 setCanceledOnTouchOutside 管
+                });
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            dialog.setCancelable(false);
+            dialog.setCanceledOnTouchOutside(false);
+        } catch (Throwable ignored) {
         }
     }
 
