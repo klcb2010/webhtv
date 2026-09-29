@@ -172,14 +172,14 @@ public final class ChildLockSetupDialog {
             sw.setFocusableInTouchMode(false);
             sw.setClickable(true);
         }
-        if (enableLabel != null) enableLabel.setTextColor(0xFFE8EEF7);
+        if (enableLabel != null) enableLabel.setTextColor(0xFF1E88E5);
         // 按钮保持可点，不做 TV 获焦变色
         for (View b : new View[]{btnCancel, btnSave}) {
             if (b == null) continue;
             b.setFocusable(false);
             b.setFocusableInTouchMode(false);
             b.setBackground(null);
-            if (b instanceof TextView) ((TextView) b).setTextColor(0xFF6BA3E8);
+            if (b instanceof TextView) ((TextView) b).setTextColor(0xFF1E88E5);
         }
         for (ImageButton ib : new ImageButton[]{togglePwd, toggleConfirm}) {
             if (ib == null) continue;
@@ -199,8 +199,8 @@ public final class ChildLockSetupDialog {
     private static void applyTvFocusChrome(View switchRow, SwitchCompat sw, TextView enableLabel,
                                           View btnCancel, View btnSave, EditText pwd, EditText confirm) {
         bindSwitchRowHighlight(switchRow, sw, enableLabel);
-        bindFocusLabel(btnCancel, btnCancel instanceof TextView ? (TextView) btnCancel : null, 0xFF6BA3E8, 0xFFFFFFFF);
-        bindFocusLabel(btnSave, btnSave instanceof TextView ? (TextView) btnSave : null, 0xFF6BA3E8, 0xFFFFFFFF);
+        bindFocusLabel(btnCancel, btnCancel instanceof TextView ? (TextView) btnCancel : null, 0xFF1E88E5, 0xFFFFFFFF);
+        bindFocusLabel(btnSave, btnSave instanceof TextView ? (TextView) btnSave : null, 0xFF1E88E5, 0xFFFFFFFF);
         enhancePasswordFocus(pwd);
         enhancePasswordFocus(confirm);
         if (sw != null) {
@@ -279,7 +279,7 @@ public final class ChildLockSetupDialog {
             switchRow.invalidate();
         }
         if (enableLabel != null) {
-            enableLabel.setTextColor(on ? 0xFFFFFFFF : 0xFFE8EEF7);
+            enableLabel.setTextColor(on ? 0xFFFFFFFF : 0xFF1E88E5);
         }
     }
 

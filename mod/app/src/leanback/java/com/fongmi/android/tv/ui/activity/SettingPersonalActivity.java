@@ -284,13 +284,20 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setChildLock(View view) {
         try {
-            ChildLockSetupDialog.show(this);
+            // post 避免 focusable 行首次点击只抢焦点不触发业务
+            view.post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    ChildLockSetupDialog.show(SettingPersonalActivity.this);
+                } catch (Throwable ignored) {
+                }
+            });
             view.postDelayed(() -> {
                 try {
                     mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled()));
                 } catch (Throwable ignored) {
                 }
-            }, 400);
+            }, 500);
         } catch (Throwable ignored) {
         }
     }

@@ -48,8 +48,8 @@ public final class ChildLockGateDialog {
         bindPasswordToggle(pwd, toggle);
 
         if (tv) {
-            bindFocusLabel(unlock, 0xFF6BA3E8, 0xFFFFFFFF);
-            bindFocusLabel(exit, 0xFF6BA3E8, 0xFFFFFFFF);
+            bindFocusLabel(unlock, 0xFF1E88E5, 0xFFFFFFFF);
+            bindFocusLabel(exit, 0xFF1E88E5, 0xFFFFFFFF);
             enhancePasswordFocus(pwd);
             if (toggle != null) {
                 toggle.setFocusable(true);
@@ -61,13 +61,13 @@ public final class ChildLockGateDialog {
                 unlock.setFocusable(false);
                 unlock.setFocusableInTouchMode(false);
                 unlock.setBackground(null);
-                unlock.setTextColor(0xFF6BA3E8);
+                unlock.setTextColor(0xFF1E88E5);
             }
             if (exit != null) {
                 exit.setFocusable(false);
                 exit.setFocusableInTouchMode(false);
                 exit.setBackground(null);
-                exit.setTextColor(0xFF6BA3E8);
+                exit.setTextColor(0xFF1E88E5);
             }
             if (toggle != null) {
                 toggle.setFocusable(false);

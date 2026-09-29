@@ -13,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/child_lock_gate_message"
-        android:textColor="#FFE8EEF7"
+        android:textColor="#FF263238"
         android:textSize="15sp"
         android:paddingBottom="16dp" />
 
@@ -34,8 +34,8 @@
             android:focusable="true"
             android:focusableInTouchMode="true"
             android:hint="@string/child_lock_password_hint"
-            android:textColor="#FFE8EEF7"
-            android:textColorHint="#99A8B8D0"
+            android:textColor="#FF263238"
+            android:textColorHint="#99263238"
             android:textSize="15sp"
             android:background="@drawable/selector_child_lock_edit"
             android:nextFocusDown="@+id/childLockGateUnlock" />
@@ -72,7 +72,7 @@
             android:paddingBottom="10dp"
             android:layout_marginEnd="4dp"
             android:text="@string/child_lock_exit"
-            android:textColor="#FF6BA3E8"
+            android:textColor="#FF1E88E5"
             android:textSize="15sp"
             android:textStyle="normal"
             android:background="@drawable/selector_child_lock_focus"
@@ -91,7 +91,7 @@
             android:paddingTop="10dp"
             android:paddingBottom="10dp"
             android:text="@string/child_lock_unlock"
-            android:textColor="#FF6BA3E8"
+            android:textColor="#FF1E88E5"
             android:textSize="15sp"
             android:textStyle="normal"
             android:background="@drawable/selector_child_lock_focus"
