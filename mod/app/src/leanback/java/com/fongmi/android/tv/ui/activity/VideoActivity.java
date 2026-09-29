@@ -3607,17 +3607,27 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
         final View target = focus;
         if (target != null) {
+            try {
+                // 先滚到可见区域，避免 HorizontalScrollView 里第一个按钮在屏外
+                target.getParent().requestChildFocus(target, target);
+            } catch (Throwable ignored) {
+            }
             target.requestFocus();
-            // 部分机顶盒首帧焦点未落地，再补一次
+            // 机顶盒：布局完成后再强制定焦到目标，防止焦点落到解码等中间项
             App.post(() -> {
                 try {
-                    if (isVisible(mBinding.control.getRoot()) && (getCurrentFocus() == null
-                            || getCurrentFocus() == mBinding.video)) {
-                        target.requestFocus();
-                    }
+                    if (!isVisible(mBinding.control.getRoot())) return;
+                    target.requestFocus();
                 } catch (Throwable ignored) {
                 }
-            }, 50);
+            }, 30);
+            App.post(() -> {
+                try {
+                    if (!isVisible(mBinding.control.getRoot())) return;
+                    if (getCurrentFocus() != target) target.requestFocus();
+                } catch (Throwable ignored) {
+                }
+            }, 120);
         }
         setR1Callback();
     }
@@ -6074,33 +6084,68 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         return findFirstFocusableControlAction();
     }
 
-    /** 底栏呼出时定焦：取第一个可见可焦的控制按钮（避免 next 被隐藏时无焦点） */
-    private View findFirstFocusableControlAction() {
-        // 固定视觉顺序：播放器内核 → 解码 → …（不要按 container 子序，避免定到第3个）
-        View[] preferred = new View[]{
-                mBinding.control.action.player,
-                mBinding.control.action.decode,
-                mBinding.control.action.playParams,
-                mBinding.control.action.speed,
-                mBinding.control.action.scale,
-                mBinding.control.action.text,
-                mBinding.control.action.audio,
-                mBinding.control.action.video,
-                mBinding.control.action.next,
-                mBinding.control.action.prev,
-                mBinding.control.action.episodes,
-                mBinding.control.action.reset,
-                mBinding.control.action.repeat
-        };
-        for (View v : preferred) {
+    /**
+     * 下键专用：显示底栏 → 滚到最左 → 按从左到右第一个可见可焦按钮定焦。
+     * 不使用 mFocus2，不硬编码 player/decode。
+     */
+    private void showControlBarFocusFirst() {
+        if (mAudioStageVisible) {
+            hideControl();
+            hideInfo();
+            focusAudioStageDefault();
+            return;
+        }
+        showTopInfo();
+        setPlayParamsState();
+        mBinding.control.getRoot().setVisibility(View.VISIBLE);
+        if (mOsd != null) mOsd.setControlsVisible(true);
+        forceHideConfiguredActionButtons();
+        // 必须先滚回最左，否则「屏幕上看到的第一个」和 container 第一个可能不是同一个
+        scrollControlActionToStart();
+        final View target = findFirstFocusableControlAction();
+        if (target != null) {
             try {
-                if (v == null || v.getVisibility() != View.VISIBLE) continue;
-                if (!v.isFocusable() || !v.isEnabled()) continue;
-                if (v == mBinding.control.action.opening || v == mBinding.control.action.ending) continue;
-                return v;
+                target.requestFocus();
             } catch (Throwable ignored) {
             }
+            App.post(() -> {
+                try {
+                    if (!isVisible(mBinding.control.getRoot())) return;
+                    scrollControlActionToStart();
+                    target.requestFocus();
+                } catch (Throwable ignored) {
+                }
+            }, 40);
+            App.post(() -> {
+                try {
+                    if (!isVisible(mBinding.control.getRoot())) return;
+                    if (getCurrentFocus() != target) {
+                        scrollControlActionToStart();
+                        target.requestFocus();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }, 150);
         }
+        setR1Callback();
+    }
+
+    private void scrollControlActionToStart() {
+        try {
+            android.widget.HorizontalScrollView scroll = mBinding.control.action.getRoot();
+            if (scroll != null) {
+                scroll.scrollTo(0, 0);
+                scroll.fullScroll(View.FOCUS_LEFT);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 从左到右：container 里第一个 VISIBLE + focusable + enabled 的子 View。
+     * 顺序已是布局/applyOrder 后的真实顺序；谁排第一（上集/EXO/字幕…）就定谁。
+     */
+    private View findFirstFocusableControlAction() {
         try {
             android.view.ViewGroup container = mBinding.control.action.container;
             if (container != null) {
@@ -6108,13 +6153,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                     View child = container.getChildAt(i);
                     if (child == null || child.getVisibility() != View.VISIBLE) continue;
                     if (!child.isFocusable() || !child.isEnabled()) continue;
-                    if (child == mBinding.control.action.opening || child == mBinding.control.action.ending) continue;
+                    try {
+                        if (child == mBinding.control.action.opening || child == mBinding.control.action.ending) continue;
+                    } catch (Throwable ignored) {
+                    }
                     return child;
                 }
             }
         } catch (Throwable ignored) {
         }
-        return mBinding.control.action.player;
+        return null;
     }
 
     private boolean dispatchOpeningEndingAdjust(KeyEvent event) {
@@ -6459,9 +6507,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     public void onKeyDown() {
-        // 每次下键呼出底栏都定到第一个可见按钮（不要粘在上次的第3个）
+        // 下键呼出：无视上次焦点与按钮排序记忆，定到底栏「当前从左到右第一个可见可焦按钮」
         mFocus2 = null;
-        showControl(findFirstFocusableControlAction());
+        showControlBarFocusFirst();
     }
 
     @Override
