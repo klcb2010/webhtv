@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Process;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
@@ -25,7 +24,9 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Util;
 
 /**
- * 启动锁：不可取消、不可点外部关闭；仅解锁成功或主动退出。
+ * 启动锁：不可点外部关闭、不可返回绕过。
+ * 仅「解锁」进入 App；「退出」只结束任务回桌面（不再 killProcess，避免像崩溃自杀）。
+ * 重弹只依赖 Activity.onResume → showIfNeeded，禁止 onDismiss 连环重弹。
  */
 public final class ChildLockGateDialog {
 
@@ -83,34 +84,14 @@ public final class ChildLockGateDialog {
                 .setView(root)
                 .setCancelable(false)
                 .create();
-        // 必须在 create 后、show 前后都设一次，部分机型只认其一
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) -> {
-            // 拦截返回键，不允许绕过
-            if (keyCode == KeyEvent.KEYCODE_BACK) return true;
-            return false;
-        });
-        dialog.setOnCancelListener(d -> {
-            // 理论上 cancelable=false 不会进；若进了则阻止
-        });
-        dialog.setOnDismissListener(d -> {
-            showing = false;
-            // 未解锁却被关掉（异常路径）→ 立刻再弹
-            if (!unlockedOk && ChildLock.needsGate()) {
-                try {
-                    if (activity != null && !activity.isFinishing() && !activity.isDestroyed()) {
-                        activity.getWindow().getDecorView().post(() -> {
-                            try {
-                                showIfNeeded(activity);
-                            } catch (Throwable ignored) {
-                            }
-                        });
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-        });
+        dialog.setOnKeyListener((DialogInterface d, int keyCode, KeyEvent event) ->
+                keyCode == KeyEvent.KEYCODE_BACK);
+        // 重要：不要在 onDismiss 里再 showIfNeeded。
+        // Activity onPause（息屏/Home/屏保）会导致 Dialog dismiss，再重弹会连环异常，
+        // 严重时进程被系统回收，表现就像「无崩溃提示地回到桌面」。
+        dialog.setOnDismissListener(d -> showing = false);
 
         if (unlock != null) {
             unlock.setOnClickListener(v -> {
@@ -122,16 +103,20 @@ public final class ChildLockGateDialog {
                 }
                 unlockedOk = true;
                 ChildLock.unlock();
-                dialog.dismiss();
-            });
-        }
-        if (exit != null) {
-            exit.setOnClickListener(v -> {
-                unlockedOk = true; // 主动退出，不必再弹
                 try {
                     dialog.dismiss();
                 } catch (Throwable ignored) {
                 }
+            });
+        }
+        if (exit != null) {
+            exit.setOnClickListener(v -> {
+                unlockedOk = true; // 主动退出，onResume 不必再锁一次干扰收尾
+                try {
+                    dialog.dismiss();
+                } catch (Throwable ignored) {
+                }
+                // 只结束任务回桌面，禁止 killProcess（否则无 bug 报告却像自杀）
                 try {
                     activity.finishAffinity();
                 } catch (Throwable ignored) {
@@ -140,16 +125,13 @@ public final class ChildLockGateDialog {
                     } catch (Throwable ignored2) {
                     }
                 }
-                try {
-                    Process.killProcess(Process.myPid());
-                } catch (Throwable ignored) {
-                }
             });
         }
 
         dialog.setOnShowListener(d -> {
             hardenWindow(dialog);
-            if (tv && pwd != null) {
+            // TV：默认焦点密码框，避免误落到「退出」
+            if (pwd != null) {
                 try {
                     pwd.requestFocus();
                 } catch (Throwable ignored) {
@@ -166,12 +148,10 @@ public final class ChildLockGateDialog {
         }
     }
 
-    /** 禁止点外部关闭、吃掉外部触摸、半透明遮罩 */
     private static void hardenWindow(AlertDialog dialog) {
         try {
             Window w = dialog.getWindow();
             if (w == null) return;
-            // 内容区透明圆角，但窗口仍拦截外部触摸
             w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
@@ -179,14 +159,6 @@ public final class ChildLockGateDialog {
             if (lp != null) {
                 lp.dimAmount = 0.65f;
                 w.setAttributes(lp);
-            }
-            // 部分 ROM：外部点击仍 dismiss，再挡一层
-            View decor = w.getDecorView();
-            if (decor != null) {
-                decor.setOnTouchListener((v, event) -> {
-                    // 消费 decor 边缘区域触摸，不往下传成 cancel
-                    return false; // false 让子 View 仍可点；cancel 由 setCanceledOnTouchOutside 管
-                });
             }
         } catch (Throwable ignored) {
         }
