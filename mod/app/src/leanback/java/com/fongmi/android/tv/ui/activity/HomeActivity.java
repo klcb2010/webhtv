@@ -796,7 +796,11 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         return child != null && child.requestFocus();
     }
 
-    /** 个性设置「启动进入直播」：冷启动且已解锁、有直播源时进一次直播 */
+
+    /**
+     * 「启动进入直播」：仅本进程首次进入主页且已解锁时判定一次。
+     * 中途在设置里打开开关不会立刻跳直播，需下次冷启动才生效。
+     */
     private void tryOpenDefaultLive() {
         try {
             if (homeLiveOpened) return;
@@ -805,13 +809,15 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                 if (com.fongmi.android.tv.utils.ChildLock.needsGate()) return;
             } catch (Throwable ignored) {
             }
+            // 先标记已判定，避免从设置返回 onResume 时因刚打开开关而立刻进直播
+            homeLiveOpened = true;
             if (!com.fongmi.android.tv.setting.Setting.isHomeEnterLive()) return;
             if (!LiveConfig.hasUrl()) return;
-            homeLiveOpened = true;
             LiveActivity.start(this);
         } catch (Throwable ignored) {
         }
     }
+
 
     @Override
     protected void onResume() {
