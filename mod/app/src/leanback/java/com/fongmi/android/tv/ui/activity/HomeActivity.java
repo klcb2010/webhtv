@@ -818,10 +818,31 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
 
+
+    /**
+     * 从个性设置返回时立即刷新首页相关开关（除「启动进入直播」等明确约定下次启动生效的项）。
+     */
+    private void applyPersonalSettingsLive() {
+        try {
+            if (mFuncAdapter == null || mAdapter == null) return;
+            syncHomeSiteLock();
+            setFunc();
+            getHistory();
+            try {
+                if (!Setting.isHomeVodAutoLoad()) {
+                    mBinding.typeRecycler.setVisibility(View.GONE);
+                }
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
+        try { applyPersonalSettingsLive(); } catch (Throwable ignored) {}
         try { tryOpenDefaultLive(); } catch (Throwable ignored) {}
         mClock.start();
         if (mWeb != null) mWeb.onResume();
