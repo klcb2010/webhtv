@@ -139,4 +139,5 @@
     <string name="setting_child_lock">Parental Control</string>
     <string name="child_lock_toggle_password">Show / hide password</string>
     <string name="child_lock_exit">Exit</string>
+    <string name="setting_home_enter_live">Enter live on startup</string>
 </resources>

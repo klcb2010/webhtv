@@ -139,4 +139,5 @@
     <string name="setting_child_lock">家长控制</string>
     <string name="child_lock_toggle_password">显示/隐藏密码</string>
     <string name="child_lock_exit">退出</string>
+    <string name="setting_home_enter_live">启动进入直播</string>
 </resources>

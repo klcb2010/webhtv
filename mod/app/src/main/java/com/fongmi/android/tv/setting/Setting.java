@@ -750,6 +750,16 @@ public class Setting {
         return 10;
     }
 
+
+    /** 启动后默认进入直播（仅冷启动一次；无直播源则忽略） */
+    public static boolean isHomeEnterLive() {
+        return Prefers.getBoolean("home_enter_live", false);
+    }
+
+    public static void putHomeEnterLive(boolean value) {
+        Prefers.put("home_enter_live", value);
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }

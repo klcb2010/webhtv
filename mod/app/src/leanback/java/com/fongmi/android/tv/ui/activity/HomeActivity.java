@@ -98,6 +98,8 @@ import java.util.Optional;
 
 public class HomeActivity extends BaseActivity implements CustomTitleView.Listener, VodPresenter.OnClickListener, FuncPresenter.OnClickListener, HistoryPresenter.OnClickListener, TypeAdapter.OnClickListener, HomeWebController.Listener {
 
+    private boolean homeLiveOpened;
+
     private static final String TV_NORMAL = "tv-normal";
     private static final String TV_TOOLBAR_HIDDEN = "tv-toolbar-hidden";
     private static final String TV_OVERLAY = "tv-overlay";
@@ -379,6 +381,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         getVideo();
         setFocus();
         App.post(this::prewarmWebView, 1500);
+        try { tryOpenDefaultLive(); } catch (Throwable ignored) {}
         SpiderDebug.log("startup", "home showContent end cost=%sms", System.currentTimeMillis() - App.time());
     }
 
@@ -794,9 +797,28 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
     @Override
+
+    /** 个性设置「默认进入直播」：冷启动且已解锁、有直播源时进一次直播 */
+    private void tryOpenDefaultLive() {
+        try {
+            if (homeLiveOpened) return;
+            if (isFinishing()) return;
+            try {
+                if (com.fongmi.android.tv.utils.ChildLock.needsGate()) return;
+            } catch (Throwable ignored) {
+            }
+            if (!com.fongmi.android.tv.setting.Setting.isHomeEnterLive()) return;
+            if (!LiveConfig.hasUrl()) return;
+            homeLiveOpened = true;
+            LiveActivity.start(this);
+        } catch (Throwable ignored) {
+        }
+    }
+
     protected void onResume() {
         super.onResume();
         try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
+        try { tryOpenDefaultLive(); } catch (Throwable ignored) {}
         mClock.start();
         if (mWeb != null) mWeb.onResume();
     }

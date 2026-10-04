@@ -48,6 +48,7 @@ public final class SettingPersonalDialog {
         Row homeSiteLock = tvOnly ? row(activity, rowPad, R.string.setting_home_site_lock) : null;
         Row homeVodAutoLoad = tvOnly ? row(activity, rowPad, R.string.setting_home_vod_auto_load) : null;
         Row homeHistory = tvOnly ? row(activity, rowPad, R.string.setting_home_history) : null;
+        Row homeEnterLive = row(activity, rowPad, R.string.setting_home_enter_live);
 
         Runnable refresh = () -> {
             autoBackup.value.setText(onOff(activity, Setting.isAutoBackup()));
@@ -72,6 +73,7 @@ public final class SettingPersonalDialog {
             if (homeSiteLock != null) homeSiteLock.value.setText(onOff(activity, Setting.isHomeSiteLock()));
             if (homeVodAutoLoad != null) homeVodAutoLoad.value.setText(onOff(activity, Setting.isHomeVodAutoLoad()));
             if (homeHistory != null) homeHistory.value.setText(onOff(activity, Setting.isHomeHistory()));
+            homeEnterLive.value.setText(onOff(activity, Setting.isHomeEnterLive()));
         };
         refresh.run();
 
@@ -139,8 +141,14 @@ public final class SettingPersonalDialog {
         if (homeSiteLock != null) root.addView(homeSiteLock.root);
         if (homeVodAutoLoad != null) root.addView(homeVodAutoLoad.root);
         if (homeHistory != null) root.addView(homeHistory.root);
+        
+        homeEnterLive.root.setOnClickListener(v -> {
+            Setting.putHomeEnterLive(!Setting.isHomeEnterLive());
+            refresh.run();
+        });
         root.addView(subAuto.root);
         root.addView(subLang.root);
+        root.addView(homeEnterLive.root);
 
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(root);

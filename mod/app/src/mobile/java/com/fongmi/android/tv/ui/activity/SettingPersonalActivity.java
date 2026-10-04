@@ -69,6 +69,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.childLock.setOnClickListener(this::setChildLock); } catch (Throwable ignored) {}
         try { mBinding.homePush.setOnClickListener(this::setHomePush); } catch (Throwable ignored) {}
         try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
+        try { mBinding.homeEnterLive.setOnClickListener(this::setHomeEnterLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
 
@@ -111,6 +112,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled())); } catch (Throwable ignored) {}
         try { mBinding.homePushText.setText(getSwitch(Setting.isHomePush())); } catch (Throwable ignored) {}
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {

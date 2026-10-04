@@ -66,6 +66,8 @@ import org.greenrobot.eventbus.ThreadMode;
 public class HomeActivity extends BaseActivity implements NavigationBarView.OnItemSelectedListener, WebHomeChromeController.Host {
 
     public static final String EXTRA_NAV_POSITION = "nav_position";
+    private boolean homeLiveOpened;
+
     private static final String STATE_RETURN_VOD_FROM_ENHANCE = "returnVodFromEnhance";
     private static final String STATE_CURRENT_POSITION = "currentPosition";
 
@@ -122,9 +124,28 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     @Override
+
+    /** 个性设置「默认进入直播」：冷启动且已解锁、有直播源时进一次直播 */
+    private void tryOpenDefaultLive() {
+        try {
+            if (homeLiveOpened) return;
+            if (isFinishing()) return;
+            try {
+                if (com.fongmi.android.tv.utils.ChildLock.needsGate()) return;
+            } catch (Throwable ignored) {
+            }
+            if (!com.fongmi.android.tv.setting.Setting.isHomeEnterLive()) return;
+            if (!LiveConfig.hasUrl()) return;
+            homeLiveOpened = true;
+            LiveActivity.start(this);
+        } catch (Throwable ignored) {
+        }
+    }
+
     protected void onResume() {
         super.onResume();
         try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
+        try { tryOpenDefaultLive(); } catch (Throwable ignored) {}
     }
 
     @Override
@@ -217,6 +238,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.live).setVisible(LiveConfig.hasUrl());
+        try { tryOpenDefaultLive(); } catch (Throwable ignored) {}
         syncNavigationSelection();
     }
 
