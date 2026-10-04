@@ -284,6 +284,15 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
 
+
+    private void setHomeEnterLive(View view) {
+        try {
+            Setting.putHomeEnterLive(!Setting.isHomeEnterLive());
+            mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive()));
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void setChildLock(View view) {
         try {
             // post 避免 focusable 行首次点击只抢焦点不触发业务
