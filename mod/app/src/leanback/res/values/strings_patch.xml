@@ -23,6 +23,7 @@
     <string name="child_lock_toggle_password">Show / hide password</string>
     <string name="child_lock_exit">Exit</string>
     <string name="setting_home_enter_live">Enter live on startup</string>
+    <string name="setting_live_default_fullscreen">Live default fullscreen</string>
 </resources>
 <string-array name="select_global_history_mode">
         <item>Off</item>

@@ -760,6 +760,16 @@ public class Setting {
         Prefers.put("home_enter_live", value);
     }
 
+    /** 进入直播后默认隐藏列表，仅保留画面（全屏观感） */
+    public static boolean isLiveDefaultFullscreen() {
+        return Prefers.getBoolean("live_default_fullscreen", false);
+    }
+
+    public static void putLiveDefaultFullscreen(boolean value) {
+        Prefers.put("live_default_fullscreen", value);
+    }
+
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }

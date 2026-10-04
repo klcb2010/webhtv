@@ -49,6 +49,7 @@ public final class SettingPersonalDialog {
         Row homeVodAutoLoad = tvOnly ? row(activity, rowPad, R.string.setting_home_vod_auto_load) : null;
         Row homeHistory = tvOnly ? row(activity, rowPad, R.string.setting_home_history) : null;
         Row homeEnterLive = row(activity, rowPad, R.string.setting_home_enter_live);
+        Row liveDefaultFullscreen = row(activity, rowPad, R.string.setting_live_default_fullscreen);
 
         Runnable refresh = () -> {
             autoBackup.value.setText(onOff(activity, Setting.isAutoBackup()));
@@ -74,6 +75,7 @@ public final class SettingPersonalDialog {
             if (homeVodAutoLoad != null) homeVodAutoLoad.value.setText(onOff(activity, Setting.isHomeVodAutoLoad()));
             if (homeHistory != null) homeHistory.value.setText(onOff(activity, Setting.isHomeHistory()));
             homeEnterLive.value.setText(onOff(activity, Setting.isHomeEnterLive()));
+            liveDefaultFullscreen.value.setText(onOff(activity, Setting.isLiveDefaultFullscreen()));
         };
         refresh.run();
 
@@ -146,9 +148,15 @@ public final class SettingPersonalDialog {
             Setting.putHomeEnterLive(!Setting.isHomeEnterLive());
             refresh.run();
         });
+        
+        liveDefaultFullscreen.root.setOnClickListener(v -> {
+            Setting.putLiveDefaultFullscreen(!Setting.isLiveDefaultFullscreen());
+            refresh.run();
+        });
         root.addView(subAuto.root);
         root.addView(subLang.root);
         root.addView(homeEnterLive.root);
+        root.addView(liveDefaultFullscreen.root);
 
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(root);
