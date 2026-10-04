@@ -1,46 +1,14 @@
 #!/usr/bin/env python3
 """Live default fullscreen.
 
-Mobile: same as tapping rotate (setRotate + landscape) + hide channel list.
-Leanback/TV: hide channel list only (hideUI).
+Mobile: mirror the existing onRotate() body (whatever upstream API is).
+Leanback/TV: hide channel list (hideUI).
 """
 import pathlib
 import re
 import sys
 
 ROOT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
-
-MOBILE_METHOD = """
-    /** mod: live default fullscreen = rotate button */
-    private void applyDefaultLiveFullscreen() {
-        try {
-            if (!com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) return;
-            try {
-                if (!isRotate()) {
-                    setRotate(true);
-                    setRequestedOrientation(com.fongmi.android.tv.playback.PlaybackOrientation.getRotateOrientation(this));
-                }
-            } catch (Throwable ignored) {
-            }
-            try {
-                hideUI();
-            } catch (Throwable ignored) {
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-"""
-
-TV_METHOD = """
-    /** mod: live default fullscreen = hide channel list */
-    private void applyDefaultLiveFullscreen() {
-        try {
-            if (!com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) return;
-            hideUI();
-        } catch (Throwable ignored) {
-        }
-    }
-"""
 
 CALL = """
         try {
@@ -67,6 +35,69 @@ def strip_old(t: str) -> str:
     )
     return t
 
+def extract_on_rotate_body(t: str) -> str | None:
+    """Copy setRotate + setRequestedOrientation lines from onRotate() as-is."""
+    m = re.search(
+        r"private void onRotate\(\)\s*\{([\s\S]*?)\n    \}",
+        t,
+    )
+    if not m:
+        return None
+    body = m.group(1)
+    lines = []
+    for line in body.splitlines():
+        s = line.strip()
+        if not s or s.startswith("setR1Callback"):
+            continue
+        # keep setRotate / setRequestedOrientation / isRotate related
+        if "setRotate" in s or "setRequestedOrientation" in s or "getRotateOrientation" in s:
+            lines.append("            " + s)
+    if not lines:
+        return None
+    # onRotate toggles with !isRotate(); for default fullscreen we force ON once
+    fixed = []
+    for line in lines:
+        # setRotate(!isRotate()) -> setRotate(true)
+        line2 = re.sub(r"setRotate\s*\(\s*!?\s*isRotate\s*\(\s*\)\s*\)", "setRotate(true)", line)
+        fixed.append(line2)
+    return "\n".join(fixed)
+
+def mobile_method(t: str) -> str:
+    rotate_body = extract_on_rotate_body(t)
+    if rotate_body is None:
+        # ultra-safe fallback: only hideUI
+        rotate_body = "            /* onRotate not found; list-only */"
+    return f"""
+    /** mod: live default fullscreen = same as rotate button */
+    private void applyDefaultLiveFullscreen() {{
+        try {{
+            if (!com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) return;
+            try {{
+                if (!isRotate()) {{
+{rotate_body}
+                }}
+            }} catch (Throwable ignored) {{
+            }}
+            try {{
+                hideUI();
+            }} catch (Throwable ignored) {{
+            }}
+        }} catch (Throwable ignored) {{
+        }}
+    }}
+"""
+
+TV_METHOD = """
+    /** mod: live default fullscreen = hide channel list */
+    private void applyDefaultLiveFullscreen() {
+        try {
+            if (!com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) return;
+            hideUI();
+        } catch (Throwable ignored) {
+        }
+    }
+"""
+
 def patch(path: pathlib.Path, mobile: bool) -> bool:
     if not path.exists():
         return False
@@ -79,7 +110,7 @@ def patch(path: pathlib.Path, mobile: bool) -> bool:
         print("[mod] WARN no checkLive", path)
         return False
     t = t.replace("checkLive();", "checkLive();" + CALL, 1)
-    method = MOBILE_METHOD if mobile else TV_METHOD
+    method = mobile_method(t) if mobile else TV_METHOD
     idx = t.rfind("\n}")
     if idx < 0:
         print("[mod] WARN no class end", path)
