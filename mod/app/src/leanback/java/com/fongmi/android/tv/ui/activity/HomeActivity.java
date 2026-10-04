@@ -796,9 +796,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         return child != null && child.requestFocus();
     }
 
-    @Override
-
-    /** 个性设置「默认进入直播」：冷启动且已解锁、有直播源时进一次直播 */
+    /** 个性设置「启动进入直播」：冷启动且已解锁、有直播源时进一次直播 */
     private void tryOpenDefaultLive() {
         try {
             if (homeLiveOpened) return;
@@ -815,6 +813,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         }
     }
 
+    @Override
     protected void onResume() {
         super.onResume();
         try { ChildLockGateDialog.showIfNeeded(this); } catch (Throwable ignored) {}
