@@ -1,8 +1,22 @@
 [
-	{
-"卫视频道","北京卫视","webview://https://www.yangshipin.cn/tv/home?pid=600002309"
-"卫视频道","广西卫视","webview://https://www.yangshipin.cn/tv/home?pid=600002307"
-"央视频道","CCTV1","webview://https://www.yangshipin.cn/tv/home?pid=600001859"
-"央视频道","CCTV2","webview://https://www.yangshipin.cn/tv/home?pid=600001851"
-	}
-		]
+    {
+        "分类": "卫视频道",
+        "频道名称": "北京卫视",
+        "链接": "webview://https://www.yangshipin.cn/tv/home?pid=600002309"
+    },
+    {
+        "分类": "卫视频道",
+        "频道名称": "广西卫视",
+        "链接": "webview://https://www.yangshipin.cn/tv/home?pid=600002307"
+    },
+    {
+        "分类": "央视频道",
+        "频道名称": "CCTV1",
+        "链接": "webview://https://www.yangshipin.cn/tv/home?pid=600001859"
+    },
+    {
+        "分类": "央视频道",
+        "频道名称": "CCTV2",
+        "链接": "webview://https://www.yangshipin.cn/tv/home?pid=600001851"
+    }
+]
