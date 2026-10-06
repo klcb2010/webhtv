@@ -17,12 +17,19 @@ import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.net.OkHttp;
+
+import java.util.Map;
+
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * Fullscreen WebView playback helper for {@code webview://} live channels.
@@ -39,6 +46,8 @@ public class WebViewPlayer {
     private static final String TAG = "WebViewPlayer";
     private static final String DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    private static final String MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 "
+            + "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36";
 
     // onPageStarted FastLoading 清理脚本
     private static final String FAST_LOADING_JS = """
@@ -50,7 +59,7 @@ public class WebViewPlayer {
                     img.src = '';
                 });
                 // 清空特定的脚本 src 属性
-                const scriptKeywords = ['login', 'index', 'daohang', 'grey', 'jquery'];
+                const scriptKeywords = ['login', 'daohang', 'grey'];
                 Array.from(document.getElementsByTagName('script')).forEach(script => {
                     if (scriptKeywords.some(keyword => script.src.includes(keyword))) {
                         script.src = '';
@@ -313,6 +322,11 @@ public class WebViewPlayer {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                s.setSafeBrowsingEnabled(false);
+            }
+        } catch (Throwable ignored) {}
         s.setUserAgentString(DESKTOP_UA);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         s.setLoadWithOverviewMode(true);
@@ -320,13 +334,47 @@ public class WebViewPlayer {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setLoadsImagesAutomatically(false);
-        s.setBlockNetworkImage(true);
+        s.setLoadsImagesAutomatically(true);
+        s.setBlockNetworkImage(false);
 
         // 注册 JS 回调接口，把 video 元素的播放/暂停状态同步给原生
         webView.addJavascriptInterface(new WebVideoBridge(), "WebVideoBridge");
  
         webView.setWebViewClient(new WebViewClient() {
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                try {
+                    if (request == null || request.getUrl() == null) {
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    String u = request.getUrl().toString();
+                    String path = request.getUrl().getPath();
+                    boolean isWasm = (path != null && path.toLowerCase().endsWith(".wasm"))
+                            || u.toLowerCase().contains(".wasm");
+                    if (!isWasm) return super.shouldInterceptRequest(view, request);
+                    Request.Builder rb = new Request.Builder().url(u);
+                    Map<String, String> hdrs = request.getRequestHeaders();
+                    if (hdrs != null) {
+                        for (Map.Entry<String, String> e : hdrs.entrySet()) {
+                            if (e.getKey() == null) continue;
+                            if ("Cookie".equalsIgnoreCase(e.getKey())) continue;
+                            try { rb.header(e.getKey(), e.getValue()); } catch (Throwable ignored) {}
+                        }
+                    }
+                    Response resp = OkHttp.client().newCall(rb.build()).execute();
+                    if (resp.body() == null) {
+                        try { resp.close(); } catch (Throwable ignored) {}
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    logI("wasm intercept code=" + resp.code() + " lenHint");
+                    return new WebResourceResponse("application/wasm", null, resp.body().byteStream());
+                } catch (Throwable e) {
+                    try { logI("wasm intercept fail " + e.getMessage()); } catch (Throwable ignored) {}
+                    return super.shouldInterceptRequest(view, request);
+                }
+            }
+
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                 handler.proceed();
@@ -342,8 +390,15 @@ public class WebViewPlayer {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if ("about:blank".equals(url)) return;
+                logI("onPageFinished size=" + view.getWidth() + "x" + view.getHeight() + " urlHost=" + (url != null && url.length() > 12 ? url.substring(0, Math.min(48, url.length())) : url));
                 view.evaluateJavascript(UNMUTE_VIDEO_JS, null);
-                logI("onPageFinished size=" + view.getWidth() + "x" + view.getHeight());
+                // yangshipin often needs a user gesture / click to start
+                mainHandler.postDelayed(() -> {
+                    try { simulateClick(view); } catch (Throwable ignored) {}
+                }, 800);
+                mainHandler.postDelayed(() -> {
+                    try { simulateClick(view); } catch (Throwable ignored) {}
+                }, 2000);
                 SpiderDebug.log(TAG, "onPageFinished %s", url);
             }
 
@@ -352,9 +407,13 @@ public class WebViewPlayer {
                 super.onReceivedError(view, request, error);
                 try {
                     if (request != null && request.isForMainFrame()) {
+                        String u = "";
+                        try { u = String.valueOf(request.getUrl()); } catch (Throwable ignored) {}
+                        if (u.length() > 64) u = u.substring(0, 64);
                         logI("resource error MAIN code=" + (error != null ? error.getErrorCode() : "?")
                                 + " desc=" + (error != null ? error.getDescription() : "?")
-                                + " size=" + view.getWidth() + "x" + view.getHeight());
+                                + " size=" + view.getWidth() + "x" + view.getHeight()
+                                + " errUrl=" + u);
                     }
                 } catch (Throwable ignored) {}
             }

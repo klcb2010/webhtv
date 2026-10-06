@@ -76,6 +76,15 @@ LIVE_METHODS_MOBILE = r'''
                 } catch (Throwable ignored) {}
             });
             bringWebViewOverlaysToFront();
+            try {
+                if (com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) {
+                    try { enterFullscreenLive(); } catch (Throwable t1) {
+                        try { onRotate(); } catch (Throwable t2) {
+                            try { hideUI(); } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }
@@ -115,6 +124,12 @@ LIVE_METHODS_TV = r'''
             if (mWebViewPlayer == null) mWebViewPlayer = new com.fongmi.android.tv.ui.custom.WebViewPlayer();
             mWebViewPlayer.attach(this, mBinding.video, url);
             bringWebViewOverlaysToFront();
+            try {
+                if (com.fongmi.android.tv.setting.Setting.isLiveDefaultFullscreen()) {
+                    try { hideUI(); } catch (Throwable ignored) {}
+                    try { com.fongmi.android.tv.utils.Util.hideSystemUI(this); } catch (Throwable ignored) {}
+                }
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }
