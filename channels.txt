@@ -1,0 +1,6 @@
+卫视频道,#genre#
+北京卫视,webview://https://www.yangshipin.cn/tv/home?pid=600002309
+广西卫视,webview://https://www.yangshipin.cn/tv/home?pid=600002307
+央视频道,#genre#
+CCTV1,webview://https://www.yangshipin.cn/tv/home?pid=600001859
+CCTV2,webview://https://www.yangshipin.cn/tv/home?pid=600001851
