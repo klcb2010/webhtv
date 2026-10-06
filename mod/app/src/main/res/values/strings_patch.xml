@@ -141,4 +141,5 @@
     <string name="child_lock_exit">Exit</string>
     <string name="setting_home_enter_live">Enter live on startup</string>
     <string name="setting_live_default_fullscreen">Live default fullscreen</string>
+    <string name="setting_webview_live">WebView live support</string>
 </resources>

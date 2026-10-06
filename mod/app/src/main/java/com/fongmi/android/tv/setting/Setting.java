@@ -769,6 +769,16 @@ public class Setting {
         Prefers.put("live_default_fullscreen", value);
     }
 
+    /** WebView 直播：频道地址 webview://https://... 时用系统 WebView 播放（央视等加密流） */
+    public static boolean isWebViewLiveEnabled() {
+        return Prefers.getBoolean("webview_live_enabled", true);
+    }
+
+    public static void putWebViewLiveEnabled(boolean value) {
+        Prefers.put("webview_live_enabled", value);
+    }
+
+
 
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);

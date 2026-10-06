@@ -71,6 +71,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
         try { mBinding.homeEnterLive.setOnClickListener(this::setHomeEnterLive); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreen.setOnClickListener(this::setLiveDefaultFullscreen); } catch (Throwable ignored) {}
+        try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
 
@@ -115,6 +116,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
         try { mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive())); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreenText.setText(getSwitch(Setting.isLiveDefaultFullscreen())); } catch (Throwable ignored) {}
+        try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
@@ -294,6 +296,15 @@ public class SettingPersonalActivity extends BaseActivity {
 
 
 
+
+
+    private void setWebViewLive(View view) {
+        try {
+            Setting.putWebViewLiveEnabled(!Setting.isWebViewLiveEnabled());
+            mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled()));
+        } catch (Throwable ignored) {
+        }
+    }
 
     private void setLiveDefaultFullscreen(View view) {
         try {
