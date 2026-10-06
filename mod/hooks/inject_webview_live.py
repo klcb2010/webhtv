@@ -61,6 +61,7 @@ LIVE_METHODS_MOBILE = r'''
                 try { player().clear(); } catch (Throwable ignored) {}
             }
             try { hideProgress(); } catch (Throwable ignored) {}
+            try { if (mBinding.exo != null) mBinding.exo.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
             if (mWebViewPlayer == null) mWebViewPlayer = new com.fongmi.android.tv.ui.custom.WebViewPlayer();
             android.view.View.OnTouchListener webTouchListener = (v, e) -> {
                 try { mKeyDown.onTouchEvent(e); } catch (Throwable ignored) {}
@@ -108,6 +109,7 @@ LIVE_METHODS_TV = r'''
                 try { player().clear(); } catch (Throwable ignored) {}
             }
             try { hideProgress(); } catch (Throwable ignored) {}
+            try { if (mBinding.exo != null) mBinding.exo.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
             if (mWebViewPlayer == null) mWebViewPlayer = new com.fongmi.android.tv.ui.custom.WebViewPlayer();
             mWebViewPlayer.attach(this, mBinding.video, url);
             bringWebViewOverlaysToFront();
