@@ -186,6 +186,21 @@ public class WebViewPlayer {
         void onWebPlayStateChanged(boolean playing);
     }
  
+
+    /** Strip webview:// so WebView gets a real http(s) page URL. */
+    private static String normalizePlayUrl(String url) {
+        if (url == null) return "";
+        String u = url.trim();
+        if (u.regionMatches(true, 0, "webview://", 0, 10)) {
+            u = u.substring(10).trim();
+        }
+        // some lists use webview:https:// without //
+        if (u.regionMatches(true, 0, "webview:", 0, 8)) {
+            u = u.substring(8).trim();
+        }
+        return u;
+    }
+
     public void attach(Activity activity, ViewGroup container, String url) {
         attach(activity, container, url, null, null);
     }
@@ -221,6 +236,12 @@ public class WebViewPlayer {
             if (customView != null && touchListener != null) customView.setOnTouchListener(touchListener);
         }
         webPlaying = false;
+        url = normalizePlayUrl(url);
+        SpiderDebug.log(TAG, "load url scheme=%s len=%d", (url.contains("://") ? url.substring(0, Math.min(url.indexOf("://")+3, url.length())) : "none"), url.length());
+        if (url.isEmpty()) {
+            SpiderDebug.log(TAG, "empty url after normalize, skip load");
+            return;
+        }
         activeWebView.onResume();
         activeWebView.loadUrl(url);
     }

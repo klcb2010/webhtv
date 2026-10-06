@@ -54,6 +54,7 @@ LIVE_METHODS_MOBILE = r'''
 
     private void startWebView(String url) {
         try {
+            if (url != null && url.startsWith("webview://")) url = url.substring("webview://".length()); // normalize webview prefix
             if (isFinishing() || isDestroyed()) return;
             if (service() != null) {
                 try { player().stop(); } catch (Throwable ignored) {}
@@ -101,6 +102,7 @@ LIVE_METHODS_TV = r'''
 
     private void startWebView(String url) {
         try {
+            if (url != null && url.startsWith("webview://")) url = url.substring("webview://".length()); // normalize webview prefix
             if (player() != null) {
                 try { player().stop(); } catch (Throwable ignored) {}
                 try { player().clear(); } catch (Throwable ignored) {}
