@@ -7,6 +7,7 @@
 # 默影视 https://github.com/Silent1566/webhtv
 
 
+
 - 首页最近观看 -TV端
 - 默认加载点播 -TV端
 - 锁定首页源 -TV端
@@ -34,3 +35,5 @@
 - 启动进入直播 -新增双端
 - 直播默认全屏 -新增双端
 - webview直播支持 -新增双端 *源自 https://github.com/llb0/webhtv
+
+  EPG https://raw.githubusercontent.com/sparkssssssssss/epg/main/pp.xml
