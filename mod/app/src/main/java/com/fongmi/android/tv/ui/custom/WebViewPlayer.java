@@ -315,7 +315,6 @@ public class WebViewPlayer {
             }
 
             @Override
-            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
             }
