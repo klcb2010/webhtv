@@ -286,7 +286,7 @@ def patch_live(path: pathlib.Path, mobile: bool) -> None:
     print("[mod] LiveActivity webview patched mobile=%s braces=%s" % (mobile, t.count("{") - t.count("}")))
 
 
-def patch_info_and_size(path: Path, mobile: bool) -> None:
+def patch_info_and_size(path: pathlib.Path, mobile: bool) -> None:
     if not path.exists():
         return
     t = path.read_text(encoding="utf-8")
@@ -296,7 +296,6 @@ def patch_info_and_size(path: Path, mobile: bool) -> None:
     if old in t and "isWebViewChannel()) ? View.GONE" not in t:
         t = t.replace(old, new, 1)
         print("[mod] webview info btn", path)
-    import re
     if "mWebViewPlayer.getSizeText()" not in t and "private void setSizeText()" in t:
         t2, n = re.subn(
             r"(private void setSizeText\(\)\s*\{)\s*String text = service\(\) == null \? \"\" : player\(\)\.getSizeText\(\);",
