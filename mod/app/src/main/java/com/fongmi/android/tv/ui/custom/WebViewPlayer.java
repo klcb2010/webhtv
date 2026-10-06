@@ -17,12 +17,21 @@ import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.net.OkHttp;
+
+import java.io.ByteArrayInputStream;
+import java.util.HashMap;
+import java.util.Map;
+
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * Fullscreen WebView playback helper for {@code webview://} live channels.
@@ -188,11 +197,9 @@ public class WebViewPlayer {
     }
  
 
-    /** Strip webview:// so WebView gets a real http(s) page URL. */
     private static String normalizePlayUrl(String url) {
         if (url == null) return "";
         String u = url.trim();
-        // repeat strip in case of double prefix
         for (int i = 0; i < 3; i++) {
             if (u.regionMatches(true, 0, "webview://", 0, 10)) {
                 u = u.substring(10).trim();
@@ -208,14 +215,8 @@ public class WebViewPlayer {
     }
 
     private static void logI(String msg) {
-        try {
-            Log.i(TAG, msg);
-        } catch (Throwable ignored) {
-        }
-        try {
-            SpiderDebug.log(TAG, "%s", msg);
-        } catch (Throwable ignored) {
-        }
+        try { Log.i(TAG, msg); } catch (Throwable ignored) {}
+        try { SpiderDebug.log(TAG, "%s", msg); } catch (Throwable ignored) {}
     }
 
     public void attach(Activity activity, ViewGroup container, String url) {
@@ -255,24 +256,27 @@ public class WebViewPlayer {
         webPlaying = false;
         String raw = url;
         url = normalizePlayUrl(url);
-        String host = "";
-        try {
-            if (url.startsWith("http")) {
-                int s = url.indexOf("://");
-                int e = url.indexOf('/', s + 3);
-                host = e > 0 ? url.substring(0, e) : url;
-            }
-        } catch (Throwable ignored) {}
-        logI("load rawLen=" + (raw == null ? -1 : raw.length())
-                + " normLen=" + url.length()
-                + " host=" + host
-                + " startsHttp=" + url.startsWith("http"));
-        if (url.isEmpty() || !url.contains("://")) {
-            logI("skip load: bad url after normalize");
+        logI("load rawLen=" + (raw == null ? -1 : raw.length()) + " normLen=" + url.length() + " startsHttp=" + url.startsWith("http"));
+        if (url.isEmpty() || !url.startsWith("http")) {
+            logI("skip load bad url");
             return;
         }
+        // probe with app OkHttp (same stack as VOD) to distinguish WebView-only failures
+        try {
+            String probe = OkHttp.string(url, 8000);
+            logI("okhttp probe len=" + (probe == null ? -1 : probe.length()));
+        } catch (Throwable e) {
+            logI("okhttp probe fail " + e.getMessage());
+        }
         activeWebView.onResume();
-        activeWebView.loadUrl(url);
+        try {
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Referer", "https://www.yangshipin.cn/");
+            headers.put("Accept-Language", "zh-CN,zh;q=0.9");
+            activeWebView.loadUrl(url, headers);
+        } catch (Throwable e) {
+            activeWebView.loadUrl(url);
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -292,31 +296,73 @@ public class WebViewPlayer {
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUserAgentString(DESKTOP_UA);
-        try { s.setSupportZoom(true); } catch (Throwable ignored) {}
-        try { s.setLoadWithOverviewMode(true); } catch (Throwable ignored) {}
-        try { s.setUseWideViewPort(true); } catch (Throwable ignored) {}
-        try { s.setOffscreenPreRaster(true); } catch (Throwable ignored) {}
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setLoadsImagesAutomatically(false);
-        s.setBlockNetworkImage(true);
+        s.setLoadsImagesAutomatically(true);
+        s.setBlockNetworkImage(false);
 
         // 注册 JS 回调接口，把 video 元素的播放/暂停状态同步给原生
         webView.addJavascriptInterface(new WebVideoBridge(), "WebVideoBridge");
  
         webView.setWebViewClient(new WebViewClient() {
+
             @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                handler.proceed();
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                try {
+                    if (request == null || request.getUrl() == null) {
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    String u = request.getUrl().toString();
+                    if (!u.startsWith("http")) return super.shouldInterceptRequest(view, request);
+                    String method = request.getMethod() == null ? "GET" : request.getMethod();
+                    if (!"GET".equalsIgnoreCase(method)) return super.shouldInterceptRequest(view, request);
+                    Map<String, String> reqHeaders = request.getRequestHeaders();
+                    if (reqHeaders != null && reqHeaders.containsKey("Range")) {
+                        // media range requests: let WebView handle
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    Request.Builder rb = new Request.Builder().url(u);
+                    if (reqHeaders != null) {
+                        for (Map.Entry<String, String> e : reqHeaders.entrySet()) {
+                            String k = e.getKey();
+                            if (k == null) continue;
+                            if ("Cookie".equalsIgnoreCase(k) || "cookie".equals(k)) continue;
+                            try { rb.header(k, e.getValue()); } catch (Throwable ignored) {}
+                        }
+                    }
+                    try { rb.header("Referer", "https://www.yangshipin.cn/"); } catch (Throwable ignored) {}
+                    Response resp = OkHttp.client().newCall(rb.build()).execute();
+                    if (resp.body() == null) {
+                        resp.close();
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    String ct = resp.header("Content-Type", "text/html; charset=utf-8");
+                    if (ct == null) ct = "text/html; charset=utf-8";
+                    String mime = ct;
+                    String encoding = "utf-8";
+                    int semi = ct.indexOf(';');
+                    if (semi > 0) {
+                        mime = ct.substring(0, semi).trim();
+                        int cs = ct.toLowerCase().indexOf("charset=");
+                        if (cs >= 0) encoding = ct.substring(cs + 8).trim().replace("\"", "");
+                    }
+                    if (request.isForMainFrame()) {
+                        logI("okhttp intercept main code=" + resp.code() + " mime=" + mime);
+                    }
+                    return new WebResourceResponse(mime, encoding, resp.body().byteStream());
+                } catch (Throwable e) {
+                    try { logI("okhttp intercept fail " + e.getMessage()); } catch (Throwable ignored) {}
+                    return super.shouldInterceptRequest(view, request);
+                }
             }
 
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return false;
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                handler.proceed();
             }
 
             @Override
@@ -336,9 +382,11 @@ public class WebViewPlayer {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                logI("resource error main=" + (request != null && request.isForMainFrame()) + " code=" + (error != null ? error.getErrorCode() : "?") + " desc=" + (error != null ? error.getDescription() : "?"));
-                SpiderDebug.log(TAG, "resource error main=%s code=%s desc=%s url=%s",
-                        request.isForMainFrame(), error.getErrorCode(), error.getDescription(), request.getUrl());
+                try {
+                    logI("resource error main=" + (request != null && request.isForMainFrame())
+                            + " code=" + (error != null ? error.getErrorCode() : "?")
+                            + " desc=" + (error != null ? error.getDescription() : "?"));
+                } catch (Throwable ignored) {}
             }
         });
 
