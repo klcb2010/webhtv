@@ -210,6 +210,42 @@ public class WebViewPlayer {
         try { SpiderDebug.log(TAG, "%s", msg); } catch (Throwable ignored) {}
     }
 
+    private int loadRetry;
+
+    private void loadWhenLaidOut(String url) {
+        if (activeWebView == null) return;
+        final String target = url;
+        activeWebView.post(() -> {
+            try {
+                if (activeWebView == null) return;
+                int w = activeWebView.getWidth();
+                int h = activeWebView.getHeight();
+                int pw = container != null ? container.getWidth() : 0;
+                int ph = container != null ? container.getHeight() : 0;
+                logI("layout web=" + w + "x" + h + " parent=" + pw + "x" + ph + " retry=" + loadRetry);
+                if ((w <= 0 || h <= 0) && loadRetry < 15) {
+                    loadRetry++;
+                    if (container != null && pw > 0 && ph > 0) {
+                        ViewGroup.LayoutParams lp = activeWebView.getLayoutParams();
+                        if (lp != null) {
+                            lp.width = pw;
+                            lp.height = ph;
+                            activeWebView.setLayoutParams(lp);
+                        }
+                    }
+                    activeWebView.postDelayed(() -> loadWhenLaidOut(target), 120);
+                    return;
+                }
+                if (w <= 0 || h <= 0) {
+                    logI("still zero size, load anyway");
+                }
+                activeWebView.loadUrl(target);
+            } catch (Throwable e) {
+                logI("loadWhenLaidOut fail " + e.getMessage());
+            }
+        });
+    }
+
     public void attach(Activity activity, ViewGroup container, String url) {
         attach(activity, container, url, null, null);
     }
@@ -233,7 +269,7 @@ public class WebViewPlayer {
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            try { activeWebView.setElevation(6f); } catch (Throwable ignored) {}
+            try { activeWebView.setElevation(8f); } catch (Throwable ignored) {}
             container.addView(activeWebView, lp);
             try { activeWebView.bringToFront(); } catch (Throwable ignored) {}
         } else {
@@ -253,8 +289,12 @@ public class WebViewPlayer {
             logI("skip load bad url");
             return;
         }
+        loadRetry = 0;
+        try { activeWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null); } catch (Throwable ignored) {}
+        try { activeWebView.setElevation(8f); } catch (Throwable ignored) {}
+        try { activeWebView.bringToFront(); } catch (Throwable ignored) {}
         activeWebView.onResume();
-        activeWebView.loadUrl(url);
+        loadWhenLaidOut(url);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -262,7 +302,6 @@ public class WebViewPlayer {
         WebView webView = new WebView(ctx);
         webView.setBackgroundColor(0xFF000000);
         webView.setFocusable(false);
-        try { webView.setLayerType(View.LAYER_TYPE_HARDWARE, null); } catch (Throwable ignored) {}
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -304,7 +343,7 @@ public class WebViewPlayer {
                 super.onPageFinished(view, url);
                 if ("about:blank".equals(url)) return;
                 view.evaluateJavascript(UNMUTE_VIDEO_JS, null);
-                logI("onPageFinished");
+                logI("onPageFinished size=" + view.getWidth() + "x" + view.getHeight());
                 SpiderDebug.log(TAG, "onPageFinished %s", url);
             }
 
@@ -314,7 +353,8 @@ public class WebViewPlayer {
                 try {
                     if (request != null && request.isForMainFrame()) {
                         logI("resource error MAIN code=" + (error != null ? error.getErrorCode() : "?")
-                                + " desc=" + (error != null ? error.getDescription() : "?"));
+                                + " desc=" + (error != null ? error.getDescription() : "?")
+                                + " size=" + view.getWidth() + "x" + view.getHeight());
                     }
                 } catch (Throwable ignored) {}
             }
