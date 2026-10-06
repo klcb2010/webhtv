@@ -285,9 +285,24 @@ public class WebViewPlayer {
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            try { activeWebView.setElevation(8f); } catch (Throwable ignored) {}
-            container.addView(activeWebView, lp);
-            try { activeWebView.bringToFront(); } catch (Throwable ignored) {}
+            // Insert under control/widget overlays so brightness/volume bars and channel list stay visible
+            int insertAt = 0;
+            try {
+                for (int i = 0; i < container.getChildCount(); i++) {
+                    android.view.View child = container.getChildAt(i);
+                    if (child == null) continue;
+                    // keep WebView above PlayerView(exo) but below includes (widget/control/...)
+                    String cn = child.getClass().getName();
+                    if (cn.contains("PlayerView") || cn.contains("ExoPlayer") || "exo".equals(String.valueOf(child.getTag()))) {
+                        insertAt = i + 1;
+                    }
+                }
+            } catch (Throwable ignored) {}
+            try {
+                container.addView(activeWebView, Math.min(insertAt, container.getChildCount()), lp);
+            } catch (Throwable t) {
+                container.addView(activeWebView, lp);
+            }
         } else {
             // 切台：复用当前webview直接加载新链接
             SpiderDebug.log(TAG, "switch url: %s", url);
@@ -307,8 +322,6 @@ public class WebViewPlayer {
         }
         loadRetry = 0;
         try { activeWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null); } catch (Throwable ignored) {}
-        try { activeWebView.setElevation(8f); } catch (Throwable ignored) {}
-        try { activeWebView.bringToFront(); } catch (Throwable ignored) {}
         activeWebView.onResume();
         loadWhenLaidOut(url);
     }

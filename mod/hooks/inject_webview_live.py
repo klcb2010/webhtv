@@ -85,17 +85,22 @@ LIVE_METHODS_MOBILE = r'''
                     }
                 }
             } catch (Throwable ignored) {}
+            try { bringWebViewOverlaysToFront(); } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }
 
     private void bringWebViewOverlaysToFront() {
         try {
+            // WebView must stay under these; otherwise brightness/volume bars and channel list are invisible
             if (mBinding.widget != null) mBinding.widget.getRoot().bringToFront();
             if (mBinding.control != null) mBinding.control.getRoot().bringToFront();
             if (mBinding.progress != null) mBinding.progress.getRoot().bringToFront();
             try { if (mBinding.osd != null) mBinding.osd.getRoot().bringToFront(); } catch (Throwable ignored) {}
             try { if (mBinding.recycler != null) mBinding.recycler.bringToFront(); } catch (Throwable ignored) {}
+            try {
+                if (mBinding.video != null) mBinding.video.requestLayout();
+            } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }
