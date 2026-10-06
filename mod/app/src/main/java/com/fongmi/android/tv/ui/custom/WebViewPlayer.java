@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.net.http.SslError;
 import android.os.Handler;
+import android.util.Log;
 import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
@@ -191,14 +192,30 @@ public class WebViewPlayer {
     private static String normalizePlayUrl(String url) {
         if (url == null) return "";
         String u = url.trim();
-        if (u.regionMatches(true, 0, "webview://", 0, 10)) {
-            u = u.substring(10).trim();
-        }
-        // some lists use webview:https:// without //
-        if (u.regionMatches(true, 0, "webview:", 0, 8)) {
-            u = u.substring(8).trim();
+        // repeat strip in case of double prefix
+        for (int i = 0; i < 3; i++) {
+            if (u.regionMatches(true, 0, "webview://", 0, 10)) {
+                u = u.substring(10).trim();
+                continue;
+            }
+            if (u.regionMatches(true, 0, "webview:", 0, 8)) {
+                u = u.substring(8).trim();
+                continue;
+            }
+            break;
         }
         return u;
+    }
+
+    private static void logI(String msg) {
+        try {
+            Log.i(TAG, msg);
+        } catch (Throwable ignored) {
+        }
+        try {
+            SpiderDebug.log(TAG, "%s", msg);
+        } catch (Throwable ignored) {
+        }
     }
 
     public void attach(Activity activity, ViewGroup container, String url) {
@@ -236,10 +253,22 @@ public class WebViewPlayer {
             if (customView != null && touchListener != null) customView.setOnTouchListener(touchListener);
         }
         webPlaying = false;
+        String raw = url;
         url = normalizePlayUrl(url);
-        SpiderDebug.log(TAG, "load url scheme=%s len=%d", (url.contains("://") ? url.substring(0, Math.min(url.indexOf("://")+3, url.length())) : "none"), url.length());
-        if (url.isEmpty()) {
-            SpiderDebug.log(TAG, "empty url after normalize, skip load");
+        String host = "";
+        try {
+            if (url.startsWith("http")) {
+                int s = url.indexOf("://");
+                int e = url.indexOf('/', s + 3);
+                host = e > 0 ? url.substring(0, e) : url;
+            }
+        } catch (Throwable ignored) {}
+        logI("load rawLen=" + (raw == null ? -1 : raw.length())
+                + " normLen=" + url.length()
+                + " host=" + host
+                + " startsHttp=" + url.startsWith("http"));
+        if (url.isEmpty() || !url.contains("://")) {
+            logI("skip load: bad url after normalize");
             return;
         }
         activeWebView.onResume();
@@ -263,6 +292,10 @@ public class WebViewPlayer {
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUserAgentString(DESKTOP_UA);
+        try { s.setSupportZoom(true); } catch (Throwable ignored) {}
+        try { s.setLoadWithOverviewMode(true); } catch (Throwable ignored) {}
+        try { s.setUseWideViewPort(true); } catch (Throwable ignored) {}
+        try { s.setOffscreenPreRaster(true); } catch (Throwable ignored) {}
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
@@ -282,6 +315,12 @@ public class WebViewPlayer {
             }
 
             @Override
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return false;
+            }
+
+            @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 view.evaluateJavascript(FAST_LOADING_JS, null);
@@ -298,6 +337,7 @@ public class WebViewPlayer {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
+                logI("resource error main=" + (request != null && request.isForMainFrame()) + " code=" + (error != null ? error.getErrorCode() : "?") + " desc=" + (error != null ? error.getDescription() : "?"));
                 SpiderDebug.log(TAG, "resource error main=%s code=%s desc=%s url=%s",
                         request.isForMainFrame(), error.getErrorCode(), error.getDescription(), request.getUrl());
             }
