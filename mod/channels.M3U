@@ -1,0 +1,13 @@
+#EXTM3U
+
+#EXTINF:-1 tvg-name="北京卫视" tvg-logo="https://epg.v1.mk/logo/北京卫视.png" group-title="卫视频道",北京卫视
+webview://https://www.yangshipin.cn/tv/home?pid=600002309
+
+#EXTINF:-1 tvg-name="广西卫视" tvg-logo="https://epg.v1.mk/logo/广西卫视.png" group-title="卫视频道",广西卫视
+webview://https://www.yangshipin.cn/tv/home?pid=600002509
+
+#EXTINF:-1 tvg-name="CCTV1" tvg-logo="https://epg.v1.mk/logo/CCTV1.png" group-title="央视频道",CCTV1
+webview://https://www.yangshipin.cn/tv/home?pid=600001859
+
+#EXTINF:-1 tvg-name="CCTV2" tvg-logo="https://epg.v1.mk/logo/CCTV2.png" group-title="央视频道",CCTV2
+webview://https://www.yangshipin.cn/tv/home?pid=600001800
