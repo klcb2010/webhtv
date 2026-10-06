@@ -17,19 +17,14 @@ import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.net.OkHttp;
 
-import java.util.Map;
 
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * Fullscreen WebView playback helper for {@code webview://} live channels.
@@ -354,42 +349,6 @@ public class WebViewPlayer {
  
         webView.setWebViewClient(new WebViewClient() {
 
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                try {
-                    if (request == null || request.getUrl() == null) {
-                        return super.shouldInterceptRequest(view, request);
-                    }
-                    String u = request.getUrl().toString();
-                    String path = request.getUrl().getPath();
-                    boolean isWasm = (path != null && path.toLowerCase().endsWith(".wasm"))
-                            || u.toLowerCase().contains(".wasm");
-                    if (!isWasm) return super.shouldInterceptRequest(view, request);
-                    Request.Builder rb = new Request.Builder().url(u);
-                    Map<String, String> hdrs = request.getRequestHeaders();
-                    if (hdrs != null) {
-                        for (Map.Entry<String, String> e : hdrs.entrySet()) {
-                            if (e.getKey() == null) continue;
-                            try { rb.header(e.getKey(), e.getValue()); } catch (Throwable ignored) {}
-                        }
-                    }
-                    try {
-                        String ck = CookieManager.getInstance().getCookie(u);
-                        if (ck != null && !ck.isEmpty()) rb.header("Cookie", ck);
-                    } catch (Throwable ignored) {}
-                    try { rb.header("User-Agent", DESKTOP_UA); } catch (Throwable ignored) {}
-                    Response resp = OkHttp.client().newCall(rb.build()).execute();
-                    if (resp.body() == null) {
-                        try { resp.close(); } catch (Throwable ignored) {}
-                        return super.shouldInterceptRequest(view, request);
-                    }
-                    logI("wasm intercept code=" + resp.code() + " lenHint");
-                    return new WebResourceResponse("application/wasm", null, resp.body().byteStream());
-                } catch (Throwable e) {
-                    try { logI("wasm intercept fail " + e.getMessage()); } catch (Throwable ignored) {}
-                    return super.shouldInterceptRequest(view, request);
-                }
-            }
 
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
