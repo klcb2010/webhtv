@@ -181,6 +181,8 @@ public class WebViewPlayer {
     private View.OnTouchListener touchListener;
     private PlaybackListener playbackListener;
     private boolean webPlaying;
+    private volatile int reportedWidth;
+    private volatile int reportedHeight;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -380,6 +382,17 @@ public class WebViewPlayer {
                 if ("about:blank".equals(url)) return;
                 logI("onPageFinished size=" + view.getWidth() + "x" + view.getHeight() + " urlHost=" + (url != null && url.length() > 12 ? url.substring(0, Math.min(48, url.length())) : url));
                 view.evaluateJavascript(UNMUTE_VIDEO_JS, null);
+
+                view.evaluateJavascript(
+                    "(function(){try{var v=document.querySelector('video');"
+                    + "function rep(){try{var el=document.querySelector('video');"
+                    + "if(el&&el.videoWidth&&el.videoHeight&&window.WebVideoBridge)"
+                    + "WebVideoBridge.onSize(el.videoWidth,el.videoHeight);}catch(e){}}"
+                    + "rep();setInterval(rep,2000);"
+                    + "if(v){v.addEventListener('loadedmetadata',rep);v.addEventListener('playing',rep);}"
+                    + "}catch(e){}})();",
+                    null);
+
                 // yangshipin often needs a user gesture / click to start
                 mainHandler.postDelayed(() -> {
                     try { simulateClick(view); } catch (Throwable ignored) {}
@@ -516,6 +529,18 @@ public class WebViewPlayer {
         activeWebView.evaluateJavascript("javascript:if(typeof pause==='function')pause();", null);
     }
  
+    public String getSizeText() {
+        int w = reportedWidth;
+        int h = reportedHeight;
+        if (w > 0 && h > 0) return w + " x " + h;
+        return "WebView";
+    }
+
+    public void resetReportedSize() {
+        reportedWidth = 0;
+        reportedHeight = 0;
+    }
+
     public boolean isWebPlaying() {
         return webPlaying;
     }
@@ -542,6 +567,7 @@ public class WebViewPlayer {
         playbackListener = null;
     }
  
+
     /**
      * JS 回调桥梁：把 video 元素的 play/pause 事件转发给原生 PlaybackListener。
      * 运行在 WebView 内部线程，需切到主线程回调。
@@ -549,6 +575,7 @@ public class WebViewPlayer {
     private class WebVideoBridge {
         @android.webkit.JavascriptInterface
         public void onPlay(final boolean playing) {
+            webPlaying = playing;
             if (activeWebView == null) return;
             final PlaybackListener listener = playbackListener;
             if (listener == null) return;
@@ -557,6 +584,14 @@ public class WebViewPlayer {
                     listener.onWebPlayStateChanged(playing);
                 }
             });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void onSize(int width, int height) {
+            if (width > 0 && height > 0) {
+                reportedWidth = width;
+                reportedHeight = height;
+            }
         }
     }
 }

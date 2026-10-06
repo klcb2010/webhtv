@@ -285,7 +285,50 @@ def patch_live(path: pathlib.Path, mobile: bool) -> None:
     path.write_text(t, encoding="utf-8")
     print("[mod] LiveActivity webview patched mobile=%s braces=%s" % (mobile, t.count("{") - t.count("}")))
 
+
+def patch_info_and_size(path: Path, mobile: bool) -> None:
+    if not path.exists():
+        return
+    t = path.read_text(encoding="utf-8")
+    orig = t
+    old = "mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);"
+    new = "mBinding.control.info.setVisibility((player().isEmpty() && !isWebViewChannel()) ? View.GONE : View.VISIBLE);"
+    if old in t and "isWebViewChannel()) ? View.GONE" not in t:
+        t = t.replace(old, new, 1)
+        print("[mod] webview info btn", path)
+    import re
+    if "mWebViewPlayer.getSizeText()" not in t and "private void setSizeText()" in t:
+        t2, n = re.subn(
+            r"(private void setSizeText\(\)\s*\{)\s*String text = service\(\) == null \? \"\" : player\(\)\.getSizeText\(\);",
+            r"""\1
+        String text = "";
+        try {
+            if (isWebViewChannel() && mWebViewPlayer != null) text = mWebViewPlayer.getSizeText();
+            else if (service() != null) text = player().getSizeText();
+        } catch (Throwable ignored) {
+            try { if (service() != null) text = player().getSizeText(); } catch (Throwable ignored2) {}
+        }
+        if (text == null) text = "";""",
+            t,
+            count=1,
+        )
+        if n:
+            t = t2
+            print("[mod] webview setSizeText", path)
+        else:
+            print("[mod] WARN setSizeText pattern", path)
+    old3 = "InfoDialog.create().title(mBinding.control.title.getText()).headers(player().getHeaders()).url(player().getUrl()).show(this);"
+    new3 = "InfoDialog.create().title(mBinding.control.title.getText()).headers(isWebViewChannel() ? java.util.Collections.emptyMap() : player().getHeaders()).url(isWebViewChannel() && mChannel != null ? mChannel.getCurrent() : player().getUrl()).show(this);"
+    if old3 in t and "isWebViewChannel() && mChannel" not in t:
+        t = t.replace(old3, new3, 1)
+        print("[mod] webview onInfo", path)
+    if t != orig:
+        path.write_text(t, encoding="utf-8")
+
+
 patch_source(ROOT / "app/src/main/java/com/fongmi/android/tv/player/Source.java")
 patch_live(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/LiveActivity.java", True)
 patch_live(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/LiveActivity.java", False)
+patch_info_and_size(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/LiveActivity.java", True)
+patch_info_and_size(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/LiveActivity.java", False)
 print("[mod] inject_webview_live done")
