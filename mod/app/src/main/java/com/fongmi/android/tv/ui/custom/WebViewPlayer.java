@@ -211,6 +211,18 @@ public class WebViewPlayer {
             }
             break;
         }
+        // TXT list may append ,tvg-logo=... after URL — strip it
+        String lower = u.toLowerCase();
+        int cut = -1;
+        String[] junk = {",tvg-logo", ",tvg-name", ",group-title", ",http-user-agent", " tvg-logo"};
+        for (String j : junk) {
+            int idx = lower.indexOf(j);
+            if (idx > 0 && (cut < 0 || idx < cut)) cut = idx;
+        }
+        if (cut > 0) u = u.substring(0, cut).trim();
+        while (u.endsWith("\"") || u.endsWith("'")) {
+            u = u.substring(0, u.length() - 1).trim();
+        }
         return u;
     }
 
@@ -293,7 +305,7 @@ public class WebViewPlayer {
         }
         webPlaying = false;
         url = normalizePlayUrl(url);
-        logI("load startsHttp=" + url.startsWith("http") + " len=" + url.length());
+        logI("load startsHttp=" + url.startsWith("http") + " len=" + url.length() + " preview=" + (url.length() > 60 ? url.substring(0, 60) : url));
         if (url.isEmpty() || !url.contains("://")) {
             logI("skip load bad url");
             return;
@@ -358,10 +370,14 @@ public class WebViewPlayer {
                     if (hdrs != null) {
                         for (Map.Entry<String, String> e : hdrs.entrySet()) {
                             if (e.getKey() == null) continue;
-                            if ("Cookie".equalsIgnoreCase(e.getKey())) continue;
                             try { rb.header(e.getKey(), e.getValue()); } catch (Throwable ignored) {}
                         }
                     }
+                    try {
+                        String ck = CookieManager.getInstance().getCookie(u);
+                        if (ck != null && !ck.isEmpty()) rb.header("Cookie", ck);
+                    } catch (Throwable ignored) {}
+                    try { rb.header("User-Agent", DESKTOP_UA); } catch (Throwable ignored) {}
                     Response resp = OkHttp.client().newCall(rb.build()).execute();
                     if (resp.body() == null) {
                         try { resp.close(); } catch (Throwable ignored) {}
