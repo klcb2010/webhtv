@@ -37,3 +37,5 @@
 - webview直播支持 -新增双端 *源自 https://github.com/llb0/webhtv
 
   EPG https://raw.githubusercontent.com/sparkssssssssss/epg/main/pp.xml
+  
+  - E-AC3音频软解 -新增双端  试图解决海思弱鸡解码问题
