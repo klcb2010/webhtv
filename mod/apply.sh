@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Upstream pins JetBrains JDK 21 via Foojay (gradle-daemon-jvm.properties).
+# CI uses Temurin; Foojay redirect often returns 400 — drop the lock.
+if [[ -f "$ROOT/gradle/gradle-daemon-jvm.properties" ]]; then
+  rm -f "$ROOT/gradle/gradle-daemon-jvm.properties"
+  echo "[mod] removed gradle/gradle-daemon-jvm.properties (use CI Temurin 21)"
+fi
 MOD="$(cd "$(dirname "$0")" && pwd)"
 echo "[mod] root=$ROOT"
 
