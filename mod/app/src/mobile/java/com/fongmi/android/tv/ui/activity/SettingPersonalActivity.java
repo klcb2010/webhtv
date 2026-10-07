@@ -71,6 +71,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
         try { mBinding.homeEnterLive.setOnClickListener(this::setHomeEnterLive); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreen.setOnClickListener(this::setLiveDefaultFullscreen); } catch (Throwable ignored) {}
+        try { mBinding.eac3SoftDecode.setOnClickListener(this::setEac3SoftDecode); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -116,6 +117,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
         try { mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive())); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreenText.setText(getSwitch(Setting.isLiveDefaultFullscreen())); } catch (Throwable ignored) {}
+        try { mBinding.eac3SoftDecodeText.setText(getSwitch(Setting.isEac3SoftDecode())); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -313,6 +315,15 @@ public class SettingPersonalActivity extends BaseActivity {
         } catch (Throwable ignored) {
         }
     }
+
+    private void setEac3SoftDecode(View view) {
+        try {
+            Setting.putEac3SoftDecode(!Setting.isEac3SoftDecode());
+            mBinding.eac3SoftDecodeText.setText(getSwitch(Setting.isEac3SoftDecode()));
+        } catch (Throwable ignored) {
+        }
+    }
+
 
     private void setHomeEnterLive(View view) {
         try {

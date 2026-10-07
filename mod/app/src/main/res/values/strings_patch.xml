@@ -142,4 +142,5 @@
     <string name="setting_home_enter_live">Enter live on startup</string>
     <string name="setting_live_default_fullscreen">Live default fullscreen</string>
     <string name="setting_webview_live">WebView live support</string>
+    <string name="setting_eac3_soft_decode">E-AC3 soft decode</string>
 </resources>

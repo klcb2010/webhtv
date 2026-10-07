@@ -778,6 +778,15 @@ public class Setting {
         Prefers.put("webview_live_enabled", value);
     }
 
+    /** E-AC3/AC3：优先 FFmpeg 软解成 PCM（视频硬解不变），减轻无硬解设备上的卡顿 */
+    public static boolean isEac3SoftDecode() {
+        return Prefers.getBoolean("eac3_soft_decode", false);
+    }
+
+    public static void putEac3SoftDecode(boolean value) {
+        Prefers.put("eac3_soft_decode", value);
+    }
+
 
 
     public static boolean isHomeVodAutoLoad() {
