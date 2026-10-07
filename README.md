@@ -38,4 +38,4 @@
 
   EPG https://raw.githubusercontent.com/sparkssssssssss/epg/main/pp.xml
   
-  - E-AC3音频软解 -新增双端  试图解决海思弱鸡解码问题
+- E-AC3音频软解 -新增双端  试图解决海思弱鸡解码问题
