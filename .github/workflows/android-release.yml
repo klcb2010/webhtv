@@ -481,7 +481,21 @@ jobs:
           else
             echo "No mod/apply.sh, skip"
           fi
-
+      
+      - name: Relax Gradle Daemon JVM lock
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          # 上游 gradle/gradle-daemon-jvm.properties 锁定 JetBrains JDK 21 + Foojay
+          # CI 用的是 Temurin 21，vendor 不匹配就会去拉 Foojay，常返回 400
+          set -e
+          if [ -f gradle/gradle-daemon-jvm.properties ]; then
+            echo "---- before ----"
+            cat gradle/gradle-daemon-jvm.properties || true
+            rm -f gradle/gradle-daemon-jvm.properties
+            echo "✅ removed gradle/gradle-daemon-jvm.properties"
+          else
+            echo "no gradle-daemon-jvm.properties (ok)"
+          fi
       # ============================================================
       # Prepare Signing and Patch Resources
       # ============================================================
