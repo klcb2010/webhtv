@@ -152,3 +152,29 @@ webview://https://www.yangshipin.cn/tv/home?pid=600002264
 
 #EXTINF:-1 tvg-name="CCTV8K" tvg-logo="https://epg.v1.mk/logo/CCTV8K.png" group-title="央视频道",CCTV8K
 webview://https://www.yangshipin.cn/tv/home?pid=600156816
+#EXTINF:-1 group-title="4K🌟频道",东方卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=dfws4K&dur=10.0066&offset=175802900
+#EXTINF:-1 group-title="4K🌟频道",广东卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=gdws4K&dur=10.001&offset=175896974
+#EXTINF:-1 group-title="4K🌟频道",湖南卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=hnws4K&dur=10.0066&offset=175789332
+#EXTINF:-1 group-title="4K🌟频道",江苏卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=jsws4K&dur=10.025&offset=175470420
+#EXTINF:-1 group-title="4K🌟频道",四川卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=scws4K&dur=10.032&offset=175363868
+#EXTINF:-1 group-title="4K🌟频道",山东卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=sdws4K&dur=10.0105&offset=175728436
+#EXTINF:-1 group-title="4K🌟频道",深圳卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=szws4K&dur=10.005&offset=175081932
+#EXTINF:-1 group-title="4K🌟频道",浙江卫视4K
+js://https://cyh92.github.io/live/spider/js/hnyx.js?id=zjws4K&dur=10.0105&offset=175728140
+#EXTINF:-1 group-title="4K🌟频道",深圳卫视4K
+webview://https://www.sztv.com.cn/pindao/index.html?liveId=R77mK1v
+#EXTINF:-1 group-title="4K🌟频道",东方卫视4K
+webview://https://live.kankanews.com/huikan?id=1
+#EXTINF:-1 group-title="4K🌟频道",江苏卫视4K
+http://8.138.7.223/tv/jsws4k.php
+#EXTINF:-1 group-title="4K🌟频道",湖南卫视4K
+http://hlsal-ldvt.qing.mgtv.com/nn_live/nn_x64/Y2RuZXhfaWQ9YWxfaGxzX2xkdnQmZT02OTE0NjA0JnY9MSZpZD1ITldTWkdTVCZzPTcwN2RiYTc2YzJjNmJmMTQ4MmUyZGYzOWU2NWM3YWFi/HNWSZGST.m3u8
+#EXTINF:-1 group-title="4K🌟频道",河北4K
+https://event.pull.hebtv.com:443/live/live101.m3u8
