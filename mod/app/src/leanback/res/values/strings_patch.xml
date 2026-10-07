@@ -24,8 +24,8 @@
     <string name="child_lock_exit">Exit</string>
     <string name="setting_home_enter_live">Enter live on startup</string>
     <string name="setting_live_default_fullscreen">Live default fullscreen</string>
-    <string name="setting_webview_live">WebView live support</string>
-    <string name="setting_eac3_soft_decode">E-AC3 soft decode (stereo downmix)</string>
+    <string name="setting_webview_live">WebView live</string>
+    <string name="setting_eac3_soft_decode">E-AC3 soft decode</string>
 </resources>
 <string-array name="select_global_history_mode">
         <item>Off</item>

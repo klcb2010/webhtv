@@ -141,6 +141,6 @@
     <string name="child_lock_exit">退出</string>
     <string name="setting_home_enter_live">启动进入直播</string>
     <string name="setting_live_default_fullscreen">直播默认全屏</string>
-    <string name="setting_webview_live">WebView直播支持</string>
-    <string name="setting_eac3_soft_decode">E-AC3音频软解(含立体声下混)</string>
+    <string name="setting_webview_live">webview直播</string>
+    <string name="setting_eac3_soft_decode">E-AC3音频软解</string>
 </resources>
