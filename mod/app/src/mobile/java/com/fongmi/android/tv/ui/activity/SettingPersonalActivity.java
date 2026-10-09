@@ -72,6 +72,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.homeEnterLive.setOnClickListener(this::setHomeEnterLive); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreen.setOnClickListener(this::setLiveDefaultFullscreen); } catch (Throwable ignored) {}
         try { mBinding.eac3SoftDecode.setOnClickListener(this::setEac3SoftDecode); } catch (Throwable ignored) {}
+        try { mBinding.searchPanFirst.setOnClickListener(this::setSearchPanFirst); } catch (Throwable ignored) {}
+        try { mBinding.playDirectPanPrefer.setOnClickListener(this::setPlayDirectPanPrefer); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -118,6 +120,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive())); } catch (Throwable ignored) {}
         try { mBinding.liveDefaultFullscreenText.setText(getSwitch(Setting.isLiveDefaultFullscreen())); } catch (Throwable ignored) {}
         try { mBinding.eac3SoftDecodeText.setText(getSwitch(Setting.isEac3SoftDecode())); } catch (Throwable ignored) {}
+        try { mBinding.searchPanFirstText.setText(getSwitch(Setting.isSearchPanFirst())); } catch (Throwable ignored) {}
+        try { mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer())); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -323,6 +327,23 @@ public class SettingPersonalActivity extends BaseActivity {
         } catch (Throwable ignored) {
         }
     }
+
+    private void setSearchPanFirst(View view) {
+        try {
+            Setting.putSearchPanFirst(!Setting.isSearchPanFirst());
+            mBinding.searchPanFirstText.setText(getSwitch(Setting.isSearchPanFirst()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setPlayDirectPanPrefer(View view) {
+        try {
+            Setting.putPlayDirectPanPrefer(!Setting.isPlayDirectPanPrefer());
+            mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer()));
+        } catch (Throwable ignored) {
+        }
+    }
+
 
 
     private void setHomeEnterLive(View view) {

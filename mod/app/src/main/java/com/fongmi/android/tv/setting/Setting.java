@@ -787,6 +787,24 @@ public class Setting {
         Prefers.put("eac3_soft_decode", value);
     }
 
+    /** 搜索结果：网盘站点/条目排到前面（默认关） */
+    public static boolean isSearchPanFirst() {
+        return Prefers.getBoolean("search_pan_first", false);
+    }
+
+    public static void putSearchPanFirst(boolean value) {
+        Prefers.put("search_pan_first", value);
+    }
+
+    /** 直达播放：优先选网盘结果（默认关） */
+    public static boolean isPlayDirectPanPrefer() {
+        return Prefers.getBoolean("play_direct_pan_prefer", false);
+    }
+
+    public static void putPlayDirectPanPrefer(boolean value) {
+        Prefers.put("play_direct_pan_prefer", value);
+    }
+
 
 
     public static boolean isHomeVodAutoLoad() {

@@ -143,4 +143,6 @@
     <string name="setting_live_default_fullscreen">直播默认全屏</string>
     <string name="setting_webview_live">webview直播</string>
     <string name="setting_eac3_soft_decode">E-AC3音频软解</string>
+    <string name="setting_search_pan_first">搜索结果网盘在前</string>
+    <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
 </resources>

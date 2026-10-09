@@ -26,6 +26,8 @@
     <string name="setting_live_default_fullscreen">Live default fullscreen</string>
     <string name="setting_webview_live">WebView live</string>
     <string name="setting_eac3_soft_decode">E-AC3 soft decode</string>
+    <string name="setting_search_pan_first">Search: cloud drive first</string>
+    <string name="setting_play_direct_pan_prefer">Direct play: prefer cloud drive</string>
 </resources>
 <string-array name="select_global_history_mode">
         <item>Off</item>

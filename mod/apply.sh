@@ -146,6 +146,7 @@ run_hook "$MOD/hooks/inject_home_push.py"
 run_hook "$MOD/hooks/inject_live_default_fullscreen.py"
 run_hook "$MOD/hooks/inject_webview_live.py"
 run_hook "$MOD/hooks/inject_eac3_soft_audio.py"
+run_hook "$MOD/hooks/inject_pan_prefer.py"
 run_hook "$MOD/hooks/fix_update_setting_stubs.py"
 run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
