@@ -805,6 +805,15 @@ public class Setting {
         Prefers.put("play_direct_pan_prefer", value);
     }
 
+    /** 隐藏首页分类栏「更多」按钮 typeMore（默认关=显示） */
+    public static boolean isHideHomeTypeMore() {
+        return Prefers.getBoolean("hide_home_type_more", false);
+    }
+
+    public static void putHideHomeTypeMore(boolean value) {
+        Prefers.put("hide_home_type_more", value);
+    }
+
 
 
     public static boolean isHomeVodAutoLoad() {

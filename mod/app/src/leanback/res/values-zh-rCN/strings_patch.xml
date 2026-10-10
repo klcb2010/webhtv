@@ -25,4 +25,5 @@
     <string name="setting_eac3_soft_decode">E-AC3音频软解</string>
     <string name="setting_search_pan_first">搜索结果网盘在前</string>
     <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
+    <string name="setting_hide_home_type_more">隐藏首页更多按钮</string>
 </resources>

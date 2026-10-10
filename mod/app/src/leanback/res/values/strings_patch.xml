@@ -28,6 +28,7 @@
     <string name="setting_eac3_soft_decode">E-AC3 soft decode</string>
     <string name="setting_search_pan_first">Search: cloud drive first</string>
     <string name="setting_play_direct_pan_prefer">Direct play: prefer cloud drive</string>
+    <string name="setting_hide_home_type_more">Hide home more button</string>
 </resources>
 <string-array name="select_global_history_mode">
         <item>Off</item>
