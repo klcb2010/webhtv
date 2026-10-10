@@ -350,6 +350,10 @@ public class SettingPersonalActivity extends BaseActivity {
         try {
             Setting.putHideHomeTypeMore(!Setting.isHideHomeTypeMore());
             mBinding.hideHomeTypeMoreText.setText(getSwitch(Setting.isHideHomeTypeMore()));
+            try {
+                com.fongmi.android.tv.event.RefreshEvent.typeMore();
+            } catch (Throwable ignored2) {
+            }
         } catch (Throwable ignored) {
         }
     }
