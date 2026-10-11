@@ -119,18 +119,24 @@ public final class SettingPersonalDialog {
         if (homeSiteLock != null) {
             homeSiteLock.root.setOnClickListener(v -> {
                 Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
+                try { com.fongmi.android.tv.event.RefreshEvent.home(); } catch (Throwable ignored) {}
                 refresh.run();
             });
         }
         if (homeVodAutoLoad != null) {
             homeVodAutoLoad.root.setOnClickListener(v -> {
                 Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
+                try { com.fongmi.android.tv.event.RefreshEvent.home(); } catch (Throwable ignored) {}
                 refresh.run();
             });
         }
         if (homeHistory != null) {
             homeHistory.root.setOnClickListener(v -> {
                 Setting.putHomeHistory(!Setting.isHomeHistory());
+                try {
+                    com.fongmi.android.tv.event.RefreshEvent.history();
+                    com.fongmi.android.tv.event.RefreshEvent.home();
+                } catch (Throwable ignored) {}
                 refresh.run();
             });
         }
@@ -141,8 +147,9 @@ public final class SettingPersonalDialog {
         root.addView(playBack.root);
         root.addView(searchThread.root);
         if (homeSiteLock != null) root.addView(homeSiteLock.root);
-        if (homeVodAutoLoad != null) root.addView(homeVodAutoLoad.root);
+        if (homeVodAutoLoad != null) /* vod after history */
         if (homeHistory != null) root.addView(homeHistory.root);
+            if (homeVodAutoLoad != null) root.addView(homeVodAutoLoad.root);
         
         homeEnterLive.root.setOnClickListener(v -> {
             Setting.putHomeEnterLive(!Setting.isHomeEnterLive());

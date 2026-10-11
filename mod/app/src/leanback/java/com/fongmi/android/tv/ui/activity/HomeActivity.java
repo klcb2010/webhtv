@@ -489,9 +489,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void setFunc() {
         List<Func> items = new ArrayList<>();
-        // 关闭「默认加载点播」时显示点播入口；关闭「首页最近观看」时显示历史入口
-        if (!Setting.isHomeVodAutoLoad()) items.add(Func.create(R.string.home_vod));
+        // 关闭「首页最近观看」时显示历史入口；关闭「默认加载点播」时显示点播入口（历史在上、点播在下）
         if (!Setting.isHomeHistory()) items.add(Func.create(R.string.home_history_button));
+        if (!Setting.isHomeVodAutoLoad()) items.add(Func.create(R.string.home_vod));
         if (LiveConfig.hasUrl()) items.add(Func.create(R.string.home_live));
         items.add(Func.create(R.string.home_search));
         items.add(Func.create(R.string.home_keep));
@@ -822,17 +822,45 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     /**
      * 从个性设置返回时立即刷新首页相关开关（除「启动进入直播」等明确约定下次启动生效的项）。
      */
+    private Boolean lastHomeVodAutoLoad;
+    private Boolean lastHomeHistory;
+
     private void applyPersonalSettingsLive() {
         try {
             if (mFuncAdapter == null || mAdapter == null) return;
             syncHomeSiteLock();
-            setFunc();
-            getHistory();
-            try {
-                if (!Setting.isHomeVodAutoLoad()) {
-                    mBinding.typeRecycler.setVisibility(View.GONE);
+            boolean auto = Setting.isHomeVodAutoLoad();
+            boolean hist = Setting.isHomeHistory();
+            boolean autoChanged = lastHomeVodAutoLoad == null || lastHomeVodAutoLoad.booleanValue() != auto;
+            boolean histChanged = lastHomeHistory == null || lastHomeHistory.booleanValue() != hist;
+            // 首次 onResume 只同步标记，避免与启动加载重复拉流
+            if (lastHomeVodAutoLoad == null && lastHomeHistory == null) {
+                lastHomeVodAutoLoad = auto;
+                lastHomeHistory = hist;
+                setFunc();
+                getHistory();
+                if (!auto) {
+                    try { mBinding.typeRecycler.setVisibility(View.GONE); } catch (Throwable ignored) {}
                 }
-            } catch (Throwable ignored) {
+                return;
+            }
+            lastHomeVodAutoLoad = auto;
+            lastHomeHistory = hist;
+            setFunc();
+            if (histChanged || autoChanged) getHistory();
+            if (autoChanged) {
+                if (auto) {
+                    try {
+                        getVideo();
+                    } catch (Throwable ignored) {
+                    }
+                } else {
+                    try {
+                        mBinding.typeRecycler.setVisibility(View.GONE);
+                        if (mTypeAdapter != null) mTypeAdapter.addAll(java.util.Collections.emptyList());
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
         } catch (Throwable ignored) {
         }

@@ -256,16 +256,29 @@ public class SettingPersonalActivity extends BaseActivity {
     private void setHomeSiteLock(View view) {
         Setting.putHomeSiteLock(!Setting.isHomeSiteLock());
         refreshTexts();
+        try {
+            RefreshEvent.home();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void setHomeVodAutoLoad(View view) {
         Setting.putHomeVodAutoLoad(!Setting.isHomeVodAutoLoad());
         refreshTexts();
+        try {
+            RefreshEvent.home();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void setHomeHistory(View view) {
         Setting.putHomeHistory(!Setting.isHomeHistory());
         refreshTexts();
+        try {
+            RefreshEvent.history();
+            RefreshEvent.home();
+        } catch (Throwable ignored) {
+        }
     }
 
 
