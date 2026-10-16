@@ -5,40 +5,7 @@ on:
     # 每天6小时检查是否需要打包
     - cron: "0 */6 * * *"
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Release tag, blank = v<versionName>-yyyyMMddHHmm or v<versionName>-beta-yyyyMMddHHmm"
-        required: false
-        type: string
-      release_channel:
-        description: "Release channel, auto uses beta on fongmi-sync"
-        required: false
-        default: auto
-        type: choice
-        options:
-          - auto
-          - stable
-          - beta
-      release_notes:
-        description: "Release notes, use \\n for Markdown newlines"
-        required: false
-        type: string
-      prerelease:
-        description: "Mark as pre-release"
-        required: false
-        default: false
-        type: boolean
-      sync_cnb:
-        description: "Mirror APKs to CNB Release and sync CNB manifests"
-        required: false
-        default: false
-        type: boolean
-      force_build:
-        description: "Force build even if upstream has no new Release (manual only)"
-        required: false
-        default: false
-        type: boolean
-
+   
 permissions:
   contents: write
 
