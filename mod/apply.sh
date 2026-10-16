@@ -156,6 +156,20 @@ run_hook "$MOD/hooks/inject_result_msg_ui.py"
 if [[ -f "$MOD/hooks/inject_subtitle_style.py" ]]; then
   python3 "$MOD/hooks/inject_subtitle_style.py" "$ROOT"
 fi
+# 楷体自动放大：必须在 inject_subtitle_style 之后（改写 reapplySubtitleStyle）
+if [[ -f "$MOD/hooks/inject_kaiti_scale.py" ]]; then
+  echo "[mod] inject_kaiti_scale"
+  python3 "$MOD/hooks/inject_kaiti_scale.py" "$ROOT" || exit 1
+fi
+# 全局禁用 MPV（若脚本存在）
+if [[ -f "$MOD/hooks/inject_disable_mpv.py" ]]; then
+  echo "[mod] inject_disable_mpv"
+  python3 "$MOD/hooks/inject_disable_mpv.py" "$ROOT" || exit 1
+fi
+if [[ -f "$MOD/hooks/inject_strip_mpv_assets.py" ]]; then
+  echo "[mod] inject_strip_mpv_assets"
+  python3 "$MOD/hooks/inject_strip_mpv_assets.py" "$ROOT" || exit 1
+fi
 if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi

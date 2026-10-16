@@ -1,0 +1,15 @@
+# ===== 追加到 mod/apply.sh 中 inject_subtitle_style 之后 =====
+# 楷体自动放大（必须在 inject_subtitle_style 之后，否则 reapply 会被覆盖）
+if [[ -f "$MOD/hooks/inject_kaiti_scale.py" ]]; then
+  echo "[mod] inject_kaiti_scale"
+  python3 "$MOD/hooks/inject_kaiti_scale.py" "$ROOT" || exit 1
+fi
+# MPV 禁用（若已有可保留）
+if [[ -f "$MOD/hooks/inject_disable_mpv.py" ]]; then
+  echo "[mod] inject_disable_mpv"
+  python3 "$MOD/hooks/inject_disable_mpv.py" "$ROOT" || exit 1
+fi
+if [[ -f "$MOD/hooks/inject_strip_mpv_assets.py" ]]; then
+  echo "[mod] inject_strip_mpv_assets"
+  python3 "$MOD/hooks/inject_strip_mpv_assets.py" "$ROOT" || exit 1
+fi
