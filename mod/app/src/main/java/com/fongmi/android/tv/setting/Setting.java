@@ -1073,6 +1073,87 @@ public class Setting {
         return zh ? "雅黑" : "YaHei";
     }
 
+
+    // ---------- 楷体（义启粗楷等）自动放大 ----------
+    private static final float[] KAITI_SCALES = {1.00f, 1.15f, 1.20f, 1.30f};
+    private static final String[] KAITI_SCALE_LABELS_ZH = {"关闭", "小幅放大", "中幅放大", "大幅放大"};
+    private static final String[] KAITI_SCALE_LABELS_EN = {"Off", "Slight", "Medium", "Large"};
+    /** Media3 SubtitleView 默认 fractional 字号（相对画面高度），作基准避免叠加。 */
+    public static final float SUBTITLE_BASE_FRACTION = 0.0533f;
+
+    public static int getKaiTiScaleIndex() {
+        int v = Prefers.getInt("subtitle_kaiti_scale_index", 2); // 默认中幅 1.20
+        if (v < 0 || v >= KAITI_SCALES.length) v = 2;
+        return v;
+    }
+
+    public static void putKaiTiScaleIndex(int index) {
+        if (index < 0) index = 0;
+        if (index >= KAITI_SCALES.length) index = KAITI_SCALES.length - 1;
+        Prefers.put("subtitle_kaiti_scale_index", index);
+    }
+
+    public static void cycleKaiTiScale() {
+        putKaiTiScaleIndex((getKaiTiScaleIndex() + 1) % KAITI_SCALES.length);
+    }
+
+    public static float getKaiTiScaleFactor() {
+        return KAITI_SCALES[getKaiTiScaleIndex()];
+    }
+
+    public static String getKaiTiScaleLabel(boolean zh) {
+        int i = getKaiTiScaleIndex();
+        String name = zh ? KAITI_SCALE_LABELS_ZH[i] : KAITI_SCALE_LABELS_EN[i];
+        return name + " (" + String.format(java.util.Locale.US, "%.2f", KAITI_SCALES[i]) + "x)";
+    }
+
+    /**
+     * 当前字幕字体是否为「楷体系」（义启粗楷 / KaiTi / 楷体等）。
+     * 圆体、系统默认返回 false。
+     */
+    public static boolean isKaiTiLikeSubtitleFont() {
+        try {
+            String id = getSubtitleFontId();
+            if (id == null) id = "";
+            String s = id.toLowerCase(java.util.Locale.ROOT);
+            if (s.contains("yiqi") || s.contains("cukai") || "kaiti".equals(s) || s.contains("kai")) {
+                // 排除仅含 kai 但实际是其他 id 的误伤：圆体 id 不含 kai
+                if (s.contains("yuan") || s.contains("hei") || s.contains("you") || "system".equals(s)) return false;
+                return true;
+            }
+            String zh = getSubtitleFontLabel(true);
+            if (zh != null && (zh.contains("粗楷") || zh.contains("楷体") || zh.contains("义启"))) return true;
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 最终应用到 SubtitleView 的倍率：非楷体恒为 1.0，楷体为所选档位。 */
+    public static float getEffectiveSubtitleFontScale() {
+        return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
+    }
+
+    /** 应用到 Media3 SubtitleView：始终用「基准 × 有效倍率」，避免反复叠加。 */
+    public static void applySubtitleViewTextSize(Object subtitleView) {
+        if (subtitleView == null) return;
+        try {
+            float scale = getEffectiveSubtitleFontScale();
+            float fraction = SUBTITLE_BASE_FRACTION * scale;
+            java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class);
+            m.invoke(subtitleView, fraction);
+        } catch (Throwable e) {
+            try {
+                float scale = getEffectiveSubtitleFontScale();
+                // fallback: sp 约 16 * scale
+                java.lang.reflect.Method m = subtitleView.getClass().getMethod(
+                        "setFixedTextSize", int.class, float.class);
+                m.invoke(subtitleView, android.util.TypedValue.COMPLEX_UNIT_SP, 16f * scale);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+
     public static int getExitClearCacheGb() {
         int v = Prefers.getInt("exit_clear_cache_gb", 0);
         if (v != 0 && v != 6 && v != 8 && v != 10) return 0;

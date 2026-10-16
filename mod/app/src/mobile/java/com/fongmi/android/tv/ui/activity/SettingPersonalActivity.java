@@ -58,6 +58,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
         try { mBinding.subtitleColor.setOnClickListener(this::setSubtitleColor); } catch (Throwable ignored) {}
         try { mBinding.subtitleFont.setOnClickListener(this::setSubtitleFont); } catch (Throwable ignored) {}
+        try { mBinding.kaitiScale.setOnClickListener(this::setKaiTiScale); } catch (Throwable ignored) {}
         mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
         mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
         mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
@@ -89,6 +90,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
         try { mBinding.subtitleColorText.setText(subtitleColorLabel()); } catch (Throwable ignored) {}
         try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
+        try { mBinding.kaitiScaleText.setText(Setting.getKaiTiScaleLabel(true)); } catch (Throwable ignored) {}
         mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
         int gh = Setting.getGlobalHistoryMode();
         if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
@@ -202,7 +204,9 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setSubtitleFont(View view) {
         Setting.cycleSubtitleFont();
+        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
         try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
         refreshTexts();
     }
 
@@ -374,3 +378,11 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
 }
+
+    private void setKaiTiScale(View view) {
+        Setting.cycleKaiTiScale();
+        try { mBinding.kaitiScaleText.setText(Setting.getKaiTiScaleLabel(true)); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
+    }
+
