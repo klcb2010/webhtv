@@ -1133,29 +1133,42 @@ public class Setting {
         return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
     }
 
-    /** 应用到 Media3 SubtitleView：始终从基准重算，避免反复叠加。 */
+    /**
+     * 与播放页 SubtitleDialog（large/small）同一套字号体系：
+     * base = PlayerSetting.getSubtitleTextSize()（<=0 则用 0.0533），再乘楷体倍率。
+     * 只改渲染，不写回 preference，避免叠加。
+     */
     public static void applySubtitleViewTextSize(Object subtitleView) {
         if (subtitleView == null) return;
         float scale = getEffectiveSubtitleFontScale();
-        // 优先 fixed SP，视觉更明显；fraction 作补充
+        float base = SUBTITLE_BASE_FRACTION;
         try {
-            java.lang.reflect.Method m = subtitleView.getClass().getMethod(
-                    "setFixedTextSize", int.class, float.class);
-            m.invoke(subtitleView, android.util.TypedValue.COMPLEX_UNIT_SP, 18f * scale);
+            float v = com.fongmi.android.tv.setting.PlayerSetting.getSubtitleTextSize();
+            if (v > 0f) base = v;
         } catch (Throwable ignored) {
         }
+        float size = base * scale;
+        if (size < 0.02f) size = 0.02f;
+        if (size > 0.15f) size = 0.15f;
         try {
-            float fraction = SUBTITLE_BASE_FRACTION * scale;
             java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class);
-            m.invoke(subtitleView, fraction);
-        } catch (Throwable ignored) {
+            m.invoke(subtitleView, size);
+        } catch (Throwable e) {
+            try {
+                // 兼容带 userDefault 参数的重载
+                java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class, boolean.class);
+                m.invoke(subtitleView, size, false);
+            } catch (Throwable ignored) {
+            }
         }
         try {
-            android.util.Log.i("SubtitleStyle", "applySubtitleViewTextSize scale=" + scale
+            android.util.Log.i("SubtitleStyle", "applySubtitleViewTextSize base=" + base
+                    + " scale=" + scale + " size=" + size
                     + " kaiti=" + isKaiTiLikeSubtitleFont());
         } catch (Throwable ignored) {
         }
     }
+
 
 
     public static int getExitClearCacheGb() {
