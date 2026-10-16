@@ -13,22 +13,22 @@ import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 内置字幕字体：system / kaiti / heiyuan / xiyuan（assets/fonts/）。
- * Mobile / Leanback / Exo / MPV 共用。
- * index 0 = 系统默认（无自定义文件），便于对比是否生效。
+ * 内置字幕字体：yiqicukai / huipianheyuan / fangzhengzhunyuan / system。
+ * Mobile / Leanback / Exo 共用。
+ * 默认 index 0 = 义启粗楷；index 3 = 系统默认。
  */
 public final class SubtitleFontManager {
 
     private static final String TAG = "SubtitleFont";
+    public static final String ID_YIQICUKAI = "yiqicukai";
+    public static final String ID_HUIPIANHEYUAN = "huipianheyuan";
+    public static final String ID_FANGZHENGZHUNYUAN = "fangzhengzhunyuan";
     public static final String ID_SYSTEM = "system";
-    public static final String ID_KAITI = "kaiti";
-    public static final String ID_HEIYUAN = "heiyuan";
-    public static final String ID_XIYUAN = "xiyuan";
 
-    // 0 系统默认, 1 楷体, 2 黑圆(默认), 3 细圆
-    private static final String[] IDS = {ID_SYSTEM, ID_KAITI, ID_HEIYUAN, ID_XIYUAN};
-    private static final String[] LABELS_ZH = {"系统默认", "楷体", "黑圆", "细圆"};
-    private static final String[] LABELS_EN = {"System", "KaiTi", "HeiYuan", "XiYuan"};
+    // 0 义启粗楷(默认), 1 毁片和圆, 2 方正细圆, 3 系统默认
+    private static final String[] IDS = {ID_YIQICUKAI, ID_HUIPIANHEYUAN, ID_FANGZHENGZHUNYUAN, ID_SYSTEM};
+    private static final String[] LABELS_ZH = {"义启粗楷", "毁片和圆", "方正细圆", "系统默认"};
+    private static final String[] LABELS_EN = {"YiQiCuKai", "HuiPianHeYuan", "FangZhengZhunYuan", "System"};
 
     private static final ConcurrentHashMap<String, Typeface> TYPEFACE_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, File> FILE_CACHE = new ConcurrentHashMap<>();
@@ -41,8 +41,7 @@ public final class SubtitleFontManager {
     }
 
     public static String idOf(int index) {
-        int i = normalizeIndex(index);
-        return IDS[i];
+        return IDS[normalizeIndex(index)];
     }
 
     public static int indexOfId(String id) {
@@ -51,33 +50,12 @@ public final class SubtitleFontManager {
         for (int i = 0; i < IDS.length; i++) {
             if (IDS[i].equals(s)) return i;
         }
-        // 系统默认
+        if (s.contains("yiqi") || s.contains("cukai") || s.contains("义启") || s.contains("粗楷")) return 0;
+        if (s.contains("huipian") || s.contains("毁片") || s.contains("heyuan")) return 1;
+        if (s.contains("fangzheng") || s.contains("zhunyuan") || s.contains("细圆") || s.contains("方正")
+                || s.contains("xiyuan")) return 2;
         if (s.contains("system") || s.contains("default") || s.contains("sans")
-                || "系统".equals(s) || "系统默认".equals(s)) {
-            return 0;
-        }
-        // 楷体
-        if (s.contains("kai") || s.contains("cursive") || s.contains("楷")) {
-            return 1;
-        }
-        // 黑圆（旧幼圆/浪圆/江城也落到黑圆）
-        if (s.contains("hei") || s.contains("黑") || s.contains("yahei") || "heiyuan".equals(s)
-                || s.contains("you") || s.contains("幼") || "youyuan".equals(s)
-                || s.contains("lang") || s.contains("浪") || s.contains("jiang") || s.contains("cheng")
-                || s.contains("江城") || "jiangcheng".equals(s) || "langyuan".equals(s)) {
-            return 2;
-        }
-        // 细圆
-        if (s.contains("xi") || s.contains("细") || "xiyuan".equals(s)) {
-            return 3;
-        }
-        if (s.contains("song") || s.contains("serif") || s.contains("mono") || s.contains("fang")) {
-            return 2;
-        }
-        if ("0".equals(s)) return 1;
-        if ("1".equals(s)) return 1;
-        if ("2".equals(s)) return 2;
-        if ("3".equals(s)) return 3;
+                || "系统".equals(s) || s.contains("系统默认")) return 3;
         return 0;
     }
 
@@ -91,38 +69,28 @@ public final class SubtitleFontManager {
         return zh ? LABELS_ZH[i] : LABELS_EN[i];
     }
 
-    /** 显示名，用于 ASS FontName / MPV sub-font 查找。系统默认返回 sans-serif。 */
+    /** ASS FontName / 显示用；系统默认返回 sans-serif。 */
     public static String displayNameOf(int index) {
-        if (normalizeIndex(index) == 0) return "sans-serif";
+        if (normalizeIndex(index) == 3) return "sans-serif";
         return labelOf(index, true);
-    }
-
-    public static boolean isSystem(int index) {
-        return normalizeIndex(index) == 0;
     }
 
     public static Typeface getTypeface(int index) {
         String id = idOf(index);
         Typeface cached = TYPEFACE_CACHE.get(id);
         if (cached != null) return cached;
-
         if (ID_SYSTEM.equals(id)) {
             Typeface tf = Typeface.SANS_SERIF;
             TYPEFACE_CACHE.put(id, tf);
             Log.i(TAG, "using system Typeface.SANS_SERIF");
             return tf;
         }
-
         Typeface tf = loadTypeface(id);
-        if (tf == null && !ID_HEIYUAN.equals(id)) {
-            Log.w(TAG, "load " + id + " failed, fallback to heiyuan");
-            tf = loadTypeface(ID_HEIYUAN);
+        if (tf == null && !ID_YIQICUKAI.equals(id)) {
+            tf = loadTypeface(ID_YIQICUKAI);
         }
-        if (tf == null) {
-            Log.w(TAG, "load heiyuan failed, fallback to SANS_SERIF");
-            tf = Typeface.SANS_SERIF;
-        }
-        if (tf != null) TYPEFACE_CACHE.put(id, tf);
+        if (tf == null) tf = Typeface.SANS_SERIF;
+        TYPEFACE_CACHE.put(id, tf);
         return tf;
     }
 
@@ -132,28 +100,9 @@ public final class SubtitleFontManager {
         File cached = FILE_CACHE.get(id);
         if (cached != null && cached.isFile()) return cached;
         File f = ensureFontFile(id);
-        if (f == null || !f.isFile()) {
-            if (!ID_HEIYUAN.equals(id)) {
-                Log.w(TAG, "font file " + id + " missing, try heiyuan");
-                f = ensureFontFile(ID_HEIYUAN);
-            }
-        }
-        if (f != null && f.isFile()) {
-            FILE_CACHE.put(id, f);
-            return f;
-        }
-        Log.w(TAG, "font file unavailable for " + id);
-        return null;
-    }
-
-    public static File getFontsDir() {
-        try {
-            File dir = new File(App.get().getFilesDir(), "subtitle_fonts");
-            if (!dir.exists()) dir.mkdirs();
-            return dir;
-        } catch (Throwable e) {
-            return null;
-        }
+        if (f == null && !ID_YIQICUKAI.equals(id)) f = ensureFontFile(ID_YIQICUKAI);
+        if (f != null) FILE_CACHE.put(id, f);
+        return f;
     }
 
     public static void prepareAllFonts() {
@@ -161,42 +110,43 @@ public final class SubtitleFontManager {
             if (ID_SYSTEM.equals(id)) continue;
             try {
                 ensureFontFile(id);
+                getTypeface(indexOfId(id));
             } catch (Throwable e) {
                 Log.w(TAG, "prepare " + id + ": " + e.getMessage());
             }
         }
-        try {
-            createAliases();
-        } catch (Throwable e) {
-            Log.w(TAG, "aliases: " + e.getMessage());
-        }
     }
 
-    private static void createAliases() {
-        File dir = getFontsDir();
-        if (dir == null) return;
+    public static void registerAssFontAliases(Object registry) {
+        if (registry == null) return;
         String[][] pairs = new String[][]{
-                {ID_KAITI, "楷体"},
-                {ID_KAITI, "KaiTi"},
-                {ID_KAITI, "STKaiti"},
-                {ID_HEIYUAN, "黑圆"},
-                {ID_HEIYUAN, "HeiYuan"},
-                {ID_XIYUAN, "细圆"},
-                {ID_XIYUAN, "XiYuan"},
+                {ID_YIQICUKAI, "义启粗楷"},
+                {ID_YIQICUKAI, "YiQiCuKai"},
+                {ID_HUIPIANHEYUAN, "毁片和圆"},
+                {ID_HUIPIANHEYUAN, "HuiPianHeYuan"},
+                {ID_FANGZHENGZHUNYUAN, "方正细圆"},
+                {ID_FANGZHENGZHUNYUAN, "FangZhengZhunYuan"},
         };
-        for (String[] p : pairs) {
-            File src = ensureFontFile(p[0]);
-            if (src == null || !src.isFile()) continue;
-            File dst = new File(dir, p[1] + ".ttf");
-            if (dst.isFile() && dst.length() == src.length()) continue;
-            try (java.io.FileInputStream in = new java.io.FileInputStream(src);
-                 java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-            } catch (Throwable e) {
-                Log.w(TAG, "alias " + p[1] + ": " + e.getMessage());
+        try {
+            java.lang.reflect.Method m = null;
+            for (java.lang.reflect.Method method : registry.getClass().getMethods()) {
+                if ("addFontPath".equals(method.getName()) || "registerFont".equals(method.getName())) {
+                    m = method;
+                    break;
+                }
             }
+            if (m == null) return;
+            for (String[] pair : pairs) {
+                File f = ensureFontFile(pair[0]);
+                if (f == null || !f.isFile()) continue;
+                try {
+                    if (m.getParameterTypes().length == 2) m.invoke(registry, pair[1], f.getAbsolutePath());
+                    else if (m.getParameterTypes().length == 1) m.invoke(registry, f.getAbsolutePath());
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "registerAssFontAliases: " + e.getMessage());
         }
     }
 
@@ -262,10 +212,9 @@ public final class SubtitleFontManager {
                         byte[] buf = new byte[8192];
                         int n;
                         while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
-                        fos.flush();
                     }
                     if (out.isFile() && out.length() > 1000) {
-                        Log.i(TAG, "extracted " + assetPath + " -> " + out.getAbsolutePath());
+                        Log.i(TAG, "extracted font " + name);
                         return out;
                     }
                 } catch (Throwable ignored) {
@@ -275,5 +224,17 @@ public final class SubtitleFontManager {
             Log.w(TAG, "ensureFontFile " + id + ": " + e.getMessage());
         }
         return null;
+    }
+
+    private static File getFontsDir() {
+        try {
+            Context ctx = App.get();
+            if (ctx == null) return null;
+            File dir = new File(ctx.getFilesDir(), "subtitle_fonts");
+            if (!dir.exists() && !dir.mkdirs()) return null;
+            return dir;
+        } catch (Throwable e) {
+            return null;
+        }
     }
 }

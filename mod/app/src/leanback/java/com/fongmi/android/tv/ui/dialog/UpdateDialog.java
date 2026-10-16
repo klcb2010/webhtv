@@ -175,7 +175,7 @@ public class UpdateDialog extends BaseAlertDialog {
             binding.stableConfirm.setEnabled(update != null && update.hasUpdate());
             binding.stableConfirm.setText(R.string.update_confirm);
             // TV：底部 cancel 易被裁切，把「更新」放进展开内容区，保证看得到、点得到
-            binding.stableConfirm.setVisibility(update != null && update.hasUpdate() ? View.VISIBLE : View.GONE);
+            binding.stableConfirm.setVisibility(View.GONE); // 底部 cancel 已是「更新」，避免重复文字
         } else {
             binding.betaVersion.setText(getVersion(update));
             binding.betaStatus.setText(getStatus(update));
@@ -184,7 +184,7 @@ public class UpdateDialog extends BaseAlertDialog {
             binding.betaDesc.setText(MarkdownText.render(getBody(update), getString(R.string.update_no_notes)));
             binding.betaConfirm.setEnabled(update != null && update.hasUpdate());
             binding.betaConfirm.setText(R.string.update_confirm);
-            binding.betaConfirm.setVisibility(update != null && update.hasUpdate() ? View.VISIBLE : View.GONE);
+            binding.betaConfirm.setVisibility(View.GONE);
         }
     }
 
