@@ -377,7 +377,6 @@ public class SettingPersonalActivity extends BaseActivity {
         }
     }
 
-}
 
     private void setKaiTiScale(View view) {
         Setting.cycleKaiTiScale();
@@ -385,4 +384,4 @@ public class SettingPersonalActivity extends BaseActivity {
         try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
         try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
     }
-
+}
