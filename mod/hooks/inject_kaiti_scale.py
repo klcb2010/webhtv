@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Apply KaiTi scale using the same fractional text-size path as SubtitleDialog."""
+"""
+KaiTi scale: inline into ExoUtil.reapplySubtitleStyle (do not rely solely on Setting.apply*).
+Uses PlayerSetting.subtitle_text_size × kaiti scale → setFractionalTextSize (same as SubtitleDialog).
+"""
 from __future__ import annotations
 import re
 import sys
@@ -7,6 +10,50 @@ from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
 ERRORS: list[str] = []
+
+REAPPLY_METHOD = r'''public static void reapplySubtitleStyle() {
+        try {
+            PlayerView view = sLastPlayerView == null ? null : sLastPlayerView.get();
+            if (view == null || view.getSubtitleView() == null) {
+                android.util.Log.w("SubtitleStyle", "reapplySubtitleStyle: no PlayerView/SubtitleView");
+                return;
+            }
+            view.getSubtitleView().setApplyEmbeddedStyles(false);
+            view.getSubtitleView().setStyle(getCaptionStyle());
+            // KAITI_SCALE_INLINE — same unit as SubtitleDialog / PlayerSetting.subtitle_text_size
+            float __base = 0.0533f;
+            float __scale = 1.0f;
+            try {
+                float v = com.fongmi.android.tv.setting.PlayerSetting.getSubtitleTextSize();
+                if (v > 0f) __base = v;
+            } catch (Throwable t) {
+                android.util.Log.w("SubtitleStyle", "kaiti read base: " + t.getMessage());
+            }
+            try {
+                __scale = com.fongmi.android.tv.setting.Setting.getEffectiveSubtitleFontScale();
+            } catch (Throwable t) {
+                android.util.Log.w("SubtitleStyle", "kaiti read scale: " + t.getMessage());
+            }
+            float __size = __base * __scale;
+            if (__size < 0.02f) __size = 0.02f;
+            if (__size > 0.15f) __size = 0.15f;
+            try {
+                view.getSubtitleView().setFractionalTextSize(__size);
+            } catch (Throwable t) {
+                android.util.Log.w("SubtitleStyle", "kaiti setFractionalTextSize: " + t.getMessage());
+            }
+            try {
+                com.fongmi.android.tv.setting.Setting.applySubtitleViewTextSize(view.getSubtitleView());
+            } catch (Throwable t) {
+                android.util.Log.w("SubtitleStyle", "kaiti Setting.apply: " + t.getMessage());
+            }
+            android.util.Log.i("SubtitleStyle", "reapplySubtitleStyle ok base=" + __base
+                    + " scale=" + __scale + " size=" + __size
+                    + " kaiti=" + (__scale != 1.0f));
+        } catch (Throwable e) {
+            android.util.Log.w("SubtitleStyle", "reapplySubtitleStyle: " + e.getMessage());
+        }
+    }'''
 
 
 def patch_exo_util(path: Path) -> None:
@@ -17,103 +64,44 @@ def patch_exo_util(path: Path) -> None:
     m = re.search(r"public static void reapplySubtitleStyle\(\)\s*\{[\s\S]*?\n    \}", t)
     if not m:
         ERRORS.append(f"no reapplySubtitleStyle in {path}")
-        print("[mod] FAIL no reapply", path)
+        print("[mod] FAIL no reapplySubtitleStyle", path)
         return
-    new_method = """public static void reapplySubtitleStyle() {
-        try {
-            PlayerView view = sLastPlayerView == null ? null : sLastPlayerView.get();
-            if (view == null || view.getSubtitleView() == null) return;
-            view.getSubtitleView().setApplyEmbeddedStyles(false);
-            view.getSubtitleView().setStyle(getCaptionStyle());
-            // KAITI_SCALE_APPLIED — same units as SubtitleDialog / PlayerSetting.subtitle_text_size
-            try {
-                com.fongmi.android.tv.setting.Setting.applySubtitleViewTextSize(view.getSubtitleView());
-            } catch (Throwable ignored) {}
-            try {
-                android.util.Log.i("SubtitleStyle", "reapplySubtitleStyle ok scale="
-                        + com.fongmi.android.tv.setting.Setting.getEffectiveSubtitleFontScale()
-                        + " kaiti=" + com.fongmi.android.tv.setting.Setting.isKaiTiLikeSubtitleFont());
-            } catch (Throwable e) {
-                android.util.Log.i("SubtitleStyle", "reapplySubtitleStyle ok");
-            }
-        } catch (Throwable e) {
-            android.util.Log.w("SubtitleStyle", "reapplySubtitleStyle: " + e.getMessage());
-        }
-    }"""
-    t = t[: m.start()] + new_method + t[m.end() :]
+    t = t[: m.start()] + REAPPLY_METHOD + t[m.end() :]
     path.write_text(t, encoding="utf-8")
-    if "applySubtitleViewTextSize" not in path.read_text(encoding="utf-8"):
-        ERRORS.append(f"verify fail {path}")
-        print("[mod] VERIFY FAIL", path)
-    else:
-        print("[mod] VERIFY OK", path)
+    t2 = path.read_text(encoding="utf-8")
+    for needle in ("KAITI_SCALE_INLINE", "setFractionalTextSize(__size)", "reapplySubtitleStyle ok base="):
+        if needle not in t2:
+            ERRORS.append(f"missing {needle} in {path}")
+            print("[mod] VERIFY FAIL", needle, path)
+            return
+    print("[mod] VERIFY OK", path)
 
 
 def patch_subtitle_dialog(path: Path) -> None:
     if not path.is_file():
-        print("[mod] skip missing SubtitleDialog", path)
+        print("[mod] skip SubtitleDialog")
         return
     t = path.read_text(encoding="utf-8")
     if "KAITI_SCALE_DIALOG" in t:
-        print("[mod] SubtitleDialog already", path)
+        print("[mod] SubtitleDialog already")
         return
-    # After each size change, re-apply kaiti scale on the same view
     hook = """
         // KAITI_SCALE_DIALOG
-        try {
-            com.fongmi.android.tv.setting.Setting.applySubtitleViewTextSize(subtitleView);
-        } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
 """
-    changed = False
+    n = 0
     for anchor in (
         "PlayerSetting.putSubtitleTextSize(subtitleView.getTextSize());",
         "subtitleView.reset();",
     ):
-        if anchor in t and "KAITI_SCALE_DIALOG" not in t[t.find(anchor) : t.find(anchor) + 120]:
+        if anchor in t:
             t = t.replace(anchor, anchor + hook, 1)
-            changed = True
-    # onReset puts 0 then reset - also after putSubtitleTextSize(0.0f) for native path
-    if "PlayerSetting.putSubtitleTextSize(0.0f);" in t:
-        t = t.replace(
-            "PlayerSetting.putSubtitleTextSize(0.0f);",
-            "PlayerSetting.putSubtitleTextSize(0.0f);"
-            + "\n        // KAITI_SCALE_DIALOG_RESET\n"
-            + "        try { if (subtitleView != null) com.fongmi.android.tv.setting.Setting.applySubtitleViewTextSize(subtitleView); } catch (Throwable ignored) {}\n",
-            1,
-        )
-        changed = True
-    if changed:
+            n += 1
+    if n:
         path.write_text(t, encoding="utf-8")
-        print("[mod] SubtitleDialog hooked", path)
+        print("[mod] SubtitleDialog hooked", n, path)
     else:
-        print("[mod] WARN SubtitleDialog anchors not found", path)
-
-
-def patch_player_manager(path: Path) -> None:
-    """When engine applies stored subtitle size, multiply by KaiTi scale for render."""
-    if not path.is_file():
-        return
-    t = path.read_text(encoding="utf-8")
-    if "KAITI_SCALE_ENGINE_STYLE" in t:
-        print("[mod] PlayerManager style already")
-        return
-    # Common pattern: setSubtitleStyle(PlayerSetting.getSubtitleTextSize(), PlayerSetting.getSubtitlePosition())
-    old = "engine.setSubtitleStyle(PlayerSetting.getSubtitleTextSize(), PlayerSetting.getSubtitlePosition());"
-    new = (
-        "{\n"
-        "            // KAITI_SCALE_ENGINE_STYLE\n"
-        "            float __st = PlayerSetting.getSubtitleTextSize();\n"
-        "            if (__st <= 0f) __st = 0.0533f;\n"
-        "            try { __st *= com.fongmi.android.tv.setting.Setting.getEffectiveSubtitleFontScale(); } catch (Throwable ignored) {}\n"
-        "            engine.setSubtitleStyle(__st, PlayerSetting.getSubtitlePosition());\n"
-        "        }"
-    )
-    if old in t:
-        t = t.replace(old, new)
-        path.write_text(t, encoding="utf-8")
-        print("[mod] PlayerManager setSubtitleStyle scaled x", t.count("KAITI_SCALE_ENGINE_STYLE"))
-    else:
-        print("[mod] WARN PlayerManager setSubtitleStyle pattern not found")
+        print("[mod] WARN SubtitleDialog anchors missing")
 
 
 def main() -> None:
@@ -121,7 +109,6 @@ def main() -> None:
     patch_exo_util(ROOT / "app/src/main/java/com/fongmi/android/tv/player/exo/ExoUtil.java")
     patch_exo_util(ROOT / "app/src/main/java/com/fongmi/android/tv/utils/ExoUtil.java")
     patch_subtitle_dialog(ROOT / "app/src/main/java/com/fongmi/android/tv/ui/dialog/SubtitleDialog.java")
-    patch_player_manager(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
     if ERRORS:
         print("[mod] FAILED", ERRORS, file=sys.stderr)
         sys.exit(1)
