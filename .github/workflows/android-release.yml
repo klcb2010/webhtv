@@ -600,7 +600,7 @@ jobs:
       # ============================================================
       - name: Set up Android SDK
         if: steps.should_build.outputs.build == 'true'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android packages
         if: steps.should_build.outputs.build == 'true'
