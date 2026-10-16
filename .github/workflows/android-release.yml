@@ -977,29 +977,3 @@ jobs:
           echo "✅ GitHub Release 创建成功"
           echo "=========================================="
 
-      # ============================================================
-      # Sync to CNB
-      # ============================================================
-      - name: Sync to CNB
-        if: steps.should_build.outputs.build == 'true' && inputs.sync_cnb
-        env:
-          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
-          CNB_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
-          CNB_RELEASE_TITLE: ${{ steps.meta.outputs.title }}
-          CNB_RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
-          CNB_RELEASE_PRERELEASE: ${{ inputs.prerelease == true || steps.meta.outputs.channel == 'beta' }}
-          CNB_RELEASE_LATEST: ${{ steps.meta.outputs.channel == 'stable' }}
-        run: |
-          .github/scripts/sync-cnb-release.sh
-
-      # ============================================================
-      # Upload workflow artifacts
-      # ============================================================
-      - name: Upload workflow artifacts
-        if: steps.should_build.outputs.build == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: webhtv-${{ steps.meta.outputs.tag }}
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 30
