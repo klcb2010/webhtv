@@ -226,7 +226,7 @@ public final class SubtitleFontManager {
         return null;
     }
 
-    private static File getFontsDir() {
+    public static File getFontsDir() {
         try {
             Context ctx = App.get();
             if (ctx == null) return null;
