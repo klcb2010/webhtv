@@ -1,0 +1,29 @@
+<resources>
+    <string name="child_lock_title">家长控制</string>
+    <string name="child_lock_enable">开启</string>
+    <string name="child_lock_password">密码</string>
+    <string name="child_lock_password_hint">请输入密码</string>
+    <string name="child_lock_password_confirm">确认密码</string>
+    <string name="child_lock_password_confirm_hint">请再次输入密码</string>
+    <string name="child_lock_setup_hint">保存后本次仍可继续使用，下次启动才需要密码。关闭时需验证当前密码。</string>
+    <string name="child_lock_gate_title">家长控制</string>
+    <string name="child_lock_gate_message">请输入密码后使用本应用</string>
+    <string name="child_lock_unlock">解锁</string>
+    <string name="child_lock_save">保存</string>
+    <string name="child_lock_cancel">取消</string>
+    <string name="child_lock_error_mismatch">两次密码不一致</string>
+    <string name="child_lock_error_empty">密码不能为空</string>
+    <string name="child_lock_error_wrong">密码错误</string>
+    <string name="child_lock_saved">已保存，下次启动将要求输入密码</string>
+    <string name="child_lock_disabled">已关闭家长控制</string>
+    <string name="setting_child_lock">家长控制</string>
+    <string name="child_lock_toggle_password">显示/隐藏密码</string>
+    <string name="child_lock_exit">退出</string>
+    <string name="setting_home_enter_live">启动进入直播</string>
+    <string name="setting_live_default_fullscreen">直播默认全屏</string>
+    <string name="setting_webview_live">webview直播</string>
+    <string name="setting_eac3_soft_decode">E-AC3音频软解</string>
+    <string name="setting_search_pan_first">搜索结果网盘在前</string>
+    <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
+    <string name="setting_hide_home_type_more">隐藏首页更多按钮</string>
+</resources>
