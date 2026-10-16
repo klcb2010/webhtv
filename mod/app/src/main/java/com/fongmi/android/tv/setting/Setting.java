@@ -1133,23 +1133,27 @@ public class Setting {
         return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
     }
 
-    /** 应用到 Media3 SubtitleView：始终用「基准 × 有效倍率」，避免反复叠加。 */
+    /** 应用到 Media3 SubtitleView：始终从基准重算，避免反复叠加。 */
     public static void applySubtitleViewTextSize(Object subtitleView) {
         if (subtitleView == null) return;
+        float scale = getEffectiveSubtitleFontScale();
+        // 优先 fixed SP，视觉更明显；fraction 作补充
         try {
-            float scale = getEffectiveSubtitleFontScale();
+            java.lang.reflect.Method m = subtitleView.getClass().getMethod(
+                    "setFixedTextSize", int.class, float.class);
+            m.invoke(subtitleView, android.util.TypedValue.COMPLEX_UNIT_SP, 18f * scale);
+        } catch (Throwable ignored) {
+        }
+        try {
             float fraction = SUBTITLE_BASE_FRACTION * scale;
             java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class);
             m.invoke(subtitleView, fraction);
-        } catch (Throwable e) {
-            try {
-                float scale = getEffectiveSubtitleFontScale();
-                // fallback: sp 约 16 * scale
-                java.lang.reflect.Method m = subtitleView.getClass().getMethod(
-                        "setFixedTextSize", int.class, float.class);
-                m.invoke(subtitleView, android.util.TypedValue.COMPLEX_UNIT_SP, 16f * scale);
-            } catch (Throwable ignored) {
-            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            android.util.Log.i("SubtitleStyle", "applySubtitleViewTextSize scale=" + scale
+                    + " kaiti=" + isKaiTiLikeSubtitleFont());
+        } catch (Throwable ignored) {
         }
     }
 

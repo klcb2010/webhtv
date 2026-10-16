@@ -1786,10 +1786,21 @@ public final class AssrtSubtitleMatch {
      */
     private static boolean preferChineseEmbedded(PlayerManager player) {
         try {
-            if (player == null || player.isEmpty()) return false;
+            if (player == null) return false;
+            try {
+                if (player.isEmpty()) return false;
+            } catch (Throwable ignored) {
+                return false;
+            }
             if (sPreferExternal) return false;
             if (loadCachedSubPayload(sLastHistory, sLastEpisode) != null) return false;
-            Tracks tracks = player.getCurrentTracks();
+            Tracks tracks;
+            try {
+                tracks = player.getCurrentTracks();
+            } catch (Throwable e) {
+                Log.w(TAG, "preferChineseEmbedded getCurrentTracks: " + e.getMessage());
+                return false;
+            }
             if (tracks == null) return false;
             Tracks.Group bestGroup = null;
             int bestIndex = -1;
