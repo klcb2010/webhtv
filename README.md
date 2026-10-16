@@ -46,3 +46,5 @@
   EPG https://raw.githubusercontent.com/sparkssssssssss/epg/main/pp.xml
   
 - E-AC3音频软解 -新增双端  试图解决海丝弱鸡解码导致4K音频卡顿问题
+
+- 楷体字幕自动放大
