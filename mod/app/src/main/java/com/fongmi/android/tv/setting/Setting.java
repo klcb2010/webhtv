@@ -1076,8 +1076,8 @@ public class Setting {
 
     // ---------- 楷体（义启粗楷等）自动放大 ----------
     private static final float[] KAITI_SCALES = {1.00f, 1.15f, 1.20f, 1.30f};
-    private static final String[] KAITI_SCALE_LABELS_ZH = {"关闭", "小幅放大", "中幅放大", "大幅放大"};
-    private static final String[] KAITI_SCALE_LABELS_EN = {"Off", "Slight", "Medium", "Large"};
+    private static final String[] KAITI_SCALE_LABELS_ZH = {"1.00x", "1.15x", "1.20x", "1.30x"};
+    private static final String[] KAITI_SCALE_LABELS_EN = {"1.00x", "1.15x", "1.20x", "1.30x"};
     /** Media3 SubtitleView 默认 fractional 字号（相对画面高度），作基准避免叠加。 */
     public static final float SUBTITLE_BASE_FRACTION = 0.0533f;
 
@@ -1103,8 +1103,7 @@ public class Setting {
 
     public static String getKaiTiScaleLabel(boolean zh) {
         int i = getKaiTiScaleIndex();
-        String name = zh ? KAITI_SCALE_LABELS_ZH[i] : KAITI_SCALE_LABELS_EN[i];
-        return name + " (" + String.format(java.util.Locale.US, "%.2f", KAITI_SCALES[i]) + "x)";
+        return zh ? KAITI_SCALE_LABELS_ZH[i] : KAITI_SCALE_LABELS_EN[i];
     }
 
     /**
