@@ -76,6 +76,7 @@ public final class AssrtSubtitleMatch {
     /** 内封字幕：语言 / 在 TEXT 轨中的序号（-1 未知） */
     private static volatile String sPendingSelectLang = "";
     private static volatile int sPendingSelectIndex = -1;
+    private static volatile long sPreferChineseSettleAt = 0L;
     /** 用户选过的内封字幕偏好（跨集记住类型）：ass / srt / pgs / "" */
     private static volatile String sEmbeddedPreferFormat = "";
     /** 用户选过的内封语言偏好：simp / trad / zh / "" */
@@ -1901,6 +1902,11 @@ public final class AssrtSubtitleMatch {
             }
             if (sPreferExternal) return false;
             if (loadCachedSubPayload(sLastHistory, sLastEpisode) != null) return false;
+            // 刚成功切轨后短时内不再反复切，避免 onTracks 风暴
+            if (System.currentTimeMillis() < sPreferChineseSettleAt) {
+                Log.i(TAG, "preferChineseEmbedded settle skip");
+                return true;
+            }
             Tracks tracks;
             try {
                 tracks = player.getCurrentTracks();
@@ -1962,40 +1968,36 @@ public final class AssrtSubtitleMatch {
             Log.i(TAG, "preferChineseEmbedded switching to better score=" + bestScore
                     + " label=" + selLabel + " fromSelected=" + selectedScore);
 
-            androidx.media3.common.Player pl = null;
-            try {
-                Object engine = player.getClass().getMethod("getPlayer").invoke(player);
-                if (engine instanceof androidx.media3.common.Player) pl = (androidx.media3.common.Player) engine;
-            } catch (Throwable ignored) {
-            }
-            if (pl == null) {
-                try {
-                    for (java.lang.reflect.Method m : player.getClass().getMethods()) {
-                        if (m.getParameterTypes().length != 0) continue;
-                        if (!androidx.media3.common.Player.class.isAssignableFrom(m.getReturnType())) continue;
-                        Object o = m.invoke(player);
-                        if (o instanceof androidx.media3.common.Player) {
-                            pl = (androidx.media3.common.Player) o;
-                            break;
-                        }
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
+            // 与 forceSelectExternalViaMedia3 相同路径：engine 字段 → getPlayer/getExoPlayer
+            androidx.media3.common.Player pl = resolveMedia3Player(player);
+            boolean applied = false;
             if (pl != null) {
                 try {
                     androidx.media3.common.TrackSelectionOverride override =
-                            new androidx.media3.common.TrackSelectionOverride(bestGroup.getMediaTrackGroup(), bestIndex);
-                    androidx.media3.common.TrackSelectionParameters params = pl.getTrackSelectionParameters()
-                            .buildUpon()
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                            .setOverrideForType(override)
-                            .build();
-                    pl.setTrackSelectionParameters(params);
+                            new androidx.media3.common.TrackSelectionOverride(
+                                    bestGroup.getMediaTrackGroup(), bestIndex);
+                    androidx.media3.common.TrackSelectionParameters.Builder b =
+                            pl.getTrackSelectionParameters().buildUpon()
+                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                    .setOverrideForType(override);
+                    // 尽量压语言偏好，减少被默认轨抢回
+                    try {
+                        if (bestFmt != null && bestFmt.language != null && !bestFmt.language.isEmpty()) {
+                            b.setPreferredTextLanguage(bestFmt.language);
+                        } else {
+                            b.setPreferredTextLanguage("zh");
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                    pl.setTrackSelectionParameters(b.build());
+                    applied = true;
+                    Log.i(TAG, "preferChinese override applied label=" + selLabel);
                 } catch (Throwable e) {
                     Log.w(TAG, "preferChinese override: " + e.getMessage());
                 }
+            } else {
+                Log.w(TAG, "preferChinese no Media3 Player from engine");
             }
             try {
                 java.util.ArrayList<Track> list = new java.util.ArrayList<>();
@@ -2010,9 +2012,29 @@ public final class AssrtSubtitleMatch {
             } catch (Throwable e) {
                 Log.w(TAG, "preferChinese setTrack: " + e.getMessage());
             }
+            // 校验是否真的选中
+            boolean nowBest = false;
+            try {
+                if (pl != null) {
+                    Tracks t2 = pl.getCurrentTracks();
+                    if (t2 != null) {
+                        for (Tracks.Group g : t2.getGroups()) {
+                            if (g.getType() != C.TRACK_TYPE_TEXT) continue;
+                            for (int i = 0; i < g.length; i++) {
+                                if (g.isTrackSelected(i) && g == bestGroup && i == bestIndex) {
+                                    nowBest = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
             Log.i(TAG, "preferChineseEmbedded OK score=" + bestScore + " label=" + selLabel
                     + " fmt=" + detectSubFormat(selLabel, selMime)
-                    + " lang=" + detectSubLang(selLabel, bestFmt != null ? bestFmt.language : ""));
+                    + " lang=" + detectSubLang(selLabel, bestFmt != null ? bestFmt.language : "")
+                    + " applied=" + applied + " verified=" + nowBest);
+            if (applied) sPreferChineseSettleAt = System.currentTimeMillis() + 2500L;
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "preferChineseEmbedded: " + e.getMessage());
