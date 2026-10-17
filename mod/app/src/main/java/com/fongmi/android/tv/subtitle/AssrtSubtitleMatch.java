@@ -76,6 +76,12 @@ public final class AssrtSubtitleMatch {
     /** 内封字幕：语言 / 在 TEXT 轨中的序号（-1 未知） */
     private static volatile String sPendingSelectLang = "";
     private static volatile int sPendingSelectIndex = -1;
+    /** 用户选过的内封字幕偏好（跨集记住类型）：ass / srt / pgs / "" */
+    private static volatile String sEmbeddedPreferFormat = "";
+    /** 用户选过的内封语言偏好：simp / trad / zh / "" */
+    private static volatile String sEmbeddedPreferLang = "";
+    private static final String PREF_EMB_FMT = "subtitle_embed_prefer_format";
+    private static final String PREF_EMB_LANG = "subtitle_embed_prefer_lang";
 
     private AssrtSubtitleMatch() {
     }
@@ -791,9 +797,17 @@ public final class AssrtSubtitleMatch {
                     || nl.contains(".srt") || nl.contains(".ass") || nl.contains(".ssa") || nl.contains(".vtt")
                     || looksLikeHashFileName(name);
             if (!external) {
-                // 内封：不记忆
+                // 内封：跨集记住「格式 + 简繁」，供下一集 preferChinese 加权
                 sPreferExternal = false;
-                Log.i(TAG, "rememberChosenTrack embedded skip memory name=" + name);
+                String embFmt = detectSubFormat(name, fmt);
+                String embLang = detectSubLang(name, item.getName());
+                // item 可能无独立 language 字段，再从 name 抽
+                if (TextUtils.isEmpty(embLang) || "zh".equals(embLang)) {
+                    embLang = detectSubLang(name, "");
+                }
+                saveEmbeddedPrefs(embFmt, embLang);
+                Log.i(TAG, "rememberChosenTrack embedded prefs name=" + name
+                        + " format=" + embFmt + " lang=" + embLang);
                 return;
             }
             sPendingSelectName = name;
@@ -880,9 +894,6 @@ public final class AssrtSubtitleMatch {
             // 无外挂记忆：延迟一次选中文内封
             sPreferExternal = false;
             final PlayerManager pm = player;
-            App.post(() -> preferChineseEmbedded(pm), 400);
-            App.post(() -> preferChineseEmbedded(pm), 1200);
-            App.post(() -> preferChineseEmbedded(pm), 2500);
             App.post(() -> preferChineseEmbedded(pm), 5000);
         } catch (Throwable e) {
             Log.w(TAG, "onTracksReady: " + e.getMessage());
@@ -932,10 +943,7 @@ public final class AssrtSubtitleMatch {
                 try {
                     if (loadCachedSubPayload(history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode) == null) {
                         final PlayerManager pmE = player;
-                        App.post(() -> preferChineseEmbedded(pmE), 400);
-            App.post(() -> preferChineseEmbedded(pmE), 1200);
-            App.post(() -> preferChineseEmbedded(pmE), 2500);
-            App.post(() -> preferChineseEmbedded(pmE), 5000);
+                        App.post(() -> preferChineseEmbedded(pmE), 5000);
                     }
                 } catch (Throwable ignoredEmb) {
                 }
@@ -1790,6 +1798,99 @@ public final class AssrtSubtitleMatch {
     /**
      * 无外挂记忆时：内封 TEXT 轨优先中文（zh/chi/中文/简体）。
      */
+    
+    private static void loadEmbeddedPrefs() {
+        try {
+            if (sEmbeddedPreferFormat == null) sEmbeddedPreferFormat = "";
+            if (sEmbeddedPreferLang == null) sEmbeddedPreferLang = "";
+            if (sEmbeddedPreferFormat.isEmpty()) {
+                String f = Prefers.getString(PREF_EMB_FMT, "");
+                if (f != null) sEmbeddedPreferFormat = f;
+            }
+            if (sEmbeddedPreferLang.isEmpty()) {
+                String l = Prefers.getString(PREF_EMB_LANG, "");
+                if (l != null) sEmbeddedPreferLang = l;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void saveEmbeddedPrefs(String format, String lang) {
+        try {
+            if (format != null) {
+                sEmbeddedPreferFormat = format;
+                Prefers.put(PREF_EMB_FMT, format);
+            }
+            if (lang != null) {
+                sEmbeddedPreferLang = lang;
+                Prefers.put(PREF_EMB_LANG, lang);
+            }
+            Log.i(TAG, "saveEmbeddedPrefs format=" + sEmbeddedPreferFormat + " lang=" + sEmbeddedPreferLang);
+        } catch (Throwable e) {
+            Log.w(TAG, "saveEmbeddedPrefs: " + e.getMessage());
+        }
+    }
+
+    /** 从 label/mime 推断格式：ass / srt / pgs / other */
+    private static String detectSubFormat(String label, String mime) {
+        String blob = ((label == null ? "" : label) + " " + (mime == null ? "" : mime)).toLowerCase(Locale.ROOT);
+        if (blob.contains("ssa") || blob.contains("ass") || blob.contains("text/x-ssa") || blob.contains("text/x-ass"))
+            return "ass";
+        if (blob.contains("pgs") || blob.contains("hdmv") || blob.contains("vobsub") || blob.contains("dvb")
+                || blob.contains("application/pgs") || blob.contains("application/vobsub"))
+            return "pgs";
+        if (blob.contains("subrip") || blob.contains("srt") || blob.contains("vtt") || blob.contains("ttml")
+                || blob.contains("text/"))
+            return "srt";
+        return "other";
+    }
+
+    private static String detectSubLang(String label, String lang) {
+        String blob = ((label == null ? "" : label) + " " + (lang == null ? "" : lang)).toLowerCase(Locale.ROOT);
+        boolean isTrad = blob.contains("繁体") || blob.contains("繁中") || blob.contains("traditional")
+                || blob.contains("cht") || blob.contains("hant") || blob.contains("zh-hant") || blob.contains("zh_hant");
+        boolean isSimp = blob.contains("简体") || blob.contains("简中") || blob.contains("simplified")
+                || blob.contains("chs") || blob.contains("hans") || blob.contains("zh-hans") || blob.contains("zh_hans");
+        if (isSimp && !isTrad) return "simp";
+        if (isTrad && !isSimp) return "trad";
+        if (blob.contains("中文") || blob.contains("chinese") || blob.startsWith("zh")
+                || "zh".equalsIgnoreCase(lang) || (lang != null && lang.toLowerCase(Locale.ROOT).startsWith("zh")))
+            return "zh";
+        return "";
+    }
+
+    private static int scoreEmbeddedTrack(Format f) {
+        String label = f.label != null ? f.label : "";
+        String lang = f.language != null ? f.language : "";
+        String mime = f.sampleMimeType == null ? "" : f.sampleMimeType;
+        String blob = (label + " " + lang).toLowerCase(Locale.ROOT);
+        if (blob.contains("外挂") || blob.contains("external")) return -1;
+
+        String langKind = detectSubLang(label, lang);
+        String fmt = detectSubFormat(label, mime);
+        int score = 0;
+        if ("simp".equals(langKind)) score += 100;
+        else if ("zh".equals(langKind)) score += 90;
+        else if ("trad".equals(langKind)) score += 70;
+        else return -1;
+
+        // 格式：ASS 优先于文本，文本优先于 PGS
+        if ("ass".equals(fmt)) score += 50;
+        else if ("srt".equals(fmt)) score += 15;
+        else if ("pgs".equals(fmt)) score -= 15;
+        else score += 5;
+
+        // 用户跨集偏好加权（手工选过后下一集沿用类型）
+        loadEmbeddedPrefs();
+        if (!TextUtils.isEmpty(sEmbeddedPreferFormat) && sEmbeddedPreferFormat.equals(fmt)) score += 35;
+        if (!TextUtils.isEmpty(sEmbeddedPreferLang)) {
+            if (sEmbeddedPreferLang.equals(langKind)) score += 25;
+            else if ("simp".equals(sEmbeddedPreferLang) && "trad".equals(langKind)) score -= 20;
+        }
+        return score;
+    }
+
+
     private static boolean preferChineseEmbedded(PlayerManager player) {
         try {
             if (player == null) return false;
@@ -1808,59 +1909,32 @@ public final class AssrtSubtitleMatch {
                 return false;
             }
             if (tracks == null) return false;
+            loadEmbeddedPrefs();
+
             Tracks.Group bestGroup = null;
             int bestIndex = -1;
             int bestScore = -1;
             Format bestFmt = null;
+            int selectedScore = -1;
+            Tracks.Group selectedGroup = null;
+            int selectedIndex = -1;
+
             for (Tracks.Group group : tracks.getGroups()) {
                 if (group.getType() != C.TRACK_TYPE_TEXT) continue;
                 for (int i = 0; i < group.length; i++) {
                     if (!group.isTrackSupported(i)) continue;
                     Format f = group.getTrackFormat(i);
-                    String label = f.label != null ? f.label : "";
-                    String lang = f.language != null ? f.language : "";
-                    String blob = (label + " " + lang).toLowerCase(Locale.ROOT);
-                    String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
-                    // 仅跳过明确外挂；标签里的 ASS/SRT/PGS 是内封格式名，不能当外挂过滤
-                    if (blob.contains("外挂") || blob.contains("external")) {
-                        continue;
+                    int score = scoreEmbeddedTrack(f);
+                    if (score < 0) continue;
+                    boolean selected = false;
+                    try {
+                        selected = group.isTrackSelected(i);
+                    } catch (Throwable ignored) {
                     }
-                    int score = 0;
-                    // 简繁：先判繁体，避免 "Chinese (Traditional)" 被当成通用中文
-                    boolean isTrad = blob.contains("繁体") || blob.contains("繁中")
-                            || blob.contains("traditional") || blob.contains("cht")
-                            || blob.contains("zh-hant") || blob.contains("zh_hant")
-                            || lang.equalsIgnoreCase("zh-hant") || lang.toLowerCase(Locale.ROOT).contains("hant");
-                    boolean isSimp = blob.contains("简体") || blob.contains("简中")
-                            || blob.contains("simplified") || blob.contains("chs")
-                            || blob.contains("zh-hans") || blob.contains("zh_hans")
-                            || lang.equalsIgnoreCase("zh-hans") || lang.toLowerCase(Locale.ROOT).contains("hans");
-                    if (isSimp && !isTrad) {
-                        score += 100; // 简体优先
-                    } else if (isTrad && !isSimp) {
-                        score += 70;  // 繁体低于简体
-                    } else if (blob.contains("中文") || blob.contains("chinese")
-                            || lang.equalsIgnoreCase("zh") || lang.toLowerCase(Locale.ROOT).startsWith("zh")
-                            || lang.equalsIgnoreCase("chi") || lang.equalsIgnoreCase("zho")) {
-                        score += 90;  // 未标明简繁的中文
-                    }
-                    if (score <= 0) continue;
-                    // 格式优先级：ASS/SSA > 文本(SRT/VTT) > 图像(PGS等)
-                    boolean isAss = mime.contains("ssa") || mime.contains("ass")
-                            || blob.contains(" ass") || blob.endsWith("ass") || blob.contains(", ass")
-                            || blob.contains("，ass") || blob.contains("ass,") || blob.contains("ass，")
-                            || label.toLowerCase(Locale.ROOT).contains("ass");
-                    boolean isTextSub = mime.contains("subrip") || mime.contains("vtt") || mime.contains("ttml")
-                            || mime.contains("text/")
-                            || blob.contains("srt") || blob.contains("vtt");
-                    boolean isBitmap = mime.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb")
-                            || mime.contains("hdmv") || blob.contains("pgs") || blob.contains("vobsub");
-                    if (isAss) {
-                        score += 40; // 多类型并存时优先 ASS
-                    } else if (isTextSub) {
-                        score += 15;
-                    } else if (isBitmap) {
-                        score -= 10; // PGS 等图像字幕靠后
+                    if (selected) {
+                        selectedScore = score;
+                        selectedGroup = group;
+                        selectedIndex = i;
                     }
                     if (score > bestScore) {
                         bestScore = score;
@@ -1874,14 +1948,20 @@ public final class AssrtSubtitleMatch {
                 Log.i(TAG, "preferChineseEmbedded none");
                 return false;
             }
-            try {
-                if (bestGroup.isTrackSelected(bestIndex)) {
-                    Log.i(TAG, "preferChineseEmbedded already best score=" + bestScore);
-                    return true;
-                }
-                Log.i(TAG, "preferChineseEmbedded switching to better score=" + bestScore);
-            } catch (Throwable ignored) {
+            String selLabel = bestFmt != null && bestFmt.label != null ? bestFmt.label : "中文";
+            String selMime = bestFmt != null && bestFmt.sampleMimeType != null ? bestFmt.sampleMimeType : "";
+            // 已选且分数不低于最优 → 不动（避免反复 setTrack）
+            if (selectedGroup == bestGroup && selectedIndex == bestIndex) {
+                Log.i(TAG, "preferChineseEmbedded already best score=" + bestScore + " label=" + selLabel);
+                return true;
             }
+            if (selectedScore >= bestScore && selectedScore > 0) {
+                Log.i(TAG, "preferChineseEmbedded already best score=" + selectedScore);
+                return true;
+            }
+            Log.i(TAG, "preferChineseEmbedded switching to better score=" + bestScore
+                    + " label=" + selLabel + " fromSelected=" + selectedScore);
+
             androidx.media3.common.Player pl = null;
             try {
                 Object engine = player.getClass().getMethod("getPlayer").invoke(player);
@@ -1902,8 +1982,6 @@ public final class AssrtSubtitleMatch {
                 } catch (Throwable ignored) {
                 }
             }
-            String selLabel = bestFmt != null && bestFmt.label != null ? bestFmt.label : "中文";
-            String selMime = bestFmt != null && bestFmt.sampleMimeType != null ? bestFmt.sampleMimeType : "";
             if (pl != null) {
                 try {
                     androidx.media3.common.TrackSelectionOverride override =
@@ -1932,7 +2010,9 @@ public final class AssrtSubtitleMatch {
             } catch (Throwable e) {
                 Log.w(TAG, "preferChinese setTrack: " + e.getMessage());
             }
-            Log.i(TAG, "preferChineseEmbedded OK score=" + bestScore + " label=" + selLabel);
+            Log.i(TAG, "preferChineseEmbedded OK score=" + bestScore + " label=" + selLabel
+                    + " fmt=" + detectSubFormat(selLabel, selMime)
+                    + " lang=" + detectSubLang(selLabel, bestFmt != null ? bestFmt.language : ""));
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "preferChineseEmbedded: " + e.getMessage());
