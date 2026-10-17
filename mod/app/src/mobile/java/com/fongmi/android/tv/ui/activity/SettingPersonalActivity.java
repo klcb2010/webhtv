@@ -1,0 +1,387 @@
+package com.fongmi.android.tv.ui.activity;
+
+import com.fongmi.android.tv.ui.dialog.ChildLockSetupDialog;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.content.Intent;
+import android.view.View;
+
+import androidx.viewbinding.ViewBinding;
+
+import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
+import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.event.RefreshEvent;
+import com.fongmi.android.tv.ui.base.BaseActivity;
+
+public class SettingPersonalActivity extends BaseActivity {
+
+    private ActivitySettingPersonalBinding mBinding;
+    private String[] globalHistoryMode;
+    private String[] subtitleLabels;
+    private String[] subtitleValues;
+
+    public static void start(Activity activity) {
+        activity.startActivity(new Intent(activity, SettingPersonalActivity.class));
+    }
+
+    private String getSwitch(boolean value) {
+        return getString(value ? R.string.setting_on : R.string.setting_off);
+    }
+
+    @Override
+    protected ViewBinding getBinding() {
+        return mBinding = ActivitySettingPersonalBinding.inflate(getLayoutInflater());
+    }
+
+    @Override
+    protected void initView(Bundle savedInstanceState) {
+        globalHistoryMode = getResources().getStringArray(R.array.select_global_history_mode);
+        try {
+            subtitleLabels = getResources().getStringArray(R.array.select_subtitle_language);
+            subtitleValues = getResources().getStringArray(R.array.select_subtitle_language_value);
+        } catch (Throwable e) {
+            subtitleLabels = new String[]{"Auto", "Chinese", "English"};
+            subtitleValues = new String[]{"auto", "zh", "en"};
+        }
+        refreshTexts();
+        setListeners();
+    }
+
+    private void setListeners() {
+        // autoChange hidden — use upstream 播放设置
+        mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        try { mBinding.globalToast.setOnClickListener(this::setGlobalToast); } catch (Throwable ignored) {}
+        try { mBinding.autoCheckUpdate.setOnClickListener(this::setAutoCheckUpdate); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCache.setOnClickListener(this::setExitClearCache); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColor.setOnClickListener(this::setSubtitleColor); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFont.setOnClickListener(this::setSubtitleFont); } catch (Throwable ignored) {}
+        try { mBinding.kaitiScale.setOnClickListener(this::setKaiTiScale); } catch (Throwable ignored) {}
+        mBinding.episodeHistory.setOnClickListener(this::setEpisodeHistory);
+        mBinding.globalHistory.setOnClickListener(this::setGlobalHistory);
+        mBinding.playBackToDetail.setOnClickListener(this::setPlayBackToDetail);
+        mBinding.searchThread.setOnClickListener(this::setSearchThread);
+        mBinding.subtitleAutoMatch.setOnClickListener(this::setSubtitleAutoMatch);
+        mBinding.subtitleLanguage.setOnClickListener(this::setSubtitleLanguage);
+        try { mBinding.childLock.setOnClickListener(this::setChildLock); } catch (Throwable ignored) {}
+        try { mBinding.homePush.setOnClickListener(this::setHomePush); } catch (Throwable ignored) {}
+        try { mBinding.playDirect.setOnClickListener(this::setPlayDirect); } catch (Throwable ignored) {}
+        try { mBinding.homeEnterLive.setOnClickListener(this::setHomeEnterLive); } catch (Throwable ignored) {}
+        try { mBinding.liveDefaultFullscreen.setOnClickListener(this::setLiveDefaultFullscreen); } catch (Throwable ignored) {}
+        try { mBinding.eac3SoftDecode.setOnClickListener(this::setEac3SoftDecode); } catch (Throwable ignored) {}
+        try { mBinding.searchPanFirst.setOnClickListener(this::setSearchPanFirst); } catch (Throwable ignored) {}
+        try { mBinding.playDirectPanPrefer.setOnClickListener(this::setPlayDirectPanPrefer); } catch (Throwable ignored) {}
+        try { mBinding.hideHomeTypeMore.setOnClickListener(this::setHideHomeTypeMore); } catch (Throwable ignored) {}
+        try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
+        try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
+    }
+
+    private void refreshTexts() {
+        try {
+        // autoChange hidden
+        } catch (Throwable e) {
+        // autoChange hidden
+        }
+        mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
+        try { mBinding.globalToastText.setText(getSwitch(Setting.isGlobalToast())); } catch (Throwable ignored) {}
+        try { mBinding.autoCheckUpdateText.setText(getSwitch(Setting.isAutoCheckUpdate())); } catch (Throwable ignored) {}
+        try { mBinding.exitClearCacheText.setText(exitClearCacheLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleColorText.setText(subtitleColorLabel()); } catch (Throwable ignored) {}
+        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
+        try { mBinding.kaitiScaleText.setText(Setting.getKaiTiScaleLabel(true)); } catch (Throwable ignored) {}
+        mBinding.episodeHistoryText.setText(getSwitch(Setting.isEpisodeHistory()));
+        int gh = Setting.getGlobalHistoryMode();
+        if (globalHistoryMode != null && gh >= 0 && gh < globalHistoryMode.length) {
+            mBinding.globalHistoryText.setText(globalHistoryMode[gh]);
+        } else {
+            mBinding.globalHistoryText.setText(String.valueOf(gh));
+        }
+        mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
+        mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
+        mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
+        String lang = Setting.getSubtitlePreferredLanguage();
+        String label = lang;
+        if (subtitleValues != null && subtitleLabels != null) {
+            for (int i = 0; i < subtitleValues.length; i++) {
+                if (subtitleValues[i].equals(lang)) {
+                    label = subtitleLabels[i];
+                    break;
+                }
+            }
+        }
+        mBinding.subtitleLanguageText.setText(label);
+        try { mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled())); } catch (Throwable ignored) {}
+        try { mBinding.homePushText.setText(getSwitch(Setting.isHomePush())); } catch (Throwable ignored) {}
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive())); } catch (Throwable ignored) {}
+        try { mBinding.liveDefaultFullscreenText.setText(getSwitch(Setting.isLiveDefaultFullscreen())); } catch (Throwable ignored) {}
+        try { mBinding.eac3SoftDecodeText.setText(getSwitch(Setting.isEac3SoftDecode())); } catch (Throwable ignored) {}
+        try { mBinding.searchPanFirstText.setText(getSwitch(Setting.isSearchPanFirst())); } catch (Throwable ignored) {}
+        try { mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer())); } catch (Throwable ignored) {}
+        try { mBinding.hideHomeTypeMoreText.setText(getSwitch(Setting.isHideHomeTypeMore())); } catch (Throwable ignored) {}
+        try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        // TV-only rows may be GONE on mobile via layout; still safe if present
+        try {
+            boolean tv = false;
+            try {
+                Class.forName("androidx.leanback.widget.VerticalGridView");
+                // detect by presence of leanback resources package flavor is compile-time
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setAutoChange(View view) {
+        try {
+            PlayerSetting.putAutoChange(!PlayerSetting.isAutoChange());
+        } catch (Throwable ignored) {
+        }
+        refreshTexts();
+    }
+
+    private void setAutoBackup(View view) {
+        Setting.putAutoBackup(!Setting.isAutoBackup());
+        refreshTexts();
+    }
+
+    private void setGlobalToast(View view) {
+        Setting.putGlobalToast(!Setting.isGlobalToast());
+        refreshTexts();
+    }
+
+
+    private void setAutoCheckUpdate(View view) {
+        Setting.putAutoCheckUpdate(!Setting.isAutoCheckUpdate());
+        refreshTexts();
+    }
+
+    private String exitClearCacheLabel() {
+        int gb = Setting.getExitClearCacheGb();
+        if (gb <= 0) {
+            try { return getString(R.string.setting_exit_clear_cache_off); } catch (Throwable e) { return getSwitch(false); }
+        }
+        return gb + "G";
+    }
+
+    private void setExitClearCache(View view) {
+        int cur = Setting.getExitClearCacheGb();
+        int next;
+        if (cur <= 0) next = 6;
+        else if (cur == 6) next = 8;
+        else if (cur == 8) next = 10;
+        else next = 0;
+        Setting.putExitClearCacheGb(next);
+        refreshTexts();
+    }
+
+    private String subtitleColorLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleColorLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleColorLabel(true);
+        }
+    }
+
+    private String subtitleFontLabel() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return Setting.getSubtitleFontLabel(lang != null && lang.startsWith("zh"));
+        } catch (Throwable e) {
+            return Setting.getSubtitleFontLabel(true);
+        }
+    }
+
+    private void setSubtitleColor(View view) {
+        Setting.cycleSubtitleColor();
+        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
+        refreshTexts();
+    }
+
+    private void setSubtitleFont(View view) {
+        Setting.cycleSubtitleFont();
+        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
+        refreshTexts();
+    }
+
+
+
+
+    private void setEpisodeHistory(View view) {
+        Setting.putEpisodeHistory(!Setting.isEpisodeHistory());
+        refreshTexts();
+    }
+
+    private void setGlobalHistory(View view) {
+        int size = globalHistoryMode == null ? 2 : globalHistoryMode.length;
+        if (size <= 0) size = 2;
+        Setting.putGlobalHistoryMode((Setting.getGlobalHistoryMode() + 1) % size);
+        refreshTexts();
+    }
+
+    private void setPlayBackToDetail(View view) {
+        Setting.putPlayBackToDetail(!Setting.isPlayBackToDetail());
+        refreshTexts();
+    }
+
+    private void setSearchThread(View view) {
+        int[] options = new int[]{8, 16, 20, 32, 48, 64};
+        int cur = Setting.getSearchThread();
+        int idx = 0;
+        for (int i = 0; i < options.length; i++) if (options[i] == cur) { idx = i; break; }
+        int next = options[(idx + 1) % options.length];
+        Setting.putSearchThread(next);
+        try { com.fongmi.android.tv.utils.Task.newSearchExecutor(next); } catch (Throwable ignored) {}
+        refreshTexts();
+    }
+
+    private void setSubtitleAutoMatch(View view) {
+        Setting.putSubtitleAutoMatchEnabled(!Setting.isSubtitleAutoMatchEnabled());
+        refreshTexts();
+    }
+
+    private void setSubtitleLanguage(View view) {
+        if (subtitleValues == null || subtitleValues.length == 0) return;
+        String cur = Setting.getSubtitlePreferredLanguage();
+        int idx = 0;
+        for (int i = 0; i < subtitleValues.length; i++) if (subtitleValues[i].equals(cur)) { idx = i; break; }
+        Setting.putSubtitlePreferredLanguage(subtitleValues[(idx + 1) % subtitleValues.length]);
+        refreshTexts();
+    }
+
+
+
+
+    private void setHomePush(View view) {
+        Setting.putHomePush(!Setting.isHomePush());
+        try { refreshTexts(); } catch (Throwable ignored) {}
+        try { RefreshEvent.home(); } catch (Throwable ignored) {}
+    }
+
+
+
+
+
+
+    private void setPlayDirect(View view) {
+        Setting.putPlayDirect(!Setting.isPlayDirect());
+        try { mBinding.playDirectText.setText(getSwitch(Setting.isPlayDirect())); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
+    private String recommendSourceLabel() {
+        int src = Setting.getRecommendSource();
+        if (src == Setting.RECOMMEND_AI) return getString(R.string.setting_recommend_ai);
+        if (src == Setting.RECOMMEND_DOUBAN) return getString(R.string.setting_recommend_douban);
+        if (src == Setting.RECOMMEND_AUTO) return getString(R.string.setting_recommend_auto);
+        return getString(R.string.setting_recommend_off);
+    }
+
+    private void setRecommendSource(View view) {
+        int src = Setting.getRecommendSource();
+        src = (src + 1) % 4;
+        Setting.putRecommendSource(src);
+        try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        try { refreshTexts(); } catch (Throwable ignored) {}
+    }
+
+
+
+
+
+    private void setWebViewLive(View view) {
+        try {
+            Setting.putWebViewLiveEnabled(!Setting.isWebViewLiveEnabled());
+            mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setLiveDefaultFullscreen(View view) {
+        try {
+            Setting.putLiveDefaultFullscreen(!Setting.isLiveDefaultFullscreen());
+            mBinding.liveDefaultFullscreenText.setText(getSwitch(Setting.isLiveDefaultFullscreen()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setEac3SoftDecode(View view) {
+        try {
+            Setting.putEac3SoftDecode(!Setting.isEac3SoftDecode());
+            mBinding.eac3SoftDecodeText.setText(getSwitch(Setting.isEac3SoftDecode()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setSearchPanFirst(View view) {
+        try {
+            Setting.putSearchPanFirst(!Setting.isSearchPanFirst());
+            mBinding.searchPanFirstText.setText(getSwitch(Setting.isSearchPanFirst()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setPlayDirectPanPrefer(View view) {
+        try {
+            Setting.putPlayDirectPanPrefer(!Setting.isPlayDirectPanPrefer());
+            mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setHideHomeTypeMore(View view) {
+        try {
+            Setting.putHideHomeTypeMore(!Setting.isHideHomeTypeMore());
+            mBinding.hideHomeTypeMoreText.setText(getSwitch(Setting.isHideHomeTypeMore()));
+            try {
+                com.fongmi.android.tv.event.RefreshEvent.typeMore();
+            } catch (Throwable ignored2) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+
+
+    private void setHomeEnterLive(View view) {
+        try {
+            Setting.putHomeEnterLive(!Setting.isHomeEnterLive());
+            mBinding.homeEnterLiveText.setText(getSwitch(Setting.isHomeEnterLive()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setChildLock(View view) {
+        try {
+            // post 避免 focusable 行首次点击只抢焦点不触发业务
+            view.post(() -> {
+                try {
+                    if (isFinishing()) return;
+                    ChildLockSetupDialog.show(SettingPersonalActivity.this, () -> {
+                        try {
+                            mBinding.childLockText.setText(getSwitch(Setting.isChildLockEnabled()));
+                        } catch (Throwable ignored) {
+                        }
+                    });
+                } catch (Throwable ignored) {
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+    private void setKaiTiScale(View view) {
+        Setting.cycleKaiTiScale();
+        try { mBinding.kaitiScaleText.setText(Setting.getKaiTiScaleLabel(true)); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
+        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
+    }
+}

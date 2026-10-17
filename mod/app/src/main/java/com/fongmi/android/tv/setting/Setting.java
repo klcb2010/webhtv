@@ -1,0 +1,1364 @@
+package com.fongmi.android.tv.setting;
+
+import com.fongmi.android.tv.subtitle.SubtitleFontManager;
+
+import com.fongmi.android.tv.update.UpdateSource;
+
+import com.fongmi.android.tv.update.OciMirror;
+
+import com.fongmi.android.tv.update.GithubProxy;
+
+import com.fongmi.android.tv.bean.AiConfig;
+
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.os.LocaleList;
+import android.provider.Settings;
+import android.util.DisplayMetrics;
+
+import androidx.core.content.ContextCompat;
+
+import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.BuildConfig;
+import com.fongmi.android.tv.bean.Update;
+import com.fongmi.android.tv.utils.WebViewUtil;
+import com.github.catvod.crawler.DebugLogStore;
+import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.utils.Trans;
+import com.github.catvod.utils.Prefers;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+
+public class Setting {
+
+    public static final int GLOBAL_HISTORY_OFF = 0;
+    public static final int GLOBAL_HISTORY_AUTO = 1;
+    public static final int GLOBAL_HISTORY_SEARCH = 2;
+
+
+    private static final Type STRING_LIST = new TypeToken<List<String>>() {}.getType();
+
+    public static final int LANGUAGE_FOLLOW_SYSTEM = 0;
+    public static final int LANGUAGE_SIMPLIFIED = 1;
+    public static final int LANGUAGE_TRADITIONAL = 2;
+    private static final int[] LANGUAGE_OPTIONS = {LANGUAGE_FOLLOW_SYSTEM, LANGUAGE_SIMPLIFIED, LANGUAGE_TRADITIONAL};
+
+    public static final int CSP_WARMUP_DISABLED = 0;
+    public static final int CSP_WARMUP_DEFAULT = 1;
+    public static final int CSP_WARMUP_CUSTOM = 2;
+
+    public static final int UI_SCALE_FOLLOW_SYSTEM = 0;
+    public static final int UI_SCALE_STANDARD = 1;
+    public static final int UI_SCALE_COMPACT = 2;
+    public static final int UI_SCALE_SMALLER = 3;
+    public static final int UI_SCALE_MILD_COMPACT = 4;
+    public static final int UI_SCALE_MORE_COMPACT = 5;
+    private static final int[] UI_SCALE_OPTIONS = {UI_SCALE_FOLLOW_SYSTEM, UI_SCALE_STANDARD, UI_SCALE_MILD_COMPACT, UI_SCALE_COMPACT, UI_SCALE_MORE_COMPACT, UI_SCALE_SMALLER};
+
+
+    
+    public static final int WALL_CINEMA = 5;
+    public static final int WALL_CINEMA_WARM = 6;
+    public static final int WALL_CINEMA_MOSS = 7;
+    public static final int WALL_CINEMA_BLUE = 8;
+    public static final int WALL_CINEMA_CLAY = 9;
+    public static final int WALL_AURORA_GLASS = 10;
+    public static final int WALL_SUNSET_PRISM = 11;
+    public static final int WALL_MINT_GLACIER = 12;
+    public static final int WALL_LIQUID_CHROME = 13;
+    public static final int WALL_NEON_BERRY = 14;
+    public static final int WALL_CHAMPAGNE_MIST = 15;
+    public static final int WALL_GLASS_GRADIENT = 16;
+    public static final int WALL_DEEP_SPACE_GLASS = 17;
+    public static final int WALL_POLAR_LIGHT_GLASS = 18;
+    public static final int WALL_NEON_CYBER = 19;
+    public static final int WALL_WARM_MOON_GLASS = 20;
+    public static final int WALL_CRYSTAL_SKY = 21;
+    public static final int WALL_DREAM_PURPLE = 22;
+    public static final int WALL_SKY_MINT = 23;
+    public static final int WALL_FOREST_MIST = 24;
+    public static final int WALL_DAYLIGHT_MINIMAL = 25;
+    public static final int WALL_DEEP_SEA = 26;
+    public static final int WALL_VIOLET_SMOKE = 27;
+    public static final int WALL_ROSE_VEIL = 28;
+    public static final int WALL_EMERALD_AURORA = 29;
+    public static final int WALL_BLUE_SILK = 30;
+    public static final int WALL_PEACH_DAWN = 31;
+    public static final int WALL_GRAPHITE_SMOKE = 32;
+    public static final int WALL_PASTEL_PRISM = 33;
+    public static final int WALL_MIDNIGHT_MOON = 34;
+    public static final int WALL_CYAN_CRYSTAL = 35;
+    public static final int WALL_LAVENDER_CRYSTAL = 36;
+    public static final int WALL_GREEN = 1;
+
+    private static final int[] DEFAULT_WALLS = {
+            WALL_DREAM_PURPLE, WALL_LAVENDER_CRYSTAL, WALL_PASTEL_PRISM, WALL_ROSE_VEIL, WALL_VIOLET_SMOKE,
+            WALL_NEON_BERRY, WALL_MIDNIGHT_MOON, WALL_NEON_CYBER, WALL_DEEP_SPACE_GLASS, WALL_GRAPHITE_SMOKE,
+            WALL_DAYLIGHT_MINIMAL, WALL_SKY_MINT, WALL_POLAR_LIGHT_GLASS, WALL_GLASS_GRADIENT, WALL_CRYSTAL_SKY,
+            WALL_BLUE_SILK, WALL_CYAN_CRYSTAL, WALL_MINT_GLACIER, WALL_AURORA_GLASS, WALL_DEEP_SEA,
+            WALL_LIQUID_CHROME, WALL_FOREST_MIST, WALL_EMERALD_AURORA, WALL_WARM_MOON_GLASS, WALL_PEACH_DAWN,
+            WALL_CHAMPAGNE_MIST, WALL_SUNSET_PRISM
+    };
+
+
+
+
+    public static String getDoh() {
+        return Prefers.getString("doh");
+    }
+
+    public static void putDoh(String doh) {
+        Prefers.put("doh", doh);
+    }
+
+    public static String getKeyword() {
+        return Prefers.getString("keyword");
+    }
+
+    public static void putKeyword(String keyword) {
+        Prefers.put("keyword", keyword);
+    }
+
+    public static String getHot() {
+        return Prefers.getString("hot");
+    }
+
+    public static void putHot(String hot) {
+        Prefers.put("hot", hot);
+    }
+
+    public static String getHotTv() {
+        return Prefers.getString("hot_tv");
+    }
+
+    public static void putHotTv(String hot) {
+        Prefers.put("hot_tv", hot);
+    }
+
+    public static String getHotMovie() {
+        return Prefers.getString("hot_movie");
+    }
+
+    public static void putHotMovie(String hot) {
+        Prefers.put("hot_movie", hot);
+    }
+
+    public static String getHotVariety() {
+        return Prefers.getString("hot_variety");
+    }
+
+    public static void putHotVariety(String hot) {
+        Prefers.put("hot_variety", hot);
+    }
+
+    public static String getUa() {
+        return Prefers.getString("ua");
+    }
+
+    public static void putUa(String ua) {
+        Prefers.put("ua", ua);
+    }
+
+    public static int getWall() {
+        int wall = Prefers.getInt("wall", WALL_DREAM_PURPLE);
+        return wall == WALL_GREEN || isLegacyColorWall(wall) ? WALL_DREAM_PURPLE : wall;
+    }
+
+    public static void putWall(int wall) {
+        Prefers.put("wall", wall);
+    }
+
+    public static int getWallType() {
+        return Prefers.getInt("wall_type", 0);
+    }
+
+    public static void putWallType(int type) {
+        Prefers.put("wall_type", type);
+    }
+
+    public static int nextDefaultWall() {
+        int wall = getWall();
+        for (int i = 0; i < DEFAULT_WALLS.length; i++) {
+            if (DEFAULT_WALLS[i] == wall) return DEFAULT_WALLS[(i + 1) % DEFAULT_WALLS.length];
+        }
+        return WALL_DREAM_PURPLE;
+    }
+
+    public static int[] getDefaultWalls() {
+        return DEFAULT_WALLS.clone();
+    }
+
+    public static int getDefaultWallIndex(int wall) {
+        for (int i = 0; i < DEFAULT_WALLS.length; i++) {
+            if (DEFAULT_WALLS[i] == wall) return i;
+        }
+        return -1;
+    }
+
+    public static boolean isBuiltInWall(int wall) {
+        return isBuiltInDesignWall(wall);
+    }
+
+    public static boolean isBuiltInColorWall(int wall) {
+        return false;
+    }
+
+    private static boolean isLegacyColorWall(int wall) {
+        return wall == WALL_CINEMA || wall == WALL_CINEMA_WARM || wall == WALL_CINEMA_MOSS || wall == WALL_CINEMA_BLUE || wall == WALL_CINEMA_CLAY;
+    }
+
+    public static boolean isBuiltInDesignWall(int wall) {
+        return getDefaultWallIndex(wall) != -1;
+    }
+
+    public static int getBuiltInWallColor(int wall) {
+        if (wall == WALL_AURORA_GLASS) return 0xFF2B8ECB;
+        if (wall == WALL_SUNSET_PRISM) return 0xFFB65B88;
+        if (wall == WALL_MINT_GLACIER) return 0xFF55BCA8;
+        if (wall == WALL_LIQUID_CHROME) return 0xFF53657F;
+        if (wall == WALL_NEON_BERRY) return 0xFF7B42CF;
+        if (wall == WALL_CHAMPAGNE_MIST) return 0xFFB47692;
+        if (wall == WALL_GLASS_GRADIENT) return 0xFF5E91B3;
+        if (wall == WALL_DEEP_SPACE_GLASS) return 0xFF2E2B74;
+        if (wall == WALL_POLAR_LIGHT_GLASS) return 0xFF6FA6B8;
+        if (wall == WALL_NEON_CYBER) return 0xFF4B2BD8;
+        if (wall == WALL_WARM_MOON_GLASS) return 0xFF9E7568;
+        if (wall == WALL_CRYSTAL_SKY) return 0xFF7890C5;
+        if (wall == WALL_DREAM_PURPLE) return 0xFF7560CA;
+        if (wall == WALL_SKY_MINT) return 0xFF6DA6B1;
+        if (wall == WALL_FOREST_MIST) return 0xFF4E8750;
+        if (wall == WALL_DAYLIGHT_MINIMAL) return 0xFF7B8D9C;
+        if (wall == WALL_DEEP_SEA) return 0xFF2F7290;
+        if (wall == WALL_VIOLET_SMOKE) return 0xFF7C4BE2;
+        if (wall == WALL_ROSE_VEIL) return 0xFFB27FAE;
+        if (wall == WALL_EMERALD_AURORA) return 0xFF27B07D;
+        if (wall == WALL_BLUE_SILK) return 0xFF5E9BB3;
+        if (wall == WALL_PEACH_DAWN) return 0xFFC27863;
+        if (wall == WALL_GRAPHITE_SMOKE) return 0xFF4B5360;
+        if (wall == WALL_PASTEL_PRISM) return 0xFF8A84C8;
+        if (wall == WALL_MIDNIGHT_MOON) return 0xFF4935B4;
+        if (wall == WALL_CYAN_CRYSTAL) return 0xFF168BA6;
+        if (wall == WALL_LAVENDER_CRYSTAL) return 0xFF8875D0;
+        return 0xFF2B8ECB;
+    }
+
+    public static String getBuiltInWallName(int wall) {
+        if (wall == WALL_AURORA_GLASS) return "蓝紫流光";
+        if (wall == WALL_SUNSET_PRISM) return "珊瑚暮色";
+        if (wall == WALL_MINT_GLACIER) return "薄荷星云";
+        if (wall == WALL_LIQUID_CHROME) return "银色潮汐";
+        if (wall == WALL_NEON_BERRY) return "莓果极光";
+        if (wall == WALL_CHAMPAGNE_MIST) return "香槟晨雾";
+        if (wall == WALL_GLASS_GRADIENT) return "玻璃渐变风";
+        if (wall == WALL_DEEP_SPACE_GLASS) return "深空玻璃风";
+        if (wall == WALL_POLAR_LIGHT_GLASS) return "极光轻玻璃风";
+        if (wall == WALL_NEON_CYBER) return "暗夜霓虹";
+        if (wall == WALL_WARM_MOON_GLASS) return "暖月玻璃风";
+        if (wall == WALL_CRYSTAL_SKY) return "冰晶幻彩风";
+        if (wall == WALL_DREAM_PURPLE) return "梦幻紫霞";
+        if (wall == WALL_SKY_MINT) return "雾青薄荷";
+        if (wall == WALL_FOREST_MIST) return "森林雾绿";
+        if (wall == WALL_DAYLIGHT_MINIMAL) return "雾蓝极简";
+        if (wall == WALL_DEEP_SEA) return "深海月影";
+        if (wall == WALL_VIOLET_SMOKE) return "紫雾星旋";
+        if (wall == WALL_ROSE_VEIL) return "玫瑰薄雾";
+        if (wall == WALL_EMERALD_AURORA) return "翡翠极光";
+        if (wall == WALL_BLUE_SILK) return "蓝绸流影";
+        if (wall == WALL_PEACH_DAWN) return "暖桃晨光";
+        if (wall == WALL_GRAPHITE_SMOKE) return "石墨烟岚";
+        if (wall == WALL_PASTEL_PRISM) return "彩虹幻璃";
+        if (wall == WALL_MIDNIGHT_MOON) return "午夜月影";
+        if (wall == WALL_CYAN_CRYSTAL) return "水晶青蓝";
+        if (wall == WALL_LAVENDER_CRYSTAL) return "薰衣水晶";
+        return "梦幻紫霞";
+    }
+
+    public static String getWallDesc(String desc) {
+        return getWallType() == 0 && isBuiltInWall(getWall()) ? getBuiltInWallName(getWall()) : desc;
+    }
+
+    public static int getReset() {
+        return Prefers.getInt("reset", 0);
+    }
+
+    public static void putReset(int reset) {
+        Prefers.put("reset", reset);
+    }
+
+    public static int getSiteMode() {
+        return Prefers.getInt("site_mode");
+    }
+
+    public static void putSiteMode(int mode) {
+        Prefers.put("site_mode", mode);
+    }
+
+    public static int getSiteColumn() {
+        return Prefers.getInt("site_column", 1);
+    }
+
+    public static void putSiteColumn(int column) {
+        Prefers.put("site_column", column);
+    }
+
+    public static int getSyncMode() {
+        return Prefers.getInt("sync_mode");
+    }
+
+    public static void putSyncMode(int mode) {
+        Prefers.put("sync_mode", mode);
+    }
+
+    public static String getSyncPaths() {
+        return Prefers.getString("sync_paths", "TV\nTVBox\nTVData");
+    }
+
+    public static void putSyncPaths(String paths) {
+        Prefers.put("sync_paths", paths);
+    }
+
+    public static String getLoginStatePaths() {
+        return Prefers.getString("login_state_paths");
+    }
+
+    public static void putLoginStatePaths(String paths) {
+        Prefers.put("login_state_paths", paths);
+    }
+
+    public static String getLoginStatePendingPaths() {
+        return Prefers.getString("login_state_pending_paths");
+    }
+
+    public static void putLoginStatePendingPaths(String paths) {
+        Prefers.put("login_state_pending_paths", paths);
+    }
+
+    public static String getLoginStateSnapshot() {
+        return Prefers.getString("login_state_snapshot");
+    }
+
+    public static void putLoginStateSnapshot(String snapshot) {
+        Prefers.put("login_state_snapshot", snapshot);
+    }
+
+    public static String getLoginStateFindings() {
+        return Prefers.getString("login_state_findings");
+    }
+
+    public static void putLoginStateFindings(String findings) {
+        Prefers.put("login_state_findings", findings);
+    }
+
+    public static boolean isIncognito() {
+        return Prefers.getBoolean("incognito");
+    }
+
+    public static void putIncognito(boolean incognito) {
+        Prefers.put("incognito", incognito);
+    }
+
+    public static int getLanguage() {
+        int language = Prefers.getInt("language", LANGUAGE_FOLLOW_SYSTEM);
+        return isLanguage(language) ? language : LANGUAGE_FOLLOW_SYSTEM;
+    }
+
+    public static void putLanguage(int language) {
+        int value = isLanguage(language) ? language : LANGUAGE_FOLLOW_SYSTEM;
+        Prefers.put("language", value);
+        applyLanguage(value);
+    }
+
+    public static void applyLanguage() {
+        applyLanguage(getLanguage());
+    }
+
+    public static int getLanguageIndex() {
+        int language = getLanguage();
+        for (int i = 0; i < LANGUAGE_OPTIONS.length; i++) if (LANGUAGE_OPTIONS[i] == language) return i;
+        return LANGUAGE_FOLLOW_SYSTEM;
+    }
+
+    public static void putLanguageIndex(int index) {
+        putLanguage(index >= 0 && index < LANGUAGE_OPTIONS.length ? LANGUAGE_OPTIONS[index] : LANGUAGE_FOLLOW_SYSTEM);
+    }
+
+    private static boolean isLanguage(int language) {
+        for (int option : LANGUAGE_OPTIONS) if (option == language) return true;
+        return false;
+    }
+
+    private static void applyLanguage(int language) {
+        if (language == LANGUAGE_SIMPLIFIED) Trans.setTraditional(false);
+        else if (language == LANGUAGE_TRADITIONAL) Trans.setTraditional(true);
+        else Trans.setTraditional(null);
+    }
+
+    public static Context wrapDisplay(Context context) {
+        return wrapUiScale(wrapLanguage(context));
+    }
+
+    public static Context wrapLanguage(Context context) {
+        int language = getLanguage();
+        applyLanguage(language);
+        if (language == LANGUAGE_FOLLOW_SYSTEM) return context;
+        Locale locale = language == LANGUAGE_TRADITIONAL ? Locale.TRADITIONAL_CHINESE : Locale.SIMPLIFIED_CHINESE;
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        config.setLocale(locale);
+        config.setLocales(new LocaleList(locale));
+        return context.createConfigurationContext(config);
+    }
+
+    public static int getUiScale() {
+        int scale = Prefers.getInt("ui_scale", UI_SCALE_FOLLOW_SYSTEM);
+        return isUiScale(scale) ? scale : UI_SCALE_FOLLOW_SYSTEM;
+    }
+
+    public static void putUiScale(int scale) {
+        Prefers.put("ui_scale", isUiScale(scale) ? scale : UI_SCALE_FOLLOW_SYSTEM);
+    }
+
+    public static int getUiScaleIndex() {
+        int scale = getUiScale();
+        for (int i = 0; i < UI_SCALE_OPTIONS.length; i++) if (UI_SCALE_OPTIONS[i] == scale) return i;
+        return UI_SCALE_FOLLOW_SYSTEM;
+    }
+
+    public static void putUiScaleIndex(int index) {
+        putUiScale(index >= 0 && index < UI_SCALE_OPTIONS.length ? UI_SCALE_OPTIONS[index] : UI_SCALE_FOLLOW_SYSTEM);
+    }
+
+    private static boolean isUiScale(int scale) {
+        for (int option : UI_SCALE_OPTIONS) if (option == scale) return true;
+        return false;
+    }
+
+    public static Context wrapUiScale(Context context) {
+        int scale = getUiScale();
+        if (scale == UI_SCALE_FOLLOW_SYSTEM) return context;
+        float factor = getUiScaleFactor(scale);
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        int stableDensity = DisplayMetrics.DENSITY_DEVICE_STABLE > 0 ? DisplayMetrics.DENSITY_DEVICE_STABLE : metrics.densityDpi;
+        int densityDpi = Math.max(DisplayMetrics.DENSITY_LOW, Math.round(stableDensity * factor));
+        config.densityDpi = densityDpi;
+        config.fontScale = 1.0f;
+        config.screenWidthDp = pxToDp(metrics.widthPixels, densityDpi);
+        config.screenHeightDp = pxToDp(metrics.heightPixels, densityDpi);
+        config.smallestScreenWidthDp = Math.min(config.screenWidthDp, config.screenHeightDp);
+        return context.createConfigurationContext(config);
+    }
+
+    private static float getUiScaleFactor(int scale) {
+        return switch (scale) {
+            case UI_SCALE_STANDARD -> 0.8f;
+            case UI_SCALE_MILD_COMPACT -> 0.75f;
+            case UI_SCALE_COMPACT -> 0.7f;
+            case UI_SCALE_MORE_COMPACT -> 0.65f;
+            case UI_SCALE_SMALLER -> 0.6f;
+            default -> 1.0f;
+        };
+    }
+
+    private static int pxToDp(int px, int densityDpi) {
+        return Math.max(1, Math.round(px * (float) DisplayMetrics.DENSITY_DEFAULT / densityDpi));
+    }
+
+    public static boolean isDriveCheck() {
+        return Prefers.getBoolean("drive_check", true);
+    }
+
+    public static void putDriveCheck(boolean driveCheck) {
+        Prefers.put("drive_check", driveCheck);
+    }
+
+    public static boolean isCompactEpisodeTitle() {
+        return Prefers.getBoolean("compact_episode_title");
+    }
+
+    public static void putCompactEpisodeTitle(boolean compact) {
+        Prefers.put("compact_episode_title", compact);
+    }
+
+    public static boolean isSiteHealthSort() {
+        return Prefers.getBoolean("site_health_sort", true);
+    }
+
+    public static void putSiteHealthSort(boolean sort) {
+        Prefers.put("site_health_sort", sort);
+    }
+
+    public static boolean isSiteHealthDialogSort() {
+        return Prefers.getBoolean("site_health_dialog_sort");
+    }
+
+    public static void putSiteHealthDialogSort(boolean sort) {
+        Prefers.put("site_health_dialog_sort", sort);
+    }
+
+    public static boolean isWebHomeExtension() {
+        return Prefers.getBoolean("web_home_extension", true);
+    }
+
+    public static void putWebHomeExtension(boolean extension) {
+        Prefers.put("web_home_extension", extension);
+    }
+
+    public static boolean isWebHomeFullscreen() {
+        return Prefers.getBoolean("web_home_fullscreen", true);
+    }
+
+    public static void putWebHomeFullscreen(boolean fullscreen) {
+        Prefers.put("web_home_fullscreen", fullscreen);
+    }
+
+    public static boolean isPlaybackArtworkWall() {
+        return Prefers.getBoolean("playback_artwork_wall", true);
+    }
+
+    public static void putPlaybackArtworkWall(boolean artworkWall) {
+        Prefers.put("playback_artwork_wall", artworkWall);
+    }
+
+    public static boolean isCspWarmup() {
+        return getCspWarmupMode() != CSP_WARMUP_DISABLED;
+    }
+
+    public static void putCspWarmup(boolean warmup) {
+        if (warmup) {
+            Prefers.put("csp_warmup", true);
+            if (getCspWarmupSelectedMode() == CSP_WARMUP_DISABLED) Prefers.put("csp_warmup_mode", CSP_WARMUP_DEFAULT);
+        } else {
+            Prefers.put("csp_warmup", false);
+        }
+    }
+
+    public static int getCspWarmupMode() {
+        if (!Prefers.getBoolean("csp_warmup")) return CSP_WARMUP_DISABLED;
+        return getCspWarmupSelectedMode();
+    }
+
+    public static int getCspWarmupSelectedMode() {
+        int mode = Prefers.getInt("csp_warmup_mode", CSP_WARMUP_DEFAULT);
+        return mode == CSP_WARMUP_CUSTOM ? CSP_WARMUP_CUSTOM : CSP_WARMUP_DEFAULT;
+    }
+
+    public static void putCspWarmupMode(int mode) {
+        if (mode == CSP_WARMUP_DISABLED) {
+            Prefers.put("csp_warmup", false);
+        } else {
+            Prefers.put("csp_warmup", true);
+            Prefers.put("csp_warmup_mode", mode == CSP_WARMUP_CUSTOM ? CSP_WARMUP_CUSTOM : CSP_WARMUP_DEFAULT);
+        }
+    }
+
+    public static List<String> getCspWarmupSites() {
+        try {
+            List<String> keys = App.gson().fromJson(Prefers.getString("csp_warmup_sites", "[]"), STRING_LIST);
+            if (keys == null) return Collections.emptyList();
+            List<String> result = new ArrayList<>();
+            for (String key : keys) if (key != null && !key.trim().isEmpty() && !result.contains(key.trim())) result.add(key.trim());
+            return result;
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    public static void putCspWarmupSites(List<String> keys) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        if (keys != null) for (String key : keys) if (key != null && !key.trim().isEmpty()) result.add(key.trim());
+        Prefers.put("csp_warmup_sites", App.gson().toJson(result));
+    }
+
+    public static int getSearchColumn() {
+        return Math.min(Math.max(Prefers.getInt("search_column", 1), 1), 2);
+    }
+
+    public static void putSearchColumn(int column) {
+        Prefers.put("search_column", column == 2 ? 2 : 1);
+    }
+
+    public static boolean isDebugLog() {
+        return DebugLogStore.isEnabled();
+    }
+
+    public static void putDebugLog(boolean debugLog) {
+        DebugLogStore.setEnabled(debugLog);
+        if (debugLog) logDebugEnvironment("enable");
+    }
+
+    public static void logDebugEnvironment(String reason) {
+        boolean hardwareAccelerated = (App.get().getApplicationInfo().flags & ApplicationInfo.FLAG_HARDWARE_ACCELERATED) != 0;
+        SpiderDebug.log("env", "reason=%s app=%s(%s) mode=%s abi=%s debug=%s hardware=%s android=%s sdk=%s incremental=%s manufacturer=%s brand=%s model=%s device=%s product=%s supportedAbis=%s",
+                reason,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
+                BuildConfig.FLAVOR_mode,
+                BuildConfig.FLAVOR_abi,
+                BuildConfig.DEBUG,
+                hardwareAccelerated,
+                Build.VERSION.RELEASE,
+                Build.VERSION.SDK_INT,
+                Build.VERSION.INCREMENTAL,
+                Build.MANUFACTURER,
+                Build.BRAND,
+                Build.MODEL,
+                Build.DEVICE,
+                Build.PRODUCT,
+                String.join(",", Build.SUPPORTED_ABIS));
+        WebViewUtil.logProvider("debug-env");
+    }
+
+    public static boolean isShellProxy() {
+        return Prefers.getBoolean("shell_proxy");
+    }
+
+    public static void putShellProxy(boolean shellProxy) {
+        Prefers.put("shell_proxy", shellProxy);
+        ProxySetting.apply();
+    }
+
+    public static String getShellProxyRules() {
+        return Prefers.getString("shell_proxy_rules");
+    }
+
+    public static void putShellProxyRules(String rules) {
+        Prefers.put("shell_proxy_rules", rules);
+        ProxySetting.apply();
+    }
+
+    public static void putShellProxyConfig(String url, String rules) {
+        Prefers.put("shell_proxy_url", url);
+        Prefers.put("shell_proxy_rules", rules);
+        Prefers.put("shell_proxy_hosts", "*");
+        ProxySetting.apply();
+    }
+
+    public static String getShellProxyUrl() {
+        return Prefers.getString("shell_proxy_url");
+    }
+
+    public static void putShellProxyUrl(String url) {
+        Prefers.put("shell_proxy_url", url);
+        ProxySetting.apply();
+    }
+
+    public static String getShellProxyHosts() {
+        return Prefers.getString("shell_proxy_hosts", "*");
+    }
+
+    public static void putShellProxyHosts(String hosts) {
+        Prefers.put("shell_proxy_hosts", hosts);
+        ProxySetting.apply();
+    }
+
+    public static boolean getUpdate() {
+        return Prefers.getBoolean("update", true);
+    }
+
+    public static void putUpdate(boolean update) {
+        Prefers.put("update", update);
+    }
+
+    public static String getUpdateChannel() {
+        String channel = Prefers.getString("update_channel", Update.CHANNEL_STABLE);
+        return Update.CHANNEL_BETA.equals(channel) ? Update.CHANNEL_BETA : Update.CHANNEL_STABLE;
+    }
+
+    public static void putUpdateChannel(String channel) {
+        Prefers.put("update_channel", Update.CHANNEL_BETA.equals(channel) ? Update.CHANNEL_BETA : Update.CHANNEL_STABLE);
+    }
+
+    public static boolean isAdblock() {
+        return Prefers.getBoolean("adblock", true);
+    }
+
+    public static void putAdblock(boolean adblock) {
+        Prefers.put("adblock", adblock);
+    }
+
+    public static boolean isZhuyin() {
+        return Prefers.getBoolean("zhuyin");
+    }
+
+    public static void putZhuyin(boolean zhuyin) {
+        Prefers.put("zhuyin", zhuyin);
+    }
+
+    public static int getThemeColor() {
+        return Prefers.getInt("theme_color", -1);
+    }
+
+    public static void putThemeColor(int color) {
+        Prefers.put("theme_color", color);
+    }
+
+    public static int getWallColor() {
+        return Prefers.getInt("wall_color", 0);
+    }
+
+    public static void putWallColor(int color) {
+        Prefers.put("wall_color", color);
+    }
+
+    public static int getDynamicColor() {
+        int color = getThemeColor();
+        if (color == -1) return 0;
+        return color != 0 ? color : getWallColor();
+    }
+
+    public static boolean isHomeHistory() {
+        return Prefers.getBoolean("home_history", true);
+    }
+
+    public static void putHomeHistory(boolean homeHistory) {
+        Prefers.put("home_history", homeHistory);
+    }
+
+    /** 手机端主页推送/链接悬浮按钮 */
+    public static boolean isHomePush() {
+        return Prefers.getBoolean("home_push", true);
+    }
+
+    public static void putHomePush(boolean homePush) {
+        Prefers.put("home_push", homePush);
+    }
+
+    /** 播放直达：msearch 静默搜源；关闭则进搜索页。默认关 */
+    public static boolean isPlayDirect() {
+        return Prefers.getBoolean("play_direct", false);
+    }
+
+    public static void putPlayDirect(boolean value) {
+        Prefers.put("play_direct", value);
+    }
+
+    /** 播放直达时随机搜索站点数上限 */
+    public static int getPlayDirectSearchLimit() {
+        return 10;
+    }
+
+
+    /** 启动后默认进入直播（仅冷启动一次；无直播源则忽略） */
+    public static boolean isHomeEnterLive() {
+        return Prefers.getBoolean("home_enter_live", false);
+    }
+
+    public static void putHomeEnterLive(boolean value) {
+        Prefers.put("home_enter_live", value);
+    }
+
+    /** 进入直播后默认隐藏列表，仅保留画面（全屏观感） */
+    public static boolean isLiveDefaultFullscreen() {
+        return Prefers.getBoolean("live_default_fullscreen", false);
+    }
+
+    public static void putLiveDefaultFullscreen(boolean value) {
+        Prefers.put("live_default_fullscreen", value);
+    }
+
+    /** WebView 直播：频道地址 webview://https://... 时用系统 WebView 播放（央视等加密流） */
+    public static boolean isWebViewLiveEnabled() {
+        return Prefers.getBoolean("webview_live_enabled", true);
+    }
+
+    public static void putWebViewLiveEnabled(boolean value) {
+        Prefers.put("webview_live_enabled", value);
+    }
+
+    /** E-AC3/AC3：优先 FFmpeg 软解成 PCM（视频硬解不变），减轻无硬解设备上的卡顿 */
+    public static boolean isEac3SoftDecode() {
+        return Prefers.getBoolean("eac3_soft_decode", false);
+    }
+
+    public static void putEac3SoftDecode(boolean value) {
+        Prefers.put("eac3_soft_decode", value);
+    }
+
+    /** 搜索结果：网盘站点/条目排到前面（默认关） */
+    public static boolean isSearchPanFirst() {
+        return Prefers.getBoolean("search_pan_first", false);
+    }
+
+    public static void putSearchPanFirst(boolean value) {
+        Prefers.put("search_pan_first", value);
+    }
+
+    /** 直达播放：优先选网盘结果（默认关） */
+    public static boolean isPlayDirectPanPrefer() {
+        return Prefers.getBoolean("play_direct_pan_prefer", false);
+    }
+
+    public static void putPlayDirectPanPrefer(boolean value) {
+        Prefers.put("play_direct_pan_prefer", value);
+    }
+
+    /** 隐藏首页分类栏「更多」按钮 typeMore（默认关=显示） */
+    public static boolean isHideHomeTypeMore() {
+        return Prefers.getBoolean("hide_home_type_more", false);
+    }
+
+    public static void putHideHomeTypeMore(boolean value) {
+        Prefers.put("hide_home_type_more", value);
+    }
+
+
+
+    public static boolean isHomeVodAutoLoad() {
+        return Prefers.getBoolean("home_vod_auto_load", true);
+    }
+
+    public static void putHomeVodAutoLoad(boolean autoLoad) {
+        Prefers.put("home_vod_auto_load", autoLoad);
+    }
+
+    public static boolean isEpisodeHistory() {
+        return Prefers.getBoolean("episode_history", true);
+    }
+
+    public static void putEpisodeHistory(boolean episodeHistory) {
+        Prefers.put("episode_history", episodeHistory);
+    }
+
+    public static boolean isPlayBackToDetail() {
+        return Prefers.getBoolean("play_back_to_detail", true);
+    }
+
+    public static void putPlayBackToDetail(boolean backToDetail) {
+        Prefers.put("play_back_to_detail", backToDetail);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    public static AiConfig getAiConfig() {
+        return AiConfig.objectFrom(Prefers.getString("ai_config"));
+    }
+
+    public static void putAiConfig(AiConfig config) {
+        Prefers.put("ai_config", config == null ? new AiConfig().sanitize().toJson() : config.sanitize().toJson());
+    }
+
+    public static boolean isAiRecommendation() {
+        return getAiConfig().isEnabled();
+    }
+
+    public static void putAiRecommendation(boolean enabled) {
+        AiConfig config = getAiConfig();
+        config.setEnabled(enabled);
+        putAiConfig(config);
+    }
+
+
+    public static boolean isAiRecommendationEnabled() {
+        return getAiConfig().isRecommendationEnabled();
+    }
+
+    public static boolean isAiTitleExtractionEnabled() {
+        return getAiConfig().isTitleExtractionEnabled();
+    }
+
+    public static boolean isAiRecommendReady() {
+        return getAiConfig().isReady();
+    }
+
+    /** 个性推荐来源：0关闭 1AI 2豆瓣 3自动(豆瓣优先，AI兜底) */
+    public static final int RECOMMEND_OFF = 0;
+    public static final int RECOMMEND_AI = 1;
+    public static final int RECOMMEND_DOUBAN = 2;
+    public static final int RECOMMEND_AUTO = 3;
+
+    public static int getRecommendSource() {
+        int v = Prefers.getInt("recommend_source", -1);
+        if (v >= 0 && v <= 3) return v;
+        // 兼容旧配置：曾开启 AI 推荐则迁移为 AI
+        try {
+            if (isAiRecommendationEnabled()) return RECOMMEND_AI;
+        } catch (Throwable ignored) {}
+        return RECOMMEND_OFF;
+    }
+
+    public static void putRecommendSource(int source) {
+        if (source < 0 || source > 3) source = RECOMMEND_OFF;
+        Prefers.put("recommend_source", source);
+        // 同步旧 AI recommendation 开关：AI 或自动都可能用到 AI
+        try {
+            if (source == RECOMMEND_AI || source == RECOMMEND_AUTO) {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(true);
+                putAiConfig(c);
+            } else {
+                AiConfig c = getAiConfig();
+                c.setRecommendation(false);
+                putAiConfig(c);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static boolean isPersonalRecommendEnabled() {
+        return getRecommendSource() != RECOMMEND_OFF;
+    }
+
+
+
+    public static boolean isSubtitleAutoMatchEnabled() {
+        return Prefers.getBoolean("subtitle_auto_match", false);
+    }
+
+    public static void putSubtitleAutoMatchEnabled(boolean enabled) {
+        Prefers.put("subtitle_auto_match", enabled);
+    }
+
+    public static String getSubtitlePreferredLanguage() {
+        return Prefers.getString("subtitle_preferred_language", "zh");
+    }
+
+    public static void putSubtitlePreferredLanguage(String language) {
+        Prefers.put("subtitle_preferred_language", language == null || language.isEmpty() ? "zh" : language);
+    }
+
+    public static String getSubtitleAssrtToken() {
+        return Prefers.getString("subtitle_assrt_token");
+    }
+
+    public static void putSubtitleAssrtToken(String token) {
+        Prefers.put("subtitle_assrt_token", token == null ? "" : token.trim());
+    }
+
+
+    /** 全局吐司，默认开启 */
+    public static boolean isGlobalToast() {
+        return Prefers.getBoolean("global_toast", true);
+    }
+
+    public static void putGlobalToast(boolean value) {
+        Prefers.put("global_toast", value);
+    }
+
+    public static boolean isAutoBackup() {
+        return Prefers.getBoolean("auto_backup", false);
+    }
+
+    public static void putAutoBackup(boolean autoBackup) {
+        Prefers.put("auto_backup", autoBackup);
+    }
+
+    public static boolean isAutoCheckUpdate() {
+        return Prefers.getBoolean("auto_check_update", false);
+    }
+
+    public static void putAutoCheckUpdate(boolean value) {
+        Prefers.put("auto_check_update", value);
+    }
+
+    /** 退出时清理缓存阈值：0=不清理，6/8/10 表示缓存达到该 GB 数才清理 */
+
+    /** 字幕颜色：0黄 1白 2青 3绿 4红 5橙 6粉，默认黄 */
+    private static final int[] SUBTITLE_COLORS = new int[]{
+            0xFFFFFF00,
+            0xFFFFFFFF,
+            0xFF00FFFF,
+            0xFF00FF00,
+            0xFFFF4444,
+            0xFFFF9800,
+            0xFFFF80AB
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS = new String[]{
+            "黄", "白", "青", "绿", "红", "橙", "粉"
+    };
+    private static final String[] SUBTITLE_COLOR_LABELS_EN = new String[]{
+            "Yellow", "White", "Cyan", "Green", "Red", "Orange", "Pink"
+    };
+
+    public static int getSubtitleColorIndex() {
+        int v = Prefers.getInt("subtitle_color_index", 0);
+        if (v < 0 || v >= SUBTITLE_COLORS.length) return 0;
+        return v;
+    }
+
+    public static void putSubtitleColorIndex(int index) {
+        if (index < 0 || index >= SUBTITLE_COLORS.length) index = 0;
+        Prefers.put("subtitle_color_index", index);
+    }
+
+    public static int getSubtitleColorArgb() {
+        return SUBTITLE_COLORS[getSubtitleColorIndex()];
+    }
+
+    public static String getSubtitleColorLabel(boolean zh) {
+        int i = getSubtitleColorIndex();
+        return zh ? SUBTITLE_COLOR_LABELS[i] : SUBTITLE_COLOR_LABELS_EN[i];
+    }
+
+    public static void cycleSubtitleColor() {
+        putSubtitleColorIndex((getSubtitleColorIndex() + 1) % SUBTITLE_COLORS.length);
+    }
+
+    /**
+     * 字幕字体：义启粗楷 / 毁片和圆 / 方正细圆 / 系统默认。
+     * index: 0=义启粗楷(默认), 1=毁片和圆, 2=方正细圆, 3=系统默认。
+     */
+    public static int getSubtitleFontIndex() {
+        int v = Prefers.getInt("subtitle_font_index", 0); // 默认义启粗楷
+        if (v < 0) v = 0;
+        boolean migratedV5 = Prefers.getBoolean("subtitle_font_index_v5", false);
+        if (!migratedV5) {
+            // 旧配置一律回到默认义启粗楷
+            v = 0;
+            try { Prefers.put("subtitle_font_index", v); } catch (Throwable ignored) {}
+            try { Prefers.put("subtitle_font_index_v5", true); } catch (Throwable ignored) {}
+        }
+        return SubtitleFontManager.normalizeIndex(v);
+    }
+
+    public static void putSubtitleFontIndex(int index) {
+        Prefers.put("subtitle_font_index", SubtitleFontManager.normalizeIndex(index));
+    }
+
+    public static void cycleSubtitleFont() {
+        putSubtitleFontIndex((getSubtitleFontIndex() + 1) % SubtitleFontManager.count());
+    }
+
+    /** 稳定 ID：yiqicukai / huipianheyuan / fangzhengzhunyuan / system */
+    public static String getSubtitleFontId() {
+        return SubtitleFontManager.idOf(getSubtitleFontIndex());
+    }
+
+    /**
+     * MPV sub-font：优先中文族名（与 TTF 内部名接近），系统默认返回 sans-serif。
+     */
+    public static String getSubtitleFontFamily() {
+        try {
+            return SubtitleFontManager.displayNameOf(getSubtitleFontIndex());
+        } catch (Throwable ignored) {
+        }
+        return "sans-serif";
+    }
+
+    public static android.graphics.Typeface getSubtitleTypeface() {
+        try {
+            return SubtitleFontManager.getTypeface(getSubtitleFontIndex());
+        } catch (Throwable e) {
+            return android.graphics.Typeface.SANS_SERIF;
+        }
+    }
+
+    public static String getSubtitleFontLabel(boolean zh) {
+        try {
+            return SubtitleFontManager.labelOf(getSubtitleFontIndex(), zh);
+        } catch (Throwable ignored) {
+        }
+        return zh ? "雅黑" : "YaHei";
+    }
+
+
+    // ---------- 楷体（义启粗楷等）自动放大 ----------
+    private static final float[] KAITI_SCALES = {1.00f, 1.15f, 1.20f, 1.30f};
+    private static final String[] KAITI_SCALE_LABELS_ZH = {"1.00x", "1.15x", "1.20x", "1.30x"};
+    private static final String[] KAITI_SCALE_LABELS_EN = {"1.00x", "1.15x", "1.20x", "1.30x"};
+    /** Media3 SubtitleView 默认 fractional 字号（相对画面高度），作基准避免叠加。 */
+    public static final float SUBTITLE_BASE_FRACTION = 0.0533f;
+
+    public static int getKaiTiScaleIndex() {
+        int v = Prefers.getInt("subtitle_kaiti_scale_index", 2); // 默认中幅 1.20
+        if (v < 0 || v >= KAITI_SCALES.length) v = 2;
+        return v;
+    }
+
+    public static void putKaiTiScaleIndex(int index) {
+        if (index < 0) index = 0;
+        if (index >= KAITI_SCALES.length) index = KAITI_SCALES.length - 1;
+        Prefers.put("subtitle_kaiti_scale_index", index);
+    }
+
+    public static void cycleKaiTiScale() {
+        putKaiTiScaleIndex((getKaiTiScaleIndex() + 1) % KAITI_SCALES.length);
+    }
+
+    public static float getKaiTiScaleFactor() {
+        return KAITI_SCALES[getKaiTiScaleIndex()];
+    }
+
+    public static String getKaiTiScaleLabel(boolean zh) {
+        int i = getKaiTiScaleIndex();
+        return zh ? KAITI_SCALE_LABELS_ZH[i] : KAITI_SCALE_LABELS_EN[i];
+    }
+
+    /**
+     * 当前字幕字体是否为「楷体系」（义启粗楷 / KaiTi / 楷体等）。
+     * 圆体、系统默认返回 false。
+     */
+    public static boolean isKaiTiLikeSubtitleFont() {
+        try {
+            String id = getSubtitleFontId();
+            if (id == null) id = "";
+            String s = id.toLowerCase(java.util.Locale.ROOT);
+            if (s.contains("yiqi") || s.contains("cukai") || "kaiti".equals(s) || s.contains("kai")) {
+                // 排除仅含 kai 但实际是其他 id 的误伤：圆体 id 不含 kai
+                if (s.contains("yuan") || s.contains("hei") || s.contains("you") || "system".equals(s)) return false;
+                return true;
+            }
+            String zh = getSubtitleFontLabel(true);
+            if (zh != null && (zh.contains("粗楷") || zh.contains("楷体") || zh.contains("义启"))) return true;
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 最终应用到 SubtitleView 的倍率：非楷体恒为 1.0，楷体为所选档位。 */
+    public static float getEffectiveSubtitleFontScale() {
+        return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
+    }
+
+    /**
+     * 与播放页 SubtitleDialog（large/small）同一套字号体系：
+     * base = PlayerSetting.getSubtitleTextSize()（<=0 则用 0.0533），再乘楷体倍率。
+     * 只改渲染，不写回 preference，避免叠加。
+     */
+    public static void applySubtitleViewTextSize(Object subtitleView) {
+        if (subtitleView == null) return;
+        float scale = getEffectiveSubtitleFontScale();
+        float base = SUBTITLE_BASE_FRACTION;
+        try {
+            float v = com.fongmi.android.tv.setting.PlayerSetting.getSubtitleTextSize();
+            if (v > 0f) base = v;
+        } catch (Throwable ignored) {
+        }
+        float size = base * scale;
+        if (size < 0.02f) size = 0.02f;
+        if (size > 0.15f) size = 0.15f;
+        try {
+            java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class);
+            m.invoke(subtitleView, size);
+        } catch (Throwable e) {
+            try {
+                // 兼容带 userDefault 参数的重载
+                java.lang.reflect.Method m = subtitleView.getClass().getMethod("setFractionalTextSize", float.class, boolean.class);
+                m.invoke(subtitleView, size, false);
+            } catch (Throwable ignored) {
+            }
+        }
+        try {
+            android.util.Log.i("SubtitleStyle", "applySubtitleViewTextSize base=" + base
+                    + " scale=" + scale + " size=" + size
+                    + " kaiti=" + isKaiTiLikeSubtitleFont());
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+
+    public static int getExitClearCacheGb() {
+        int v = Prefers.getInt("exit_clear_cache_gb", 0);
+        if (v != 0 && v != 6 && v != 8 && v != 10) return 0;
+        return v;
+    }
+
+    public static void putExitClearCacheGb(int gb) {
+        if (gb != 0 && gb != 6 && gb != 8 && gb != 10) gb = 0;
+        Prefers.put("exit_clear_cache_gb", gb);
+    }
+
+
+
+    public static boolean isHomeSiteLock() {
+        return Prefers.getBoolean("home_site_lock", false);
+    }
+
+    public static void putHomeSiteLock(boolean homeSiteLock) {
+        Prefers.put("home_site_lock", homeSiteLock);
+    }
+
+    public static int getSearchThread() {
+        return clampSearchThread(Prefers.getInt("search_thread", 20));
+    }
+
+    public static void putSearchThread(int thread) {
+        Prefers.put("search_thread", clampSearchThread(thread));
+    }
+
+    private static int clampSearchThread(int thread) {
+        return Math.max(1, Math.min(thread, 100));
+    }
+
+    public static int getGlobalHistoryMode() {
+        return clampGlobalHistoryMode(Prefers.getInt("global_history_mode", GLOBAL_HISTORY_OFF));
+    }
+
+    public static void putGlobalHistoryMode(int mode) {
+        Prefers.put("global_history_mode", clampGlobalHistoryMode(mode));
+    }
+
+    public static boolean isGlobalHistoryEnabled() {
+        return getGlobalHistoryMode() != GLOBAL_HISTORY_OFF;
+    }
+
+    public static boolean isGlobalHistoryAuto() {
+        return getGlobalHistoryMode() == GLOBAL_HISTORY_AUTO;
+    }
+
+    public static boolean isGlobalHistorySearch() {
+        return getGlobalHistoryMode() == GLOBAL_HISTORY_SEARCH;
+    }
+
+    private static int clampGlobalHistoryMode(int mode) {
+        return mode == GLOBAL_HISTORY_AUTO || mode == GLOBAL_HISTORY_SEARCH ? mode : GLOBAL_HISTORY_OFF;
+    }
+
+    public static boolean hasFileAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return Environment.isExternalStorageManager();
+        return ContextCompat.checkSelfPermission(App.get(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(App.get(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public static boolean hasFileManager() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
+        return new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + App.get().getPackageName())).resolveActivity(App.get().getPackageManager()) != null || new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).resolveActivity(App.get().getPackageManager()) != null;
+    }
+
+
+
+    // ---------- 更新设置桩（兼容上游对话框；发布检测仍走 klcb2010 Github）----------
+
+    public static String getUpdateSource() {
+        try {
+            return UpdateSource.normalize(Prefers.getString("update_source", UpdateSource.OCI));
+        } catch (Throwable e) {
+            return Prefers.getString("update_source", "oci");
+        }
+    }
+
+    public static void putUpdateSource(String source) {
+        try {
+            Prefers.put("update_source", UpdateSource.normalize(source));
+        } catch (Throwable e) {
+            Prefers.put("update_source", source == null ? "" : source);
+        }
+    }
+
+    public static String getUpdateGithubProxy() {
+        try {
+            String id = Prefers.getString("update_github_proxy", GithubProxy.DIRECT);
+            return GithubProxy.find(id).id;
+        } catch (Throwable e) {
+            return "direct";
+        }
+    }
+
+    public static void putUpdateGithubProxy(String proxy) {
+        try {
+            Prefers.put("update_github_proxy", GithubProxy.find(proxy).id);
+        } catch (Throwable e) {
+            Prefers.put("update_github_proxy", proxy == null ? "" : proxy);
+        }
+    }
+
+    public static String getUpdateGithubProxyUrl() {
+        return Prefers.getString("update_github_proxy_url");
+    }
+
+    public static void putUpdateGithubProxyUrl(String url) {
+        Prefers.put("update_github_proxy_url", url == null ? "" : url.trim());
+    }
+
+    public static String getUpdateGithubProxyMode() {
+        try {
+            return GithubProxy.normalizeMode(Prefers.getString("update_github_proxy_mode", GithubProxy.MODE_FULL_URL));
+        } catch (Throwable e) {
+            return Prefers.getString("update_github_proxy_mode", "full_url");
+        }
+    }
+
+    public static void putUpdateGithubProxyMode(String mode) {
+        try {
+            Prefers.put("update_github_proxy_mode", GithubProxy.normalizeMode(mode));
+        } catch (Throwable e) {
+            Prefers.put("update_github_proxy_mode", mode == null ? "" : mode);
+        }
+    }
+
+    public static String getUpdateOciMirror() {
+        try {
+            return OciMirror.find(Prefers.getString("update_oci_mirror", OciMirror.DEFAULT)).id;
+        } catch (Throwable e) {
+            return Prefers.getString("update_oci_mirror", "default");
+        }
+    }
+
+    public static void putUpdateOciMirror(String mirror) {
+        try {
+            Prefers.put("update_oci_mirror", OciMirror.find(mirror).id);
+        } catch (Throwable e) {
+            Prefers.put("update_oci_mirror", mirror == null ? "" : mirror);
+        }
+    }
+
+    public static String getUpdateOciMirrorUrl() {
+        return Prefers.getString("update_oci_mirror_url");
+    }
+
+    public static void putUpdateOciMirrorUrl(String url) {
+        Prefers.put("update_oci_mirror_url", url == null ? "" : url.trim());
+    }
+
+
+    // ---------- 儿童管理（启动密码锁，非内容过滤）----------
+    public static boolean isChildLockEnabled() {
+        return Prefers.getBoolean("child_lock_enabled", false);
+    }
+
+    public static void putChildLockEnabled(boolean enabled) {
+        Prefers.put("child_lock_enabled", enabled);
+    }
+
+    public static String getChildLockPasswordHash() {
+        return Prefers.getString("child_lock_password_hash", "");
+    }
+
+    public static void putChildLockPasswordHash(String hash) {
+        Prefers.put("child_lock_password_hash", hash == null ? "" : hash);
+    }
+
+    /** SHA-256 hex of password; empty input -> empty */
+    public static String hashChildLockPassword(String password) {
+        if (password == null || password.isEmpty()) return "";
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] dig = md.digest(password.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(dig.length * 2);
+            for (byte b : dig) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    public static boolean verifyChildLockPassword(String password) {
+        String saved = getChildLockPasswordHash();
+        if (saved == null || saved.isEmpty()) return false;
+        String h = hashChildLockPassword(password);
+        return saved.equalsIgnoreCase(h);
+    }
+
+}
