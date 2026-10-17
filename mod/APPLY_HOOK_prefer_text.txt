@@ -1,0 +1,5 @@
+# 在 apply.sh 的 inject_subtitle_style / inject_kaiti 附近增加：
+if [[ -f "$MOD/hooks/inject_prefer_text_lang.py" ]]; then
+  echo "[mod] inject_prefer_text_lang"
+  python3 "$MOD/hooks/inject_prefer_text_lang.py" "$ROOT" || exit 1
+fi

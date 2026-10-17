@@ -161,6 +161,10 @@ if [[ -f "$MOD/hooks/inject_kaiti_scale.py" ]]; then
   echo "[mod] inject_kaiti_scale"
   python3 "$MOD/hooks/inject_kaiti_scale.py" "$ROOT" || exit 1
 fi
+if [[ -f "$MOD/hooks/inject_prefer_text_lang.py" ]]; then
+  echo "[mod] inject_prefer_text_lang"
+  python3 "$MOD/hooks/inject_prefer_text_lang.py" "$ROOT" || exit 1
+fi
 if [[ -f "$MOD/hooks/patch_protect_clear_py.py" ]]; then
   echo "[mod] patch_protect_clear_py"
   python3 "$MOD/hooks/patch_protect_clear_py.py" "$ROOT" || true

@@ -880,6 +880,9 @@ public final class AssrtSubtitleMatch {
             // 无外挂记忆：延迟一次选中文内封
             sPreferExternal = false;
             final PlayerManager pm = player;
+            App.post(() -> preferChineseEmbedded(pm), 400);
+            App.post(() -> preferChineseEmbedded(pm), 1200);
+            App.post(() -> preferChineseEmbedded(pm), 2500);
             App.post(() -> preferChineseEmbedded(pm), 5000);
         } catch (Throwable e) {
             Log.w(TAG, "onTracksReady: " + e.getMessage());
@@ -929,7 +932,10 @@ public final class AssrtSubtitleMatch {
                 try {
                     if (loadCachedSubPayload(history != null ? history : sLastHistory, episode != null ? episode : sLastEpisode) == null) {
                         final PlayerManager pmE = player;
-                        App.post(() -> preferChineseEmbedded(pmE), 5000);
+                        App.post(() -> preferChineseEmbedded(pmE), 400);
+            App.post(() -> preferChineseEmbedded(pmE), 1200);
+            App.post(() -> preferChineseEmbedded(pmE), 2500);
+            App.post(() -> preferChineseEmbedded(pmE), 5000);
                     }
                 } catch (Throwable ignoredEmb) {
                 }
@@ -1870,9 +1876,10 @@ public final class AssrtSubtitleMatch {
             }
             try {
                 if (bestGroup.isTrackSelected(bestIndex)) {
-                    Log.i(TAG, "preferChineseEmbedded already selected");
+                    Log.i(TAG, "preferChineseEmbedded already best score=" + bestScore);
                     return true;
                 }
+                Log.i(TAG, "preferChineseEmbedded switching to better score=" + bestScore);
             } catch (Throwable ignored) {
             }
             androidx.media3.common.Player pl = null;
