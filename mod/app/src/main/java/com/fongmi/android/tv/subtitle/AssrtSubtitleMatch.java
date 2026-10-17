@@ -1893,54 +1893,60 @@ public final class AssrtSubtitleMatch {
 
 
 
-    /** 从 PlayerManager → engine → ExoPlayer，与 forceSelectExternalViaMedia3 一致 */
+        /**
+     * PlayerManager.getPlayer() 可能为 null（tracks 在 engine 上），
+     * R8 后 field 名会变，故扫描所有字段找 engine.getPlayer()。
+     */
     private static androidx.media3.common.Player resolveMedia3Player(PlayerManager player) {
         if (player == null) return null;
+        // 1) 公开 getPlayer()
         try {
-            Object engine = null;
-            try {
-                java.lang.reflect.Field f = player.getClass().getDeclaredField("engine");
-                f.setAccessible(true);
-                engine = f.get(player);
-            } catch (Throwable ignored) {
-            }
-            if (engine == null) {
-                try {
-                    Object o = player.getClass().getMethod("getPlayer").invoke(player);
-                    if (o instanceof androidx.media3.common.Player) {
-                        return (androidx.media3.common.Player) o;
-                    }
-                    engine = o;
-                } catch (Throwable ignored) {
-                }
-            }
-            if (engine == null) return null;
-            if (engine instanceof androidx.media3.common.Player) {
-                return (androidx.media3.common.Player) engine;
-            }
-            for (String mName : new String[]{"getPlayer", "getExoPlayer"}) {
-                try {
-                    java.lang.reflect.Method mth = engine.getClass().getMethod(mName);
-                    Object exo = mth.invoke(engine);
-                    if (exo instanceof androidx.media3.common.Player) {
-                        return (androidx.media3.common.Player) exo;
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-            try {
-                java.lang.reflect.Field f = engine.getClass().getDeclaredField("player");
-                f.setAccessible(true);
-                Object o = f.get(engine);
-                if (o instanceof androidx.media3.common.Player) {
-                    return (androidx.media3.common.Player) o;
-                }
-            } catch (Throwable ignored) {
+            Object o = player.getClass().getMethod("getPlayer").invoke(player);
+            if (o instanceof androidx.media3.common.Player) {
+                return (androidx.media3.common.Player) o;
             }
         } catch (Throwable ignored) {
         }
+        // 2) 任意字段上的 getPlayer()（兼容 R8 混淆的 engine 字段名）
+        try {
+            for (java.lang.reflect.Field f : player.getClass().getDeclaredFields()) {
+                try {
+                    f.setAccessible(true);
+                    Object eng = f.get(player);
+                    if (eng == null) continue;
+                    if (eng instanceof androidx.media3.common.Player) {
+                        return (androidx.media3.common.Player) eng;
+                    }
+                    for (String mName : new String[]{"getPlayer", "getExoPlayer"}) {
+                        try {
+                            java.lang.reflect.Method mth = eng.getClass().getMethod(mName);
+                            Object exo = mth.invoke(eng);
+                            if (exo instanceof androidx.media3.common.Player) {
+                                return (androidx.media3.common.Player) exo;
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    // 字段里再挖一层 player
+                    for (java.lang.reflect.Field f2 : eng.getClass().getDeclaredFields()) {
+                        try {
+                            f2.setAccessible(true);
+                            Object p2 = f2.get(eng);
+                            if (p2 instanceof androidx.media3.common.Player) {
+                                return (androidx.media3.common.Player) p2;
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable e) {
+            android.util.Log.w("SubtitleMatch", "resolveMedia3Player scan: " + e.getMessage());
+        }
         return null;
     }
+
 
     private static boolean preferChineseEmbedded(PlayerManager player) {
         try {
@@ -2053,12 +2059,22 @@ public final class AssrtSubtitleMatch {
                 java.util.ArrayList<Track> list = new java.util.ArrayList<>();
                 Track tr = new Track(C.TRACK_TYPE_TEXT, selLabel, selMime);
                 tr.setSelected(true);
+                // TrackUtil.find 优先用 playerId == Format.id
+                try {
+                    if (bestFmt != null && bestFmt.id != null) {
+                        tr.setPlayerId(String.valueOf(bestFmt.id));
+                    }
+                } catch (Throwable ignored) {
+                }
                 if (!TextUtils.isEmpty(player.getKey())) {
                     try { tr.setKey(player.getKey()); } catch (Throwable ignored) {}
                 }
                 try { tr.save(); } catch (Throwable ignored) {}
                 list.add(tr);
                 player.setTrack(list);
+                Log.i(TAG, "preferChinese setTrack name=" + selLabel
+                        + " mime=" + selMime
+                        + " playerId=" + (bestFmt != null ? bestFmt.id : null));
             } catch (Throwable e) {
                 Log.w(TAG, "preferChinese setTrack: " + e.getMessage());
             }
