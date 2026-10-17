@@ -1815,19 +1815,47 @@ public final class AssrtSubtitleMatch {
                     String lang = f.language != null ? f.language : "";
                     String blob = (label + " " + lang).toLowerCase(Locale.ROOT);
                     String mime = f.sampleMimeType == null ? "" : f.sampleMimeType.toLowerCase(Locale.ROOT);
-                    if (blob.contains("外挂") || blob.contains("external") || blob.contains(".srt") || blob.contains(".ass")) {
+                    // 仅跳过明确外挂；标签里的 ASS/SRT/PGS 是内封格式名，不能当外挂过滤
+                    if (blob.contains("外挂") || blob.contains("external")) {
                         continue;
                     }
                     int score = 0;
-                    if (blob.contains("简体") || blob.contains("simplified")) score += 100;
-                    else if (blob.contains("中文") || blob.contains("chinese")
+                    // 简繁：先判繁体，避免 "Chinese (Traditional)" 被当成通用中文
+                    boolean isTrad = blob.contains("繁体") || blob.contains("繁中")
+                            || blob.contains("traditional") || blob.contains("cht")
+                            || blob.contains("zh-hant") || blob.contains("zh_hant")
+                            || lang.equalsIgnoreCase("zh-hant") || lang.toLowerCase(Locale.ROOT).contains("hant");
+                    boolean isSimp = blob.contains("简体") || blob.contains("简中")
+                            || blob.contains("simplified") || blob.contains("chs")
+                            || blob.contains("zh-hans") || blob.contains("zh_hans")
+                            || lang.equalsIgnoreCase("zh-hans") || lang.toLowerCase(Locale.ROOT).contains("hans");
+                    if (isSimp && !isTrad) {
+                        score += 100; // 简体优先
+                    } else if (isTrad && !isSimp) {
+                        score += 70;  // 繁体低于简体
+                    } else if (blob.contains("中文") || blob.contains("chinese")
                             || lang.equalsIgnoreCase("zh") || lang.toLowerCase(Locale.ROOT).startsWith("zh")
-                            || lang.equalsIgnoreCase("chi"))
-                        score += 90;
-                    else if (blob.contains("繁体") || blob.contains("traditional") || blob.contains("cht"))
-                        score += 80;
+                            || lang.equalsIgnoreCase("chi") || lang.equalsIgnoreCase("zho")) {
+                        score += 90;  // 未标明简繁的中文
+                    }
                     if (score <= 0) continue;
-                    if (mime.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb")) score -= 5;
+                    // 格式优先级：ASS/SSA > 文本(SRT/VTT) > 图像(PGS等)
+                    boolean isAss = mime.contains("ssa") || mime.contains("ass")
+                            || blob.contains(" ass") || blob.endsWith("ass") || blob.contains(", ass")
+                            || blob.contains("，ass") || blob.contains("ass,") || blob.contains("ass，")
+                            || label.toLowerCase(Locale.ROOT).contains("ass");
+                    boolean isTextSub = mime.contains("subrip") || mime.contains("vtt") || mime.contains("ttml")
+                            || mime.contains("text/")
+                            || blob.contains("srt") || blob.contains("vtt");
+                    boolean isBitmap = mime.contains("pgs") || mime.contains("vobsub") || mime.contains("dvb")
+                            || mime.contains("hdmv") || blob.contains("pgs") || blob.contains("vobsub");
+                    if (isAss) {
+                        score += 40; // 多类型并存时优先 ASS
+                    } else if (isTextSub) {
+                        score += 15;
+                    } else if (isBitmap) {
+                        score -= 10; // PGS 等图像字幕靠后
+                    }
                     if (score > bestScore) {
                         bestScore = score;
                         bestGroup = group;
