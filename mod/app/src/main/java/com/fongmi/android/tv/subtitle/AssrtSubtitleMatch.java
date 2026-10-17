@@ -1892,6 +1892,56 @@ public final class AssrtSubtitleMatch {
     }
 
 
+
+    /** 从 PlayerManager → engine → ExoPlayer，与 forceSelectExternalViaMedia3 一致 */
+    private static androidx.media3.common.Player resolveMedia3Player(PlayerManager player) {
+        if (player == null) return null;
+        try {
+            Object engine = null;
+            try {
+                java.lang.reflect.Field f = player.getClass().getDeclaredField("engine");
+                f.setAccessible(true);
+                engine = f.get(player);
+            } catch (Throwable ignored) {
+            }
+            if (engine == null) {
+                try {
+                    Object o = player.getClass().getMethod("getPlayer").invoke(player);
+                    if (o instanceof androidx.media3.common.Player) {
+                        return (androidx.media3.common.Player) o;
+                    }
+                    engine = o;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (engine == null) return null;
+            if (engine instanceof androidx.media3.common.Player) {
+                return (androidx.media3.common.Player) engine;
+            }
+            for (String mName : new String[]{"getPlayer", "getExoPlayer"}) {
+                try {
+                    java.lang.reflect.Method mth = engine.getClass().getMethod(mName);
+                    Object exo = mth.invoke(engine);
+                    if (exo instanceof androidx.media3.common.Player) {
+                        return (androidx.media3.common.Player) exo;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                java.lang.reflect.Field f = engine.getClass().getDeclaredField("player");
+                f.setAccessible(true);
+                Object o = f.get(engine);
+                if (o instanceof androidx.media3.common.Player) {
+                    return (androidx.media3.common.Player) o;
+                }
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
     private static boolean preferChineseEmbedded(PlayerManager player) {
         try {
             if (player == null) return false;
