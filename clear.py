@@ -21,15 +21,15 @@ def get_old_commits(days=2):
     return [c for c in commits if c]
 
 def delete_old_commits():
-    """删除2天前的提交并重写 master 分支"""
+    """删除2天前的提交并重写 main 分支"""
     old_commits = get_old_commits()
     if not old_commits:
         print("没有找到2天前的提交。")
         return
 
-    # 确保在 master 分支并拉取最新文件
-    run_command('git checkout master')
-    run_command('git pull origin master')
+    # 确保在 main 分支并拉取最新文件
+    run_command('git checkout main')
+    run_command('git pull origin main')
 
     # 获取初始提交的哈希（只取第一个初始提交）
     initial_commit = run_command('git rev-list --max-parents=0 HEAD | head -n 1', check=True).stdout.strip()
@@ -48,11 +48,11 @@ def delete_old_commits():
         print(f"提交失败: {e}")
         return
 
-    # 强制推送重写的 master 分支
+    # 强制推送重写的 main 分支
     try:
-        run_command('git push origin master --force')
+        run_command('git push origin main --force')
     except subprocess.CalledProcessError as e:
-        print(f"强制推送 master 分支失败: {e}")
+        print(f"强制推送 main 分支失败: {e}")
         print("请确保已启用分支保护中的 '允许强制推送' 或有足够权限。")
         return
 
