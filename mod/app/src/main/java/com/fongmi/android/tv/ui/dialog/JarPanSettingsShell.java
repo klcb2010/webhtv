@@ -35,8 +35,8 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 /**
- * SHELL_JAR_SETTINGS_REDO v21
- * 淡蓝背景 + 完整线路列表可滚动 + 下载线程需确认 + 账号登录壳子+宿主交 jar
+ * SHELL_JAR_SETTINGS_REDO v20
+ * 淡蓝背景 + 完整线路列表可滚动 + 下载线程需确认 + 账号登录不劫持
  */
 public final class JarPanSettingsShell {
 
@@ -91,41 +91,11 @@ public final class JarPanSettingsShell {
         return isShellPanel(id, null);
     }
 
-    private static volatile long sBypassLoginUntil = 0;
-    private static volatile boolean sForceJarLogin = false;
-    private static volatile String sLoginSiteKey = null;
-    private static volatile java.util.ArrayList<String> sLoginPending = null;
-
-    public static void clearLoginForce() {
-        sForceJarLogin = false;
-        sBypassLoginUntil = 0;
-    }
-
-    public static String getLoginSiteKey() {
-        return sLoginSiteKey;
-    }
-
-    public static java.util.ArrayList<String> takeLoginPending() {
-        return sLoginPending;
-    }
-
     public static boolean isShellPanel(String id, String name) {
         if (!isTelevision()) return false;
         String s = id == null ? "" : id.toLowerCase().trim();
         String n = name == null ? "" : name.trim();
-        boolean loginHub = s.contains("panloginhub") || s.equals("panloginhubsettings")
-                || n.contains("账号登录") || n.contains("帐号登录");
-        if (loginHub) {
-            // force 期间放行给 jar（宿主 Activity 上触发）
-            if (sForceJarLogin && android.os.SystemClock.uptimeMillis() < sBypassLoginUntil)
-                return false;
-            return true;
-        }
-        if (sForceJarLogin || android.os.SystemClock.uptimeMillis() < sBypassLoginUntil) {
-            if (s.contains("login") || s.contains("scan") || s.contains("app")
-                    || n.contains("登录") || n.contains("扫码"))
-                return false;
-        }
+        // 账号登录：不劫持，完全走 jar
         if (s.contains("playlineorder") || s.contains("lineorder") || n.contains("线路排序"))
             return true;
         if (s.contains("panthread") || s.contains("threadhub") || n.contains("下载线程"))
@@ -143,12 +113,6 @@ public final class JarPanSettingsShell {
         sOpening = false; // 永不因脏标记跳过
         sOpening = true;
         try {
-            if (name != null && (name.contains("账号登录") || name.contains("帐号登录"))) {
-                sForceJarLogin = false;
-                sBypassLoginUntil = 0;
-                openLogin(activity, siteKey);
-                return;
-            }
             openInner(activity, siteKey, id != null ? id : "");
         } catch (Throwable e) {
             sOpening = false;
@@ -159,10 +123,6 @@ public final class JarPanSettingsShell {
         String s = id == null ? "" : id.toLowerCase();
         if (s.contains("thread") || (id != null && id.contains(ID_THREAD))) {
             openThread(activity);
-        } else if (s.contains("login") || (id != null && id.contains(ID_LOGIN))) {
-            sForceJarLogin = false;
-            sBypassLoginUntil = 0;
-            openLogin(activity, siteKey);
         } else {
             openLineOrder(activity);
         }
@@ -653,300 +613,6 @@ public final class JarPanSettingsShell {
         } catch (Throwable e) {
             return allowAuto ? "自动" : "16";
         }
-    }
-
-
-    // -------------------- 账号登录（壳子一级/二级 + 宿主交 jar） --------------------
-
-    private static void openLogin(Activity activity, String siteKey) {
-        final LinearLayout root = column(activity);
-        root.setBackgroundColor(BG_PANEL);
-        root.addView(title(activity, "账号登录"));
-        root.addView(sub(activity, "上下键选择网盘 · OK 进入登录方式"));
-
-        final ScrollView scroll = new ScrollView(activity);
-        scroll.setFocusable(false);
-        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        final LinearLayout list = new LinearLayout(activity);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-
-        final String[][] entries = new String[][]{
-                {"夸克网盘", "quark", "夸克"},
-                {"UC网盘", "uc", "UC"},
-                {"百度网盘", "baidu", "百度"},
-                {"迅雷网盘", "xunlei", "迅雷"},
-                {"阿里云盘", "ali", "阿里"},
-                {"天翼云盘", "cloud189", "天翼"},
-                {"115网盘", "pan115", "115"},
-                {"移动云盘", "cloud139", "移动"},
-                {"光鸭云盘", "guangya", "光鸭"},
-        };
-
-        final int[] sel = {0};
-        final List<LinearLayout> rows = new ArrayList<>();
-        final List<TextView> titles = new ArrayList<>();
-        final AlertDialog[] dialogRef = new AlertDialog[1];
-        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-        final Runnable[] paint = new Runnable[1];
-        paint[0] = () -> {
-            for (int i = 0; i < rows.size(); i++) {
-                applyRowFocus(activity, rows.get(i), i == sel[0]);
-                if (i < titles.size()) {
-                    titles.get(i).setText(sel[0] == i ? ("▶  " + entries[i][0]) : ("    " + entries[i][0]));
-                }
-            }
-        };
-
-        for (int i = 0; i < entries.length; i++) {
-            final int idx = i;
-            LinearLayout row = makeRow(activity, "    " + entries[i][0], "OK 选择登录方式");
-            row.setId(View.generateViewId());
-            if (row.getChildCount() > 0 && row.getChildAt(0) instanceof TextView) {
-                titles.add((TextView) row.getChildAt(0));
-            } else {
-                titles.add(new TextView(activity));
-            }
-            final String panKey = entries[i][1];
-            final String panName = entries[i][0];
-            final String shortName = entries[i][2];
-            row.setOnFocusChangeListener((v, has) -> {
-                if (has) {
-                    sel[0] = idx;
-                    paint[0].run();
-                }
-            });
-            row.setOnClickListener(v -> {
-                sel[0] = idx;
-                paint[0].run();
-                openLoginMethods(activity, siteKey, panKey, panName, shortName, dialogRef[0]);
-            });
-            row.setOnKeyListener((v, keyCode, event) -> {
-                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && sel[0] > 0) {
-                    sel[0]--;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && sel[0] < rows.size() - 1) {
-                    sel[0]++;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                    rows.get(sel[0]).performClick();
-                    return true;
-                }
-                return false;
-            });
-            rows.add(row);
-            list.addView(row);
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            if (i > 0) rows.get(i).setNextFocusUpId(rows.get(i - 1).getId());
-            if (i + 1 < rows.size()) rows.get(i).setNextFocusDownId(rows.get(i + 1).getId());
-        }
-        scroll.addView(list);
-        int listH = Math.min(dp(activity, 420),
-                (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.55f));
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, listH));
-
-        AlertDialog dialog = buildDialog(activity, root);
-        dialogRef[0] = dialog;
-        dialog.setCancelable(true);
-        dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnShowListener(d -> {
-            styleWindow(dialog);
-            sel[0] = 0;
-            paint[0].run();
-            final int[] n = {0};
-            Runnable keep = new Runnable() {
-                @Override
-                public void run() {
-                    if (dialogRef[0] == null || !dialogRef[0].isShowing()) return;
-                    paint[0].run();
-                    if (!rows.isEmpty()) rows.get(sel[0]).requestFocus();
-                    if (++n[0] < 12) h.postDelayed(this, 100);
-                }
-            };
-            h.post(keep);
-        });
-        dialog.setOnDismissListener(d -> {
-            sOpening = false;
-            dialogRef[0] = null;
-        });
-        dialog.setOnKeyListener((d, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                dialog.dismiss();
-                return true;
-            }
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && sel[0] > 0) {
-                    sel[0]--;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && sel[0] < rows.size() - 1) {
-                    sel[0]++;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                    if (!rows.isEmpty()) rows.get(sel[0]).performClick();
-                    return true;
-                }
-            }
-            return false;
-        });
-        try {
-            dialog.show();
-            sizeWindow(dialog, activity, 0.68f);
-        } catch (Throwable e) {
-            sOpening = false;
-        }
-    }
-
-    private static void openLoginMethods(Activity activity, String siteKey,
-                                         String panKey, String panName, String shortName,
-                                         AlertDialog parent) {
-        LinearLayout root = column(activity);
-        root.setBackgroundColor(BG_PANEL);
-        root.addView(title(activity, panName));
-        root.addView(sub(activity, "选择登录方式 · 返回键回网盘列表"));
-
-        final String[] methods = new String[]{
-                "扫码登录", "账号密码 / Cookie", "APP 跳转登录", "返回网盘列表"
-        };
-        final int[] sel = {0};
-        final List<LinearLayout> rows = new ArrayList<>();
-        final AlertDialog[] dlg = new AlertDialog[1];
-        final Runnable[] paint = new Runnable[1];
-        paint[0] = () -> {
-            for (int i = 0; i < rows.size(); i++) {
-                applyRowFocus(activity, rows.get(i), i == sel[0]);
-                if (rows.get(i).getChildCount() > 0 && rows.get(i).getChildAt(0) instanceof TextView) {
-                    ((TextView) rows.get(i).getChildAt(0))
-                            .setText((i == sel[0] ? "▶  " : "    ") + methods[i]);
-                }
-            }
-        };
-        for (int i = 0; i < methods.length; i++) {
-            final int idx = i;
-            LinearLayout row = makeRow(activity, "    " + methods[i], null);
-            row.setId(View.generateViewId());
-            row.setOnFocusChangeListener((v, has) -> {
-                if (has) {
-                    sel[0] = idx;
-                    paint[0].run();
-                }
-            });
-            row.setOnClickListener(v -> {
-                if (idx == 3) {
-                    if (dlg[0] != null) dlg[0].dismiss();
-                    return;
-                }
-                // 关二级+一级，再启动透明宿主交给 jar
-                if (dlg[0] != null) dlg[0].dismiss();
-                if (parent != null && parent.isShowing()) parent.dismiss();
-                sOpening = false;
-                handOffToJarLogin(activity, siteKey, panKey, panName, shortName, idx);
-            });
-            row.setOnKeyListener((v, keyCode, event) -> {
-                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && sel[0] > 0) {
-                    sel[0]--;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && sel[0] < rows.size() - 1) {
-                    sel[0]++;
-                    paint[0].run();
-                    rows.get(sel[0]).requestFocus();
-                    return true;
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                    rows.get(sel[0]).performClick();
-                    return true;
-                }
-                return false;
-            });
-            rows.add(row);
-            root.addView(row);
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            if (i > 0) rows.get(i).setNextFocusUpId(rows.get(i - 1).getId());
-            if (i + 1 < rows.size()) rows.get(i).setNextFocusDownId(rows.get(i + 1).getId());
-        }
-        AlertDialog dialog = buildDialog(activity, root);
-        dlg[0] = dialog;
-        dialog.setCancelable(true);
-        dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnShowListener(d -> {
-            styleWindow(dialog);
-            paint[0].run();
-            if (!rows.isEmpty()) rows.get(0).requestFocus();
-        });
-        dialog.setOnKeyListener((d, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                dialog.dismiss();
-                return true;
-            }
-            return false;
-        });
-        try {
-            dialog.show();
-            sizeWindow(dialog, activity, 0.55f);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    private static void handOffToJarLogin(Activity activity, String siteKey, String panKey,
-                                         String panName, String shortName, int mode) {
-        if (TextUtils.isEmpty(siteKey)) {
-            sForceJarLogin = false;
-            return;
-        }
-        java.util.ArrayList<String> acts = new java.util.ArrayList<>();
-        // mode: 0 扫码 1 账密 2 APP（与二级菜单顺序一致）
-        if (mode == 0) {
-            acts.add("扫码登录" + shortName + "账号");
-            acts.add("扫码登录" + shortName);
-            acts.add("扫码登录" + panName);
-            acts.add(shortName + "扫码");
-        } else if (mode == 1) {
-            acts.add(shortName + "账号密码");
-            acts.add("账号密码登录");
-            acts.add("账密登录" + shortName);
-        } else {
-            acts.add("APP跳转登录" + shortName);
-            acts.add("APP登录" + shortName);
-            acts.add("打开" + shortName);
-            acts.add(shortName + "APP登录");
-        }
-        acts.add(panKey + "Login");
-        acts.add("login" + shortName);
-        acts.add(panKey);
-        acts.add("panLoginHubSettings");
-
-        final String first = acts.get(0);
-        sForceJarLogin = true;
-        sBypassLoginUntil = android.os.SystemClock.uptimeMillis() + 90000;
-        sLoginPending = acts;
-        sLoginSiteKey = siteKey;
-        try {
-            activity.runOnUiThread(() ->
-                    com.fongmi.android.tv.ui.activity.JarLoginHostActivity.start(activity, siteKey, first));
-        } catch (Throwable t0) {
-            sForceJarLogin = false;
-        }
-        new android.os.Handler(android.os.Looper.getMainLooper())
-                .postDelayed(() -> sForceJarLogin = false, 90000);
     }
 
     // -------------------- UI helpers --------------------
