@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 /**
- * SHELL_JAR_SETTINGS_REDO v20
+ * SHELL_JAR_SETTINGS_REDO v20-nologin
  * 淡蓝背景 + 完整线路列表可滚动 + 下载线程需确认 + 账号登录不劫持
  */
 public final class JarPanSettingsShell {
