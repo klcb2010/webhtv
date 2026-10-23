@@ -143,7 +143,7 @@ def patch_site_api() -> None:
 
 def patch_video() -> None:
     snip = """
-        // SHELL_JAR_SETTINGS_REDO: TV 线路排序/下载线程（账号登录不劫持）
+        // SHELL_JAR_SETTINGS_REDO: TV 线路排序/下载线程/账号登录
         try {
             String _id = getId();
             String _name = null;
@@ -160,7 +160,7 @@ def patch_video() -> None:
         if not path.is_file():
             continue
         t = path.read_text(encoding="utf-8")
-        if "账号登录不劫持" in t:
+        if "账号登录壳子+宿主" in t:
             print("[mod] VideoActivity already v20", flavor)
             continue
         # drop old SHELL_JAR_SETTINGS_REDO inserts
@@ -180,6 +180,43 @@ def patch_video() -> None:
         print("[mod] VideoActivity", flavor)
 
 
+def patch_manifest() -> None:
+    """Register JarLoginHostActivity in main + leanback manifests."""
+    act = """
+        <activity
+            android:name=".ui.activity.JarLoginHostActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="false" />
+"""
+    for rel in (
+        "app/src/main/AndroidManifest.xml",
+        "app/src/leanback/AndroidManifest.xml",
+        "app/src/mobile/AndroidManifest.xml",
+    ):
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        t = path.read_text(encoding="utf-8")
+        if "JarLoginHostActivity" in t:
+            print("[mod] manifest already", rel)
+            continue
+        t2, n = re.subn(
+            r"(<application\b[^>]*>)",
+            r"\1" + act,
+            t,
+            count=1,
+        )
+        if not n:
+            print("[mod] WARN no application in", rel)
+            continue
+        path.write_text(t2, encoding="utf-8")
+        print("[mod] manifest", rel)
+
+
+
 def main() -> None:
     print("[mod] inject_jar_settings_shell v3 ROOT", ROOT)
     ensure_init()
@@ -190,6 +227,7 @@ def main() -> None:
         sys.exit(1)
     patch_site_api()
     patch_video()
+    patch_manifest()
     print("[mod] inject_jar_settings_shell done")
 
 
