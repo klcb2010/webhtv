@@ -48,6 +48,11 @@ while IFS= read -r -d '' src; do
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
 
+# 回退账号登录宿主（若仓库残留）
+rm -f "$ROOT/app/src/main/java/com/fongmi/android/tv/ui/activity/JarLoginHostActivity.java"
+find "$ROOT/app/src" -name 'JarLoginHostActivity.java' -delete 2>/dev/null || true
+
+
 
 
 

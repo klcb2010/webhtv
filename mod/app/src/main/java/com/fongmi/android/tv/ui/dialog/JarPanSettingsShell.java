@@ -35,8 +35,8 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 /**
- * SHELL_JAR_SETTINGS_REDO v9
- * 淡蓝背景 + 完整线路列表可滚动 + 下载线程需确认 + 账号登录壳子列表带高亮
+ * SHELL_JAR_SETTINGS_REDO v20-nologin
+ * 淡蓝背景 + 完整线路列表可滚动 + 下载线程需确认 + 账号登录不劫持
  */
 public final class JarPanSettingsShell {
 
@@ -60,19 +60,21 @@ public final class JarPanSettingsShell {
 
     private JarPanSettingsShell() {}
 
-    /** 仅 TV / Leanback；手机端一律 false，不改 jar 原逻辑 */
+    /**
+     * 与壳子其它魔改一致：优先 Util.isLeanback()（按编译 flavor）。
+     * 再回退 FEATURE_LEANBACK / UI_MODE，避免部分盒子漏判。
+     * 手机端 mobile flavor 下 Util.isLeanback()=false，绝不进壳子 UI。
+     */
     public static boolean isTelevision() {
         try {
+            if (com.fongmi.android.tv.utils.Util.isLeanback()) return true;
+        } catch (Throwable ignored) {
+        }
+        try {
             Context c = null;
-            try {
-                c = com.fongmi.android.tv.App.activity();
-            } catch (Throwable ignored) {
-            }
+            try { c = com.fongmi.android.tv.App.activity(); } catch (Throwable ignored) {}
             if (c == null) {
-                try {
-                    c = com.fongmi.android.tv.App.get();
-                } catch (Throwable ignored) {
-                }
+                try { c = com.fongmi.android.tv.App.get(); } catch (Throwable ignored) {}
             }
             if (c == null) return false;
             if (c.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return true;
@@ -83,28 +85,37 @@ public final class JarPanSettingsShell {
         }
     }
 
+
+
     public static boolean isShellPanel(String id) {
-        if (!isTelevision()) return false; // 手机端不拦截
-        if (TextUtils.isEmpty(id)) return false;
-        String s = id.toLowerCase();
-        return s.contains("playlineorder")
-                || s.contains("panthread")
-                || s.contains("panlogin")
-                || s.contains("login")
-                || id.contains(ID_LINE_ORDER)
-                || id.contains(ID_THREAD)
-                || id.contains(ID_LOGIN);
+        return isShellPanel(id, null);
+    }
+
+    public static boolean isShellPanel(String id, String name) {
+        if (!isTelevision()) return false;
+        String s = id == null ? "" : id.toLowerCase().trim();
+        String n = name == null ? "" : name.trim();
+        // 账号登录：不劫持，完全走 jar
+        if (s.contains("playlineorder") || s.contains("lineorder") || n.contains("线路排序"))
+            return true;
+        if (s.contains("panthread") || s.contains("threadhub") || n.contains("下载线程"))
+            return true;
+        return false;
     }
 
     public static void open(Activity activity, String siteKey, String id) {
+        open(activity, siteKey, id, null);
+    }
+
+    public static void open(Activity activity, String siteKey, String id, String name) {
         if (activity == null || activity.isFinishing()) return;
-        if (!isTelevision()) return; // 双保险：手机不进壳子 UI
-        if (sOpening) return;
+        if (!isTelevision()) return;
+        sOpening = false; // 永不因脏标记跳过
         sOpening = true;
         try {
-            openInner(activity, siteKey, id);
-        } finally {
-            // released on dialog dismiss
+            openInner(activity, siteKey, id != null ? id : "");
+        } catch (Throwable e) {
+            sOpening = false;
         }
     }
 
@@ -112,12 +123,12 @@ public final class JarPanSettingsShell {
         String s = id == null ? "" : id.toLowerCase();
         if (s.contains("thread") || (id != null && id.contains(ID_THREAD))) {
             openThread(activity);
-        } else if (s.contains("login") || (id != null && id.contains(ID_LOGIN))) {
-            openLogin(activity, siteKey);
         } else {
             openLineOrder(activity);
         }
     }
+
+
 
     public static void openPost(String siteKey, String id) {
         new Handler(Looper.getMainLooper()).post(() -> {
@@ -132,7 +143,7 @@ public final class JarPanSettingsShell {
                 } catch (Throwable ignored) {
                 }
             }
-            if (a != null && !a.isFinishing() && isShellPanel(id)) open(a, siteKey, id);
+            if (a != null && !a.isFinishing() && isShellPanel(id, null)) open(a, siteKey, id, null);
         });
     }
 
@@ -487,9 +498,11 @@ public final class JarPanSettingsShell {
         String cur = readThreadVal(item.key, item.defVal);
         final String[] selected = {normalizeThread(cur, item.allowAuto)};
 
+        // 与手机端 jar 常见档位对齐（含截图中的 10/12/16/32/64）
         List<String> opts = new ArrayList<>();
         if (item.allowAuto) opts.add("自动");
-        for (int n : new int[]{1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64, 96, 128}) {
+        // 与手机端常见档位对齐：16 / 32 / 64 为主，兼顾截图中的 10/12
+        for (int n : new int[]{8, 10, 12, 16, 32, 64, 128}) {
             opts.add(String.valueOf(n));
         }
 
@@ -602,108 +615,6 @@ public final class JarPanSettingsShell {
         }
     }
 
-    // -------------------- 账号登录（壳子列表 + 高亮） --------------------
-
-
-    private static void openLogin(Activity activity, String siteKey) {
-        LinearLayout root = column(activity);
-        root.setBackgroundColor(BG_PANEL);
-        root.addView(title(activity, "选择账号或导入项目"));
-        root.addView(sub(activity, "上下键移动焦点 · OK 选择 · 返回关闭"));
-
-        final ScrollView scroll = new ScrollView(activity);
-        scroll.setFocusable(false);
-        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        LinearLayout list = new LinearLayout(activity);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        scroll.addView(list);
-        int listH = Math.min(dp(activity, 400),
-                (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.5f));
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, listH));
-
-        // 静态入口，避免与 jar 异步抢焦
-        String[][] rowsData = new String[][]{
-                {"夸克网盘", "登录 / 切换账号"},
-                {"UC网盘", "登录 / 切换账号"},
-                {"百度网盘", "登录 / 切换账号"},
-                {"迅雷网盘", "登录 / 切换账号"},
-                {"阿里云盘", "登录 / 切换账号"},
-                {"天翼云盘", "登录 / 切换账号"},
-                {"115网盘", "登录 / 切换账号"},
-                {"移动云盘", "登录 / 切换账号"},
-                {"光鸭云盘", "登录 / 切换账号"},
-        };
-
-        AlertDialog dialog = buildDialog(activity, root);
-        dialog.setCancelable(true);
-        dialog.setCanceledOnTouchOutside(true);
-
-        List<LinearLayout> views = new ArrayList<>();
-        for (String[] r : rowsData) {
-            LinearLayout row = makeRow(activity, r[0], r[1]);
-            row.setId(View.generateViewId());
-            String name = r[0];
-            row.setOnFocusChangeListener((v, has) -> {
-                applyRowFocus(activity, v, has);
-                if (has) {
-                    scroll.post(() -> {
-                        try {
-                            int top = v.getTop();
-                            int bottom = v.getBottom();
-                            int sl = scroll.getScrollY();
-                            int sh = scroll.getHeight();
-                            if (top < sl) scroll.smoothScrollTo(0, top);
-                            else if (bottom > sl + sh) scroll.smoothScrollTo(0, bottom - sh);
-                        } catch (Throwable ignored) {
-                        }
-                    });
-                }
-            });
-            row.setOnClickListener(v -> {
-                trySelectAccount(siteKey, name);
-                dialog.dismiss();
-            });
-            views.add(row);
-            list.addView(row);
-        }
-        for (int i = 0; i < views.size(); i++) {
-            if (i > 0) views.get(i).setNextFocusUpId(views.get(i - 1).getId());
-            if (i + 1 < views.size()) views.get(i).setNextFocusDownId(views.get(i + 1).getId());
-        }
-
-        dialog.setOnShowListener(d -> {
-            styleWindow(dialog);
-            if (!views.isEmpty()) views.get(0).post(views.get(0)::requestFocus);
-        });
-        dialog.setOnKeyListener((d, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                dialog.dismiss();
-                return true;
-            }
-            return false;
-        });
-        attachDismissFinish(activity, dialog);
-        try {
-            dialog.show();
-            sizeWindow(dialog, activity, 0.7f);
-        } catch (Throwable e) {
-            sOpening = false;
-        }
-    }
-
-    private static void trySelectAccount(String siteKey, String name) {
-        if (TextUtils.isEmpty(siteKey)) return;
-        for (String act : new String[]{"selectAccount:" + name, "panLogin:" + name, name}) {
-            try {
-                SiteApi.action(siteKey, act);
-                return;
-            } catch (Throwable ignored) {
-            }
-        }
-    }
-
     // -------------------- UI helpers --------------------
 
     private static AlertDialog buildDialog(Activity activity, View root) {
@@ -747,10 +658,15 @@ public final class JarPanSettingsShell {
     private static void applyRowFocus(Activity a, View v, boolean has) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(a, 10));
-        g.setColor(has ? BG_ROW_FOCUS : BG_ROW);
-        if (has) g.setStroke(dp(a, 3), STROKE_FOCUS);
-        else g.setStroke(dp(a, 1), 0xFF90CAF9);
+        if (has) {
+            g.setColor(0xFF64B5F6);
+            g.setStroke(dp(a, 4), 0xFF0D47A1);
+        } else {
+            g.setColor(BG_ROW);
+            g.setStroke(dp(a, 1), 0xFF90CAF9);
+        }
         v.setBackground(g);
+        try { v.setElevation(has ? dp(a, 8) : 0); } catch (Throwable ignored) {}
     }
 
     private static LinearLayout makeRow(Activity a, String title, String sub) {

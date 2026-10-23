@@ -143,10 +143,13 @@ def patch_site_api() -> None:
 
 def patch_video() -> None:
     snip = """
-        // SHELL_JAR_SETTINGS_REDO: open shell panel; finish after dialog dismiss (inside shell)
+        // SHELL_JAR_SETTINGS_REDO: TV 线路排序/下载线程（账号登录不劫持）
         try {
-            if (com.fongmi.android.tv.ui.dialog.JarPanSettingsShell.isShellPanel(getId())) {
-                com.fongmi.android.tv.ui.dialog.JarPanSettingsShell.open(this, getKey(), getId());
+            String _id = getId();
+            String _name = null;
+            try { _name = getName(); } catch (Throwable ignored) {}
+            if (com.fongmi.android.tv.ui.dialog.JarPanSettingsShell.isShellPanel(_id, _name)) {
+                com.fongmi.android.tv.ui.dialog.JarPanSettingsShell.open(this, getKey(), _id, _name);
                 return;
             }
         } catch (Throwable ignored) {
@@ -157,10 +160,18 @@ def patch_video() -> None:
         if not path.is_file():
             continue
         t = path.read_text(encoding="utf-8")
-        if "JarPanSettingsShell.open" in t:
-            print("[mod] VideoActivity already", flavor)
+        if "账号登录不劫持" in t:
+            print("[mod] VideoActivity already v20", flavor)
             continue
-        m = re.search(r"(private void checkId\(\)\s*\{)", t)
+        # drop old SHELL_JAR_SETTINGS_REDO inserts
+        import re as _re
+        t = _re.sub(
+            r"\n[ \t]*// SHELL_JAR_SETTINGS_REDO[\s\S]*?catch \(Throwable ignored\) \{\s*\}",
+            "",
+            t,
+            count=8,
+        )
+        m = _re.search(r"(private void checkId\(\)\s*\{)", t)
         if not m:
             print("[mod] WARN no checkId", flavor)
             continue
@@ -169,8 +180,49 @@ def patch_video() -> None:
         print("[mod] VideoActivity", flavor)
 
 
+def cleanup_login_host() -> None:
+    """回退账号登录劫持：删除宿主 Activity 与 manifest 注册。"""
+    host = ROOT / "app/src/main/java/com/fongmi/android/tv/ui/activity/JarLoginHostActivity.java"
+    if host.is_file():
+        host.unlink()
+        print("[mod] removed JarLoginHostActivity.java")
+    # also leanback/mobile copies if any
+    for p in ROOT.glob("app/src/**/JarLoginHostActivity.java"):
+        p.unlink()
+        print("[mod] removed", p)
+    import re
+    for rel in (
+        "app/src/main/AndroidManifest.xml",
+        "app/src/leanback/AndroidManifest.xml",
+        "app/src/mobile/AndroidManifest.xml",
+    ):
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "JarLoginHostActivity" not in text:
+            continue
+        text2 = re.sub(
+            r"\s*<activity\b[^>]*JarLoginHostActivity[\s\S]*?</activity>\s*",
+            "\n",
+            text,
+            count=5,
+        )
+        # self-closing form
+        text2 = re.sub(
+            r"\s*<activity\b[^>]*JarLoginHostActivity[^>]*/>\s*",
+            "\n",
+            text2,
+            count=5,
+        )
+        path.write_text(text2, encoding="utf-8")
+        print("[mod] stripped JarLoginHostActivity from", rel)
+
+
+
 def main() -> None:
     print("[mod] inject_jar_settings_shell v3 ROOT", ROOT)
+    cleanup_login_host()
     ensure_init()
     patch_app()
     shell = ROOT / "app/src/main/java/com/fongmi/android/tv/ui/dialog/JarPanSettingsShell.java"
