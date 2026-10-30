@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<string name="setting_home_history">首页最近观看</string>
+<string name="setting_home_vod_auto_load">默认加载点播</string>
+<string name="setting_home_site_lock">首页源锁定</string>
+<string name="dialog_delete_record">删除全部记录？</string>
+<string name="dialog_delete_history">将删除全部历史记录。</string>
+<string name="dialog_negative">取消</string>
+<string name="dialog_positive">确定</string>
+<string name="backup_permission_denied">未授予存储权限</string>
+<string name="exit_confirm_title">退出应用？</string>
+<string name="exit_confirm_message">将关闭当前页面。若正在后台播放，播放会继续。</string>
+<string name="exit_confirm_positive">退出</string>
+<string name="setting_subtitle">字幕设置</string>
+<string name="player_subtitle_auto_match">自动匹配字幕</string>
+<string name="player_subtitle_language">字幕偏好语言</string>
+<string name="player_subtitle_assrt_token">射手网 Token</string>
+<string name="subtitle_auto_match_hit">已自动匹配字幕：%1$s</string>
+<string name="subtitle_token_hint">粘贴射手网 API Token</string>
+<string name="setting_configured">已配置</string>
+<string name="setting_unconfigured">未配置</string>
+<string name="subtitle_manual_search">搜索字幕</string>
+<string name="subtitle_manual_searching">正在搜索字幕…</string>
+<string name="subtitle_manual_select_title">选择字幕（%1$d）</string>
+<string name="subtitle_manual_search_empty">未搜索到字幕</string>
+<string name="subtitle_manual_search_failed">字幕搜索失败</string>
+<string name="subtitle_manual_resolving">正在加载字幕…</string>
+<string name="subtitle_manual_applied">已应用字幕：%1$s</string>
+<string name="subtitle_manual_apply_failed">已找到字幕但无法应用</string>
+<string name="subtitle_manual_inactive">请先开始播放再搜索字幕</string>
+<string name="subtitle_auto_match_provider_unavailable">请先配置射手网 Token</string>
+<string name="search_keyword">关键词</string>
+<string name="setting_ai_recommendation">AI 推荐</string>
+<string name="setting_ai_endpoint">API 服务端点 / 基地址</string>
+<string name="setting_ai_api_key">API key</string>
+<string name="setting_ai_model">模型</string>
+<string name="setting_ai_fetch">获取 AI 推荐</string>
+<string name="ai_recommend_loading">正在获取 AI 推荐…</string>
+<string name="ai_recommend_empty">暂无推荐结果</string>
+<string name="ai_recommend_failed">AI 推荐失败</string>
+<string name="ai_recommend_not_ready">请先完成 AI 通用配置并启用服务</string>
+<string name="ai_recommend_title">AI 推荐（%1$d）</string>
+<string name="ai_config_saved">已保存</string>
+<string name="setting_ai_enable">启用 AI 服务</string>
+<string name="setting_ai_protocol">协议类型</string>
+<string name="setting_ai_user_agent">自定义 User-Agent</string>
+<string name="setting_ai_user_agent_hint">可选，用于有 UA 限制的供应商</string>
+<string name="setting_ai_testing">正在测试 AI 连通性…</string>
+<string name="setting_ai_test_ok">测试成功：%1$s</string>
+<string name="setting_ai_test_fail">测试失败：%1$s</string>
+<string name="setting_ai_status_on">已配置</string>
+<string name="setting_ai_status_off">未配置</string>
+<string name="setting_ai_recommendation_switch">AI 推荐</string>
+<string name="setting_ai_title_extraction">AI 真实剧名识别</string>
+<string name="setting_ai_fetching_models">正在获取模型列表…</string>
+<string name="setting_ai_fetch_models_fail">获取模型失败：%1$s</string>
+<string name="setting_ai_need_key">请先填写端点和 API key</string>
+<string name="ai_recommend_section">个性推荐</string>
+<string name="ai_recommend_loading_short">加载中…</string>
+<string name="ai_recommend_retry">加载失败</string>
+<string name="ai_recommend_retry_action">点击重试</string>
+<string name="setting_personal">个性设置</string>
+<string name="setting_auto_backup">自动备份</string>
+<string name="setting_episode_history">分集进度</string>
+<string name="setting_global_history">全局历史</string>
+<string name="setting_play_back_to_detail">返回详情</string>
+<string name="setting_search_thread">搜索线程</string>
+<string name="setting_on">开</string>
+<string name="setting_off">关</string>
+<string name="setting_subtitle_auto_match">自动匹配字幕</string>
+<string name="setting_subtitle_language">字幕偏好语言</string>
+<string-array name="select_global_history_mode">
+        <item>关闭</item>
+        <item>自动</item>
+        <item>搜索时</item>
+    </string-array>
+<string-array name="select_subtitle_language">
+        <item>自动</item>
+        <item>中文</item>
+        <item>英文</item>
+    </string-array>
+<string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
+
+    <string name="setting_appearance_summary"></string>
+
+    <string name="setting_ai_config">AI 通用配置</string>
+
+    <string name="setting_ai_fetch_models">拉取模型列表</string>
+
+    <string name="setting_ai_test">测试连接</string>
+    <string name="player_auto_change">自动换源</string>
+    <string name="setting_player_auto_change">自动换源</string>
+    <string name="setting_home_push">主页推送</string>
+    <string name="personal_recommend_section">个性推荐</string>
+    <string name="setting_recommend_source">个性推荐</string>
+    <string name="setting_recommend_off">关闭</string>
+    <string name="setting_recommend_ai">AI</string>
+    <string name="setting_recommend_douban">豆瓣</string>
+    <string name="setting_recommend_auto">自动</string>
+    <string name="setting_play_direct">播放直达</string>
+    <string name="setting_play_cache">最大缓存</string>
+        <string-array name="select_play_cache">
+        <item>128MB</item>
+        <item>256MB</item>
+        <item>512MB</item>
+        <item>1GB</item>
+        <item>2GB</item>
+    </string-array>
+    <string name="danmaku">嗷呜弹幕</string>
+    <string name="about_check_update">查更新</string>
+    <string name="about_acknowledge">已悉知</string>
+    <string name="setting_auto_check_update">自动检查更新</string>
+    <string name="setting_exit_clear_cache">退出清理缓存</string>
+    <string name="setting_exit_clear_cache_off">关</string>
+    <string name="setting_subtitle_color">字幕颜色</string>
+    <string name="setting_subtitle_font">字幕字体</string>
+    <string name="setting_global_toast">全局吐司</string>
+    <string name="child_lock_title">家长控制</string>
+    <string name="child_lock_enable">开启</string>
+    <string name="child_lock_password">密码</string>
+    <string name="child_lock_password_hint">请输入密码</string>
+    <string name="child_lock_password_confirm">确认密码</string>
+    <string name="child_lock_password_confirm_hint">请再次输入密码</string>
+    <string name="child_lock_setup_hint">保存后本次仍可继续使用，下次启动才需要密码。关闭时需验证当前密码。</string>
+    <string name="child_lock_gate_title">家长控制</string>
+    <string name="child_lock_gate_message">请输入密码后使用本应用</string>
+    <string name="child_lock_unlock">解锁</string>
+    <string name="child_lock_save">保存</string>
+    <string name="child_lock_cancel">取消</string>
+    <string name="child_lock_error_mismatch">两次密码不一致</string>
+    <string name="child_lock_error_empty">密码不能为空</string>
+    <string name="child_lock_error_wrong">密码错误</string>
+    <string name="child_lock_saved">已保存，下次启动将要求输入密码</string>
+    <string name="child_lock_disabled">已关闭家长控制</string>
+    <string name="setting_child_lock">家长控制</string>
+    <string name="child_lock_toggle_password">显示/隐藏密码</string>
+    <string name="child_lock_exit">退出</string>
+    <string name="setting_home_enter_live">启动进入直播</string>
+    <string name="setting_live_default_fullscreen">直播默认全屏</string>
+    <string name="setting_webview_live">webview直播</string>
+    <string name="setting_eac3_soft_decode">E-AC3音频软解</string>
+    <string name="setting_search_pan_first">搜索结果排序优先</string>
+    <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
+    <string name="setting_hide_home_type_more">隐藏首页更多按钮</string>
+</resources>

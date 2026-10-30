@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_playback_screenshot_btn">播放控制栏截图</string>
+    <string name="play_screenshot">截图</string>
+    <string name="screenshot_ok">已保存到 Pictures/WEBHTV</string>
+    <string name="screenshot_fail">截图失败</string>
+    <string name="screenshot_unavailable">当前无法截取画面</string>
+</resources>
