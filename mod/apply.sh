@@ -244,6 +244,12 @@ if [[ -f "$MOD/hooks/inject_playback_screenshot.py" ]]; then
   python3 "$MOD/hooks/inject_playback_screenshot.py" "$ROOT"
 fi
 
+if [[ -f "$MOD/hooks/inject_vod_home_label.py" ]]; then
+  echo "[mod] inject_vod_home_label"
+  python3 "$MOD/hooks/inject_vod_home_label.py" "$ROOT" || exit 1
+fi
+
+
 if [[ -f "$MOD/hooks/inject_hdr_to_sdr.py" ]]; then
   echo "[mod] inject_hdr_to_sdr"
   python3 "$MOD/hooks/inject_hdr_to_sdr.py" "$ROOT" || exit 1
