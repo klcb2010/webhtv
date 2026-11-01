@@ -897,22 +897,24 @@ public class Setting {
     }
 
 
-    /** 截图亮度提升：0=关，其余为 +45/+65/+75/+85/+95（RGB 偏移，默认 65） */
-    private static final int[] SCREENSHOT_BRIGHTNESS_LEVELS = {0, 45, 65, 75, 85, 95};
+    /** 截图亮度提升：0=关，其余为 +5/+10/+15/+20/+25/+35（RGB 偏移，默认 15） */
+    private static final int[] SCREENSHOT_BRIGHTNESS_LEVELS = {0, 5, 10, 15, 20, 25, 35};
 
     public static int getScreenshotBrightnessBoost() {
         try {
-            int v = Prefers.getInt("screenshot_brightness_boost", 65);
+            int v = Prefers.getInt("screenshot_brightness_boost", 15);
             for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
                 if (level == v) return v;
             }
+            // 旧档 45/65 等映射到新范围中档，避免沿用过曝值
+            if (v >= 45) return 15;
         } catch (Throwable ignored) {
         }
-        return 65;
+        return 15;
     }
 
     public static void putScreenshotBrightnessBoost(int value) {
-        int picked = 65;
+        int picked = 15;
         for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
             if (level == value) {
                 picked = value;
