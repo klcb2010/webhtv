@@ -77,7 +77,7 @@ public final class PhoneScreenshot {
                         + " posMs=" + (snap == null ? -1 : snap.posMs)
                         + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
             } catch (Throwable ignored) {}
-            // 质量优先：始终独立解码（含 GO/127.0.0.1）；并行 Retriever+Codec，提高线程优先级
+            // 质量优先：始终独立解码（含 GO/127.0.0.1）；串行 Retriever→Codec，高优先级；Codec 优先软解避免与播放硬解冲突
             Task.execute(() -> {
                 try {
                     android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
@@ -87,7 +87,7 @@ public final class PhoneScreenshot {
                 long t0 = android.os.SystemClock.elapsedRealtime();
                 try {
                     if (snap != null && snap.uri != null) {
-                        frame = decodeFromSnapshotParallel(snap);
+                        frame = decodeFromSnapshot(snap); // 串行：避免与播放中硬解并行二次 MediaCodec 导致 CRASH_NATIVE
                     }
                 } catch (Throwable e) {
                     if (DIAG) try { Log.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
@@ -157,78 +157,6 @@ public final class PhoneScreenshot {
         }
     }
 
-
-    /**
-     * 并行 Retriever + MediaCodec，先完成的有效帧胜出（多占 CPU，缩短等待）。
-     * 不降分辨率；失败才由调用方回退 Surface。
-     */
-    private static Bitmap decodeFromSnapshotParallel(Snapshot snap) {
-        if (snap == null || snap.uri == null) return null;
-        final java.util.concurrent.atomic.AtomicReference<Bitmap> winner =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        final java.util.concurrent.CountDownLatch firstDone = new java.util.concurrent.CountDownLatch(1);
-        final java.util.concurrent.atomic.AtomicInteger pending =
-                new java.util.concurrent.atomic.AtomicInteger(2);
-
-        Runnable onWorkerDone = () -> {
-            if (pending.decrementAndGet() <= 0 || winner.get() != null) {
-                firstDone.countDown();
-            }
-        };
-
-        Thread tRetriever = new Thread(() -> {
-            try {
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
-            } catch (Throwable ignored) {
-            }
-            try {
-                long posUs = Math.max(0L, snap.posMs) * 1000L;
-                Bitmap b = tryRetrieverUri(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
-                if (b != null) {
-                    if (!winner.compareAndSet(null, b)) {
-                        try { b.recycle(); } catch (Throwable ignored) {}
-                    } else {
-                        firstDone.countDown();
-                    }
-                }
-            } catch (Throwable ignored) {
-            } finally {
-                onWorkerDone.run();
-            }
-        }, "ss-retriever");
-        tRetriever.setPriority(Thread.MAX_PRIORITY);
-
-        Thread tCodec = new Thread(() -> {
-            try {
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
-            } catch (Throwable ignored) {
-            }
-            try {
-                long posUs = Math.max(0L, snap.posMs) * 1000L;
-                Bitmap b = tryMediaCodecFrame(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
-                if (b != null) {
-                    if (!winner.compareAndSet(null, b)) {
-                        try { b.recycle(); } catch (Throwable ignored) {}
-                    } else {
-                        firstDone.countDown();
-                    }
-                }
-            } catch (Throwable ignored) {
-            } finally {
-                onWorkerDone.run();
-            }
-        }, "ss-codec");
-        tCodec.setPriority(Thread.MAX_PRIORITY);
-
-        tRetriever.start();
-        tCodec.start();
-        try {
-            firstDone.await(90, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        return winner.get();
-    }
 
     @Nullable
     private static Bitmap decodeFromSnapshot(Snapshot snap) {
@@ -825,6 +753,49 @@ public final class PhoneScreenshot {
     }
 
     @Nullable
+
+    /** 尽量选软件解码器，降低与播放器占用的硬解冲突（CRASH_NATIVE）。 */
+    private static MediaCodec createSafeVideoDecoder(String mime) throws Exception {
+        if (mime == null || mime.isEmpty()) throw new IllegalArgumentException("mime");
+        try {
+            android.media.MediaCodecList list = new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS);
+            android.media.MediaCodecInfo soft = null;
+            android.media.MediaCodecInfo any = null;
+            for (android.media.MediaCodecInfo info : list.getCodecInfos()) {
+                if (info.isEncoder()) continue;
+                String[] types = info.getSupportedTypes();
+                boolean match = false;
+                if (types != null) {
+                    for (String type : types) {
+                        if (mime.equalsIgnoreCase(type)) { match = true; break; }
+                    }
+                }
+                if (!match) continue;
+                any = info;
+                try {
+                    // API 29+: isHardwareAccelerated；更早用名称启发式
+                    boolean hw = true;
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        hw = info.isHardwareAccelerated();
+                    } else {
+                        String n = info.getName().toLowerCase(java.util.Locale.US);
+                        hw = !(n.contains("android") || n.contains("google") || n.contains("c2.android"));
+                    }
+                    if (!hw) {
+                        soft = info;
+                        break;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            if (soft != null) {
+                return MediaCodec.createByCodecName(soft.getName());
+            }
+        } catch (Throwable ignored) {
+        }
+        return MediaCodec.createDecoderByType(mime);
+    }
+
     private static Bitmap tryMediaCodecFrame(Uri uri, Map<String, String> headers, long posUs, int playW, int playH) {
         if (uri == null) return null;
         MediaExtractor extractor = null;
@@ -884,7 +855,7 @@ public final class PhoneScreenshot {
             } catch (Throwable ignored) {}
 
             reader = ImageReader.newInstance(outW, outH, ImageFormat.YUV_420_888, 2);
-            codec = MediaCodec.createDecoderByType(mime);
+            codec = createSafeVideoDecoder(mime);
             codec.configure(format, reader.getSurface(), null, 0);
             codec.start();
 
