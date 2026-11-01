@@ -5783,8 +5783,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onScreenshot() {
         try {
-            com.fongmi.android.tv.utils.ScreenshotHelper.capture(this, getExoView(),
-                new com.fongmi.android.tv.utils.ScreenshotHelper.Callback() {
+            com.fongmi.android.tv.utils.PhoneScreenshot.capture(this, getExoView(),
+                new com.fongmi.android.tv.utils.PhoneScreenshot.Callback() {
                     @Override
                     public void onSuccess(android.net.Uri uri) {
                         try { com.fongmi.android.tv.utils.Notify.show(getString(com.fongmi.android.tv.R.string.screenshot_ok)); } catch (Throwable ignored) {}

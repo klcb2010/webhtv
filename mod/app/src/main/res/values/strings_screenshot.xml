@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="setting_playback_screenshot_btn">Screenshot button on controls</string>
+    <string name="setting_playback_screenshot_btn">Player control screenshot</string>
+    <string name="setting_screenshot_brightness">Screenshot brightness boost</string>
     <string name="play_screenshot">Screenshot</string>
     <string name="screenshot_ok">Saved to Pictures/WEBHTV</string>
     <string name="screenshot_fail">Screenshot failed</string>

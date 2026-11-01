@@ -854,12 +854,98 @@ public class Setting {
     }
 
     /** 播放控制栏截图按键（默认开） */
+    /** 截图：0=关 1=PNG 2=WebP无损 3=WebP98 */
+    public static final int SCREENSHOT_OFF = 0;
+    public static final int SCREENSHOT_PNG = 1;
+    public static final int SCREENSHOT_WEBP = 2;
+    public static final int SCREENSHOT_WEBP98 = 3;
+
+    public static int getPlaybackScreenshotMode() {
+        try {
+            int m = Prefers.getInt("playback_screenshot_mode", -1);
+            if (m >= 0 && m <= 3) return m;
+        } catch (Throwable ignored) {
+        }
+        try {
+            return Prefers.getBoolean("playback_screenshot_btn", true) ? SCREENSHOT_PNG : SCREENSHOT_OFF;
+        } catch (Throwable ignored) {
+            return SCREENSHOT_PNG;
+        }
+    }
+
+    public static void putPlaybackScreenshotMode(int mode) {
+        if (mode < 0 || mode > 3) mode = SCREENSHOT_PNG;
+        Prefers.put("playback_screenshot_mode", mode);
+    }
+
+    public static void cyclePlaybackScreenshotMode() {
+        putPlaybackScreenshotMode((getPlaybackScreenshotMode() + 1) % 4);
+    }
+
+    public static String getPlaybackScreenshotModeLabel() {
+        switch (getPlaybackScreenshotMode()) {
+            case SCREENSHOT_OFF:
+                return "关";
+            case SCREENSHOT_WEBP:
+                return "WebP";
+            case SCREENSHOT_WEBP98:
+                return "WebP98";
+            case SCREENSHOT_PNG:
+            default:
+                return "PNG";
+        }
+    }
+
+
+    /** 截图亮度提升：0=关，其余为 +45/+65/+75/+85/+95（RGB 偏移，默认 65） */
+    private static final int[] SCREENSHOT_BRIGHTNESS_LEVELS = {0, 45, 65, 75, 85, 95};
+
+    public static int getScreenshotBrightnessBoost() {
+        try {
+            int v = Prefers.getInt("screenshot_brightness_boost", 65);
+            for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
+                if (level == v) return v;
+            }
+        } catch (Throwable ignored) {
+        }
+        return 65;
+    }
+
+    public static void putScreenshotBrightnessBoost(int value) {
+        int picked = 65;
+        for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
+            if (level == value) {
+                picked = value;
+                break;
+            }
+        }
+        Prefers.put("screenshot_brightness_boost", picked);
+    }
+
+    public static void cycleScreenshotBrightnessBoost() {
+        int cur = getScreenshotBrightnessBoost();
+        int idx = 0;
+        for (int i = 0; i < SCREENSHOT_BRIGHTNESS_LEVELS.length; i++) {
+            if (SCREENSHOT_BRIGHTNESS_LEVELS[i] == cur) {
+                idx = i;
+                break;
+            }
+        }
+        int next = SCREENSHOT_BRIGHTNESS_LEVELS[(idx + 1) % SCREENSHOT_BRIGHTNESS_LEVELS.length];
+        putScreenshotBrightnessBoost(next);
+    }
+
+    public static String getScreenshotBrightnessBoostLabel() {
+        int v = getScreenshotBrightnessBoost();
+        return v <= 0 ? "关" : String.valueOf(v);
+    }
+
     public static boolean isPlaybackScreenshotBtn() {
-        return Prefers.getBoolean("playback_screenshot_btn", true);
+        return getPlaybackScreenshotMode() != SCREENSHOT_OFF;
     }
 
     public static void putPlaybackScreenshotBtn(boolean value) {
-        Prefers.put("playback_screenshot_btn", value);
+        putPlaybackScreenshotMode(value ? SCREENSHOT_PNG : SCREENSHOT_OFF);
     }
 
 

@@ -687,7 +687,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.lut.setOnClickListener(view -> onLut());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
-        try { mBinding.control.action.screenshot.setOnClickListener(view -> onScreenshot()); } catch (Throwable ignored) {}
+        try { mBinding.control.action.screenshot.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
         updateScreenshotBtn();
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
         mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
@@ -5630,35 +5630,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     
     private void updateScreenshotBtn() {
-        try {
-            android.view.View v = mBinding.control.action.screenshot;
-            if (v == null) return;
-            boolean show = com.fongmi.android.tv.setting.Setting.isPlaybackScreenshotBtn();
-            v.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
-        } catch (Throwable ignored) {
-        }
+        try { mBinding.control.action.screenshot.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
     }
 
-    private void onScreenshot() {
-        try {
-            com.fongmi.android.tv.utils.ScreenshotHelper.capture(this, getExoView(),
-                new com.fongmi.android.tv.utils.ScreenshotHelper.Callback() {
-                    @Override
-                    public void onSuccess(android.net.Uri uri) {
-                        try { com.fongmi.android.tv.utils.Notify.show(getString(com.fongmi.android.tv.R.string.screenshot_ok)); } catch (Throwable ignored) {}
-                    }
-                    @Override
-                    public void onError(String message) {
-                        try {
-                            com.fongmi.android.tv.utils.Notify.show(message == null || message.isEmpty()
-                                ? getString(com.fongmi.android.tv.R.string.screenshot_fail) : message);
-                        } catch (Throwable ignored) {}
-                    }
-                });
-        } catch (Throwable e) {
-            try { com.fongmi.android.tv.utils.Notify.show(getString(com.fongmi.android.tv.R.string.screenshot_fail)); } catch (Throwable ignored) {}
-        }
-    }
+
+
+
+
+
+
 
     @Override
     protected void onError(String msg) {

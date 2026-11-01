@@ -75,6 +75,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirectPanPrefer.setOnClickListener(this::setPlayDirectPanPrefer); } catch (Throwable ignored) {}
         try { mBinding.hideHomeTypeMore.setOnClickListener(this::setHideHomeTypeMore); } catch (Throwable ignored) {}
         try { mBinding.playbackScreenshotBtn.setOnClickListener(this::setPlaybackScreenshotBtn); } catch (Throwable ignored) {}
+        try { mBinding.screenshotBrightnessBoost.setOnClickListener(this::setScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -122,7 +123,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.searchPanFirstText.setText(Setting.getSearchResultPreferText()); } catch (Throwable ignored) {}
         try { mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer())); } catch (Throwable ignored) {}
         try { mBinding.hideHomeTypeMoreText.setText(getSwitch(Setting.isHideHomeTypeMore())); } catch (Throwable ignored) {}
-        try { mBinding.playbackScreenshotBtnText.setText(getSwitch(Setting.isPlaybackScreenshotBtn())); } catch (Throwable ignored) {}
+        try { mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel()); } catch (Throwable ignored) {}
+        try { mBinding.screenshotBrightnessBoostText.setText(Setting.getScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -390,10 +392,22 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setPlaybackScreenshotBtn(View view) {
         try {
-            Setting.putPlaybackScreenshotBtn(!Setting.isPlaybackScreenshotBtn());
-            mBinding.playbackScreenshotBtnText.setText(getSwitch(Setting.isPlaybackScreenshotBtn()));
+            Setting.cyclePlaybackScreenshotMode();
+            mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel());
+            try { com.fongmi.android.tv.utils.Notify.show(Setting.getPlaybackScreenshotModeLabel()); } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }
+
+    private void setScreenshotBrightnessBoost(View view) {
+        try {
+            Setting.cycleScreenshotBrightnessBoost();
+            mBinding.screenshotBrightnessBoostText.setText(Setting.getScreenshotBrightnessBoostLabel());
+            try { com.fongmi.android.tv.utils.Notify.show(Setting.getScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {
+        }
+    }
+
+
 
 }
