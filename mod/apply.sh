@@ -48,6 +48,15 @@ while IFS= read -r -d '' src; do
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
 
+
+# 清除误加的 vod_home 独立资源，避免与 strings.xml 重复
+rm -f "$ROOT/app/src/mobile/res/values/strings_vod_home.xml" \
+      "$ROOT/app/src/mobile/res/values-zh-rCN/strings_vod_home.xml" \
+      "$ROOT/app/src/mobile/res/values-zh-rTW/strings_vod_home.xml" \
+      "$MOD/app/src/mobile/res/values/strings_vod_home.xml" \
+      "$MOD/app/src/mobile/res/values-zh-rCN/strings_vod_home.xml" \
+      "$MOD/app/src/mobile/res/values-zh-rTW/strings_vod_home.xml" 2>/dev/null || true
+
 # 回退账号登录宿主（若仓库残留）
 rm -f "$ROOT/app/src/main/java/com/fongmi/android/tv/ui/activity/JarLoginHostActivity.java"
 find "$ROOT/app/src" -name 'JarLoginHostActivity.java' -delete 2>/dev/null || true
