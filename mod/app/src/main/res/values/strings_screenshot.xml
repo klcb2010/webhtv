@@ -6,4 +6,5 @@
     <string name="screenshot_ok">Saved to Pictures/WEBHTV</string>
     <string name="screenshot_fail">Screenshot failed</string>
     <string name="screenshot_unavailable">Video surface unavailable</string>
+    <string name="setting_hdr_to_sdr">HDR to SDR</string>
 </resources>

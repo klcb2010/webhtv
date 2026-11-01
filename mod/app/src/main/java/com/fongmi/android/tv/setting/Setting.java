@@ -942,6 +942,20 @@ public class Setting {
         return v <= 0 ? "关" : String.valueOf(v);
     }
 
+
+    /** HDR 转 SDR（OpenGL tone mapping），默认关闭。 */
+    public static boolean isHdrToSdrEnabled() {
+        try {
+            return Prefers.getBoolean("hdr_to_sdr_enabled", false);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static void putHdrToSdrEnabled(boolean value) {
+        Prefers.put("hdr_to_sdr_enabled", value);
+    }
+
     public static boolean isPlaybackScreenshotBtn() {
         return getPlaybackScreenshotMode() != SCREENSHOT_OFF;
     }

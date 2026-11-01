@@ -76,6 +76,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.searchPanFirst.setOnClickListener(this::setSearchPanFirst); } catch (Throwable ignored) {}
         try { mBinding.playDirectPanPrefer.setOnClickListener(this::setPlayDirectPanPrefer); } catch (Throwable ignored) {}
         try { mBinding.playbackScreenshotBtn.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
+        try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
+        try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -404,6 +406,15 @@ public class SettingPersonalActivity extends BaseActivity {
         try {
             Setting.cyclePlaybackScreenshotMode();
             mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel());
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+    private void setHdrToSdr(View view) {
+        try {
+            Setting.putHdrToSdrEnabled(!Setting.isHdrToSdrEnabled());
+            mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled()));
         } catch (Throwable ignored) {
         }
     }
