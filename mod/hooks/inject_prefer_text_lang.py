@@ -19,42 +19,21 @@ t = path.read_text(encoding="utf-8")
 changed = False
 
 # --- getPreferredTextLanguages ---
-if "PREFER_HANS_FIRST" not in t:
-    m = re.search(
-        r"public static String\[\] getPreferredTextLanguages\(\)\s*\{[\s\S]*?\n    \}",
-        t,
-    )
-    if not m:
-        print("[mod] FAIL getPreferredTextLanguages not found")
-        sys.exit(1)
-    new = """public static String[] getPreferredTextLanguages() {
-        // PREFER_HANS_FIRST: Simplified before Traditional, ignore system region for Chinese
-        Locale locale = Locale.getDefault();
-        if (!isChinese(locale)) {
-            String tag = locale.toLanguageTag();
-            String language = locale.getLanguage();
-            return tag.equals(language) ? new String[]{language} : unique(tag, language);
-        }
-        // zh-Hans / zh-CN first, then generic zh, then Hant
-        return unique(TAG_HANS, "zh-CN", "zh-Hans", "chs", "sc", LANGUAGE_CHINESE, TAG_HANT, "zh-TW", "zh-Hant", "cht");
+# EXO and MPV consume the same fixed Simplified-Chinese-first order.
+m = re.search(
+    r"public static String\\[\\] getPreferredTextLanguages\\(\\)\\s*\\{[\\s\\S]*?\\n    \\}",
+    t,
+)
+if not m:
+    print("[mod] FAIL getPreferredTextLanguages not found")
+    sys.exit(1)
+new = """public static String[] getPreferredTextLanguages() {
+        // PREFER_HANS_FIRST: fixed order shared with MPV; do not follow device region.
+        return unique("zh-Hans", "zh-CN", "chs", "sc", "zh", "zh-Hant", "zh-TW", "cht");
     }"""
-    # TAG_HANS may not exist — fall back to string literals only
-    if "TAG_HANS" not in t:
-        new = """public static String[] getPreferredTextLanguages() {
-        // PREFER_HANS_FIRST
-        Locale locale = Locale.getDefault();
-        if (!isChinese(locale)) {
-            String tag = locale.toLanguageTag();
-            String language = locale.getLanguage();
-            return tag.equals(language) ? new String[]{language} : unique(tag, language);
-        }
-        return unique("zh-Hans", "zh-CN", "zh-Hans-CN", "chs", "sc", "zh", "zh-Hant", "zh-TW", "zh-HK", "cht");
-    }"""
-    t = t[: m.start()] + new + t[m.end() :]
-    changed = True
-    print("[mod] patched getPreferredTextLanguages")
-else:
-    print("[mod] getPreferredTextLanguages already PREFER_HANS_FIRST")
+t = t[:m.start()] + new + t[m.end():]
+changed = True
+print("[mod] patched fixed Simplified-Chinese-first language order")
 
 # --- getPreferredTextLanguageScore(String language) if present ---
 if "PREFER_HANS_SCORE" not in t:
@@ -91,8 +70,10 @@ if changed:
     path.write_text(t, encoding="utf-8")
 # verify languages
 vt = path.read_text(encoding="utf-8")
-if "PREFER_HANS_FIRST" not in vt and "zh-Hans" not in vt:
-    print("[mod] VERIFY FAIL languages")
+vm = re.search(r"public static String\\[\\] getPreferredTextLanguages\\(\\)\\s*\\{([\\s\\S]*?)\\n    \\}", vt)
+expected = ['"zh-Hans"', '"zh-CN"', '"chs"', '"sc"', '"zh"', '"zh-Hant"', '"zh-TW"', '"cht"']
+if not vm or any(x not in vm.group(1) for x in expected) or [vm.group(1).find(x) for x in expected] != sorted(vm.group(1).find(x) for x in expected):
+    print("[mod] VERIFY FAIL fixed Hans-first order")
     sys.exit(1)
 print("[mod] inject_prefer_text_lang SUCCESS")
 sys.exit(0)
