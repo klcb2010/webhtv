@@ -5,7 +5,29 @@ on:
     # 每天6小时检查是否需要打包
     - cron: "0 */6 * * *"
   workflow_dispatch:
-   
+    inputs:
+      release_channel:
+        description: Release channel
+        type: choice
+        options:
+          - auto
+          - stable
+          - beta
+        default: auto
+      release_tag:
+        description: Manually specify tag (leave empty for auto)
+        required: false
+      release_notes:
+        description: Custom release notes
+        required: false
+      prerelease:
+        description: Mark as prerelease
+        type: boolean
+        default: false
+      force_build:
+        description: Force build even no new commit
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -592,7 +614,7 @@ jobs:
             --no-daemon
 
       # ============================================================
-      # Resolve release tag
+      # Resolve release tag【方案A：-mpv 后缀隔离】
       # ============================================================
       - name: Resolve release tag
         if: steps.should_build.outputs.build == 'true'
@@ -622,16 +644,18 @@ jobs:
             fi
           fi
 
+          BRANCH_TAG_SUFFIX="-mpv"
+
           if [ "$CHANNEL" = "beta" ]; then
-            APK_SUFFIX="-beta"
-            TAG_PATTERN="^v${VERSION_NAME}-beta-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-beta-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-beta-yyyyMMddHHmm"
+            APK_SUFFIX="-beta${BRANCH_TAG_SUFFIX}"
+            TAG_PATTERN="^v${VERSION_NAME}-beta${BRANCH_TAG_SUFFIX}-[0-9]{12}$"
+            TAG_DEFAULT="v${VERSION_NAME}-beta${BRANCH_TAG_SUFFIX}-$(date +%Y%m%d%H%M)"
+            TAG_EXPECT="v${VERSION_NAME}-beta-mpv-yyyyMMddHHmm"
           else
-            APK_SUFFIX=""
-            TAG_PATTERN="^v${VERSION_NAME}-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm"
+            APK_SUFFIX="${BRANCH_TAG_SUFFIX}"
+            TAG_PATTERN="^v${VERSION_NAME}${BRANCH_TAG_SUFFIX}-[0-9]{12}$"
+            TAG_DEFAULT="v${VERSION_NAME}${BRANCH_TAG_SUFFIX}-$(date +%Y%m%d%H%M)"
+            TAG_EXPECT="v${VERSION_NAME}-mpv-yyyyMMddHHmm"
           fi
 
           TAG="${{ inputs.release_tag }}"
@@ -742,7 +766,7 @@ jobs:
           ls -lh dist/
 
       # ============================================================
-      # Prepare release notes
+      # Prepare release notes input
       # - 手动 inputs.release_notes 优先
       # - 自动附带上游 fish2018/webhtv 最新 Release 说明
       # ============================================================
@@ -821,7 +845,7 @@ jobs:
           if manual:
               parts.append(manual)
           else:
-              parts.append("基于鱼壳上游同步构建的魔改")
+              parts.append("基于鱼壳上游同步构建的MPV魔改分支")
 
           if up_body:
               parts.append("")
@@ -838,7 +862,7 @@ jobs:
 
           notes = "\n".join(parts).strip()
           if not notes:
-              notes = "手动触发 GitHub Actions 构建发布。"
+              notes = "手动触发 GitHub Actions 构建发布（MPV分支）。"
 
           delimiter = "RELEASE_NOTES_EOF"
           while delimiter in notes:
@@ -923,18 +947,6 @@ jobs:
 
       # ============================================================
       # Create GitHub Release
-      #
-      # 重要：
-      #
-      # --repo "${GITHUB_REPOSITORY}"
-      #
-      # 强制指定目标仓库为：
-      #
-      # klcb2010/webhtv
-      #
-      # 即使存在 upstream remote，也不会去：
-      #
-      # fish2018/webhtv/releases
       # ============================================================
       - name: Create GitHub Release
         if: steps.should_build.outputs.build == 'true'
@@ -977,4 +989,3 @@ jobs:
           echo "=========================================="
           echo "✅ GitHub Release 创建成功"
           echo "=========================================="
-
