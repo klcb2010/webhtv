@@ -614,7 +614,7 @@ jobs:
             --no-daemon
 
       # ============================================================
-      # Resolve release tag【方案A：-mpv 后缀隔离】
+      # Resolve release tag【修正对齐主分支格式：v版本-时间戳-mpv】
       # ============================================================
       - name: Resolve release tag
         if: steps.should_build.outputs.build == 'true'
@@ -644,18 +644,19 @@ jobs:
             fi
           fi
 
-          BRANCH_TAG_SUFFIX="-mpv"
+          TS="$(date +%Y%m%d%H%M)"
+          SUFFIX="-mpv"
 
           if [ "$CHANNEL" = "beta" ]; then
-            APK_SUFFIX="-beta${BRANCH_TAG_SUFFIX}"
-            TAG_PATTERN="^v${VERSION_NAME}-beta${BRANCH_TAG_SUFFIX}-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-beta${BRANCH_TAG_SUFFIX}-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-beta-mpv-yyyyMMddHHmm"
+            TAG_DEFAULT="v${VERSION_NAME}-${TS}-beta${SUFFIX}"
+            TAG_PATTERN="^v${VERSION_NAME}-[0-9]{12}-beta-mpv$"
+            TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm-beta-mpv"
+            APK_SUFFIX="-beta-mpv"
           else
-            APK_SUFFIX="${BRANCH_TAG_SUFFIX}"
-            TAG_PATTERN="^v${VERSION_NAME}${BRANCH_TAG_SUFFIX}-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}${BRANCH_TAG_SUFFIX}-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-mpv-yyyyMMddHHmm"
+            TAG_DEFAULT="v${VERSION_NAME}-${TS}${SUFFIX}"
+            TAG_PATTERN="^v${VERSION_NAME}-[0-9]{12}-mpv$"
+            TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm-mpv"
+            APK_SUFFIX="-mpv"
           fi
 
           TAG="${{ inputs.release_tag }}"
