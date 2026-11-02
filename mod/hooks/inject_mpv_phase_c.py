@@ -683,7 +683,7 @@ def inject_bridge(text: str) -> str:
         ERR.append("class end not found")
         return text
     text = text[:idx] + "\n" + BRIDGE + text[idx:]
-    OK.append("bridge V11 inserted")
+    OK.append("bridge V12 inserted")
     return text
 
 
@@ -696,11 +696,10 @@ def inject_init_slang(text: str) -> str:
             OK.append("init slang already in ensureInitialized")
             return text
 
-    # Remove only previous one-line option injections; never search globally for
-    # unrelated option calls to guess an insertion point.
+    # Remove previous phase-C slang lines only; do not guess from unrelated options.
     text = re.sub(
-        r"^[ \\t]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11|12)\\r?\\n"
-        r"[ \\t]*try \\{ modSetInitOption\\(\\"slang\\"[^\\n]*\\n",
+        r'^[ \t]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11|12)\r?\n'
+        r'^[ \t]*try \{ modSetInitOption\("slang"[^ \r\n]*.*\r?\n',
         "",
         text,
         flags=re.M,
@@ -709,17 +708,17 @@ def inject_init_slang(text: str) -> str:
     if method is None:
         ERR.append("ensureInitialized declaration not found (throws clauses supported)")
         return text
-    start, brace, end = method
+    _, brace, end = method
     body = text[brace + 1:end]
-    init = re.search(r"\\bmpvInit\\s*\\(\\s*\\)\\s*;", body)
+    init = re.search(r'\bmpvInit\s*\(\s*\)\s*;', body)
     if not init:
         ERR.append("mpvInit(); not found inside ensureInitialized")
         return text
-    line_start = body.rfind("\\n", 0, init.start()) + 1
-    indent = re.match(r"[ \\t]*", body[line_start:]).group(0)
+    line_start = body.rfind("\n", 0, init.start()) + 1
+    indent = re.match(r"[ \t]*", body[line_start:]).group(0)
     block = (
-        f"{indent}// {MARKER_OPT}\\n"
-        f'{indent}try {{ modSetInitOption("slang", "{slang}"); }} catch (Throwable ignored) {{}}\\n'
+        f"{indent}// {MARKER_OPT}\n"
+        f'{indent}try {{ modSetInitOption("slang", "{slang}"); }} catch (Throwable ignored) {{}}\n'
     )
     text = text[:brace + 1] + body[:init.start()] + block + body[init.start():] + text[end:]
     OK.append("init slang before mpvInit in ensureInitialized")
@@ -736,20 +735,20 @@ def inject_post_init(text: str) -> str:
     if method is None:
         ERR.append("ensureInitialized declaration not found for post-init")
         return text
-    start, brace, end = method
+    _, brace, end = method
     body = text[brace + 1:end]
-    call = re.search(r"\\bapplyPostInitOptions\\s*\\(\\s*\\)\\s*;", body)
+    call = re.search(r'\bapplyPostInitOptions\s*\(\s*\)\s*;', body)
     if not call:
         ERR.append("applyPostInitOptions() not found inside ensureInitialized")
         return text
-    line_start = body.rfind("\\n", 0, call.start()) + 1
-    indent = re.match(r"[ \\t]*", body[line_start:]).group(0)
+    line_start = body.rfind("\n", 0, call.start()) + 1
+    indent = re.match(r"[ \t]*", body[line_start:]).group(0)
     post = (
-        f"\\n{indent}// {MARKER_POST}\\n"
-        f"{indent}try {{\\n"
-        f"{indent}    modRegisterActive(this);\\n"
-        f"{indent}    modApplyUserSubtitleStyleFromPolicy();\\n"
-        f"{indent}}} catch (Throwable ignored) {{}}\\n"
+        f"\n{indent}// {MARKER_POST}\n"
+        f"{indent}try {{\n"
+        f"{indent}    modRegisterActive(this);\n"
+        f"{indent}    modApplyUserSubtitleStyleFromPolicy();\n"
+        f"{indent}}} catch (Throwable ignored) {{}}\n"
     )
     text = text[:brace + 1] + body[:call.end()] + post + body[call.end():] + text[end:]
     OK.append("post-init after applyPostInitOptions inside ensureInitialized")
@@ -776,14 +775,15 @@ def inject_handle_release(text: str) -> str:
 
 
 def inject_owner_clear(text: str) -> str:
-    """Unregister the active player at the actual native-owner release point."""
+    """Unregister the active player where the native owner is actually cleared."""
     body = extract_method_body(text, "releaseNativeContextLocked")
     if body and MARKER_OWNER in body:
         OK.append("owner clear already in releaseNativeContextLocked")
         return text
-    # Remove an incorrectly placed legacy marker block, if present.
+
+    # Remove only a legacy marked owner-clear try block, wherever V5-V11 placed it.
     text = re.sub(
-        r"^[ \\t]*try \\{ // MPV_MOD_OWNER_CLEAR_V(?:5|6|7|8|9|10|11|12)[\\s\\S]{0,200}?catch \\(Throwable ignored\\) \\{\\}\\r?\\n",
+        r'^[ \t]*try \{ // MPV_MOD_OWNER_CLEAR_V(?:5|6|7|8|9|10|11|12)[\s\S]{0,200}?catch \(Throwable ignored\) \{\}\r?\n',
         "",
         text,
         flags=re.M,
@@ -792,17 +792,17 @@ def inject_owner_clear(text: str) -> str:
     if method is None:
         ERR.append("releaseNativeContextLocked declaration not found")
         return text
-    start, brace, end = method
+    _, brace, end = method
     body = text[brace + 1:end]
-    owner = re.search(r"if \\(ownsNativeContext\\)\\s+nativeContextOwner\\s*=\\s*null\\s*;", body)
+    owner = re.search(r'if \(ownsNativeContext\)\s+nativeContextOwner\s*=\s*null\s*;', body)
     if not owner:
         ERR.append("ownsNativeContext nativeContextOwner clear not found in releaseNativeContextLocked")
         return text
-    indent_start = body.rfind("\\n", 0, owner.start()) + 1
-    indent = re.match(r"[ \\t]*", body[indent_start:]).group(0)
+    line_start = body.rfind("\n", 0, owner.start()) + 1
+    indent = re.match(r"[ \t]*", body[line_start:]).group(0)
     insert = (
-        owner.group(0) + "\\n"
-        + indent + f"// {MARKER_OWNER}: clear active reference with native owner release\\n"
+        owner.group(0) + "\n"
+        + indent + f"// {MARKER_OWNER}: unregister with native owner release\n"
         + indent + "modUnregisterActive(this);"
     )
     body = body[:owner.start()] + insert + body[owner.end():]
@@ -814,19 +814,19 @@ def inject_owner_clear(text: str) -> str:
 def find_method(text: str, method_name: str):
     """Return (declaration_start, opening_brace, closing_brace), including throws clauses."""
     pattern = re.compile(
-        rf"(?m)^[ \\t]*(?:(?:public|protected|private)\\s+)?"
-        rf"(?:static\\s+)?[\\w$.<>?, \\[\\]]+\\s+{re.escape(method_name)}\\s*"
-        rf"\\([^;{{}}]*\\)\\s*(?:throws\\s+[^{{}}]+)?\\{{"
+        rf"(?m)^[ \t]*(?:(?:public|protected|private)\s+)?"
+        rf"(?:static\s+)?[\w$.<>?, \[\]]+\s+{re.escape(method_name)}\s*"
+        rf"\([^;{{}}]*\)\s*(?:throws\s+[^{{}}]+)?\{{"
     )
     matches = list(pattern.finditer(text))
     if len(matches) != 1:
         return None
-    m = matches[0]
-    brace = text.find("{", m.start(), m.end())
+    match = matches[0]
+    brace = text.find("{", match.start(), match.end())
     end = find_matching_brace(text, brace)
     if brace < 0 or end < 0:
         return None
-    return m.start(), brace, end
+    return match.start(), brace, end
 
 
 def extract_method_body(text: str, method_name: str) -> str | None:
@@ -914,8 +914,9 @@ def verify_injected(text: str) -> None:
     hr = extract_method_body(text, "handleRelease")
     if not hr or "modUnregisterActive(this)" not in hr:
         ERR.append("VERIFY: handleRelease unregister missing")
-    if not hr or MARKER_OWNER not in hr:
-        ERR.append("VERIFY: owner clear not inside handleRelease")
+    owner_body = extract_method_body(text, "releaseNativeContextLocked")
+    if not owner_body or MARKER_OWNER not in owner_body or "modUnregisterActive(this)" not in owner_body:
+        ERR.append("VERIFY: owner unregister not inside releaseNativeContextLocked")
     OK.append("VERIFY all checks executed")
 
 
@@ -923,11 +924,11 @@ def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
-    OK.append("policy V11 written")
+    OK.append("policy V12 written")
 
 
 def patch_setting() -> None:
-    marker = "MPV_FONT_APPLY_AFTER_PUT_V11"
+    marker = "MPV_FONT_APPLY_AFTER_PUT_V12"
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     if not path.is_file():
         ERR.append("Setting.java not found — cannot SUCCESS without real Setting")
