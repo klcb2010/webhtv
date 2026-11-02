@@ -1036,12 +1036,11 @@ def verify_injected(text: str) -> None:
     OK.append("VERIFY all checks executed")
 
 
+def write_policy() -> None:
     if "platformID == 0 || platformID == 3" not in POLICY_JAVA:
         ERR.append("VERIFY: Unicode platform font names are not decoded as UTF-16BE")
     if "id16Rank" not in POLICY_JAVA or "0x0804" not in POLICY_JAVA:
         ERR.append("VERIFY: font family language priority is incomplete")
-
-def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
