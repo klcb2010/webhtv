@@ -758,6 +758,14 @@ def inject_init_slang(text: str) -> str:
     block = (
         f"{indent}// {MARKER_OPT}\n"
         f'{indent}try {{ modSetInitOption("slang", android.text.TextUtils.join(",", com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages())); }} catch (Throwable ignored) {{}}\n'
+        f"{indent}// MPV_PHASE_C_FONT_OPTIONS_V14: configure custom fonts before MPV initializes\n"
+        f"{indent}try {{\n"
+        f'{indent}    java.lang.Class<?> policy = java.lang.Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");\n'
+        f'{indent}    String fontsDir = (String) policy.getMethod("getSubFontsDirProperty").invoke(null);\n'
+        f'{indent}    String fontFamily = (String) policy.getMethod("getSubFontProperty").invoke(null);\n'
+        f'{indent}    if (fontsDir != null && !fontsDir.isEmpty()) modSetInitOption("sub-fonts-dir", fontsDir);\n'
+        f'{indent}    if (fontFamily != null && !fontFamily.isEmpty()) modSetInitOption("sub-font", fontFamily);\n'
+        f'{indent}}} catch (Throwable ignored) {{}}\n'
     )
     text = text[:brace + 1] + body[:init.start()] + block + body[init.start():] + text[end:]
     OK.append("init slang before mpvInit in ensureInitialized")
@@ -952,6 +960,15 @@ def verify_injected(text: str) -> None:
         ERR.append("VERIFY: slang marker not inside ensureInitialized")
     elif 'modSetInitOption("slang", android.text.TextUtils.join(",", com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages()))' not in body:
         ERR.append("VERIFY: slang priority string incorrect or missing")
+    if "MPV_PHASE_C_FONT_OPTIONS_V14" not in body:
+        ERR.append("VERIFY: pre-init custom font options missing")
+    else:
+        font_pos = body.find("MPV_PHASE_C_FONT_OPTIONS_V14")
+        if not (0 <= font_pos < body.find("mpvInit")):
+            ERR.append("VERIFY: custom font options are not before mpvInit")
+        for option in ('modSetInitOption("sub-fonts-dir", fontsDir)', 'modSetInitOption("sub-font", fontFamily)'):
+            if option not in body:
+                ERR.append("VERIFY: missing pre-init " + option)
     if min(p_init, p_true, p_post, p_style) < 0:
         ERR.append("VERIFY: missing step in ensureInitialized")
     elif not (p_slang < p_init < p_true < p_post < p_style):
