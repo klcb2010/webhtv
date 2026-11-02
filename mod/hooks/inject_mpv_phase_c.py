@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """MPV phase C V12 — source-aware injection, brace-depth strip, owner-clear in release only."""
+# Upstream lifecycle reference: https://github.com/webhtv/webhtv
+# Font pipeline reference: https://github.com/100pangci/mpvKt
+# Always inject against the fork's real androidx.media3.mpvplayer.MpvPlayer source.
 from __future__ import annotations
 
 import re
