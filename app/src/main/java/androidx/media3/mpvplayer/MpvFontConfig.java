@@ -28,8 +28,11 @@ final class MpvFontConfig {
         ensureDirectory(configDir, "MPV configuration directory");
         File fontCacheDir = new File(cacheDir, "fontconfig");
         ensureDirectory(fontCacheDir, "fontconfig cache directory");
+        List<File> directories = new ArrayList<>(readableSystemFontDirectories());
+        File appSubtitleFonts = new File(configDir, "subtitle_fonts");
+        if (appSubtitleFonts.isDirectory() && appSubtitleFonts.canRead()) directories.add(appSubtitleFonts);
         writeIfChanged(new File(configDir, "fonts.conf"),
-                build(readableSystemFontDirectories(), fontCacheDir));
+                build(directories, fontCacheDir));
     }
 
     static List<File> readableSystemFontDirectories() {
