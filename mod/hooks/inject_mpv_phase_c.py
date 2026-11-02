@@ -216,6 +216,25 @@ public final class MpvSubtitleStylePolicy {
         return contentHashSample(a).equals(contentHashSample(b));
     }
 
+    private static String fontExtension(File file) {
+        if (file == null) return ".ttf";
+        String name = file.getName();
+        int dot = name.lastIndexOf('.');
+        if (dot < 0) return ".ttf";
+        String ext = name.substring(dot).toLowerCase(java.util.Locale.ROOT);
+        return (".ttf".equals(ext) || ".otf".equals(ext) || ".ttc".equals(ext)) ? ext : ".ttf";
+    }
+
+    private static void removeOtherFontVariants(File dir, String base, File keep) {
+        for (String ext : new String[]{".ttf", ".otf", ".ttc"}) {
+            File candidate = new File(dir, base + ext);
+            if (!candidate.equals(keep) && candidate.isFile()) {
+                //noinspection ResultOfMethodCallIgnored
+                candidate.delete();
+            }
+        }
+    }
+
     private static boolean forceCopy(File src, File dst) {
         if (src == null || dst == null || !src.isFile()) return false;
         try {
@@ -264,8 +283,9 @@ public final class MpvSubtitleStylePolicy {
             }
 
             String fp = fingerprint(id, src);
-            File subfont = new File(dir, "subfont.ttf");
-            File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
+            String ext = fontExtension(src);
+            File subfont = new File(dir, "subfont" + ext);
+            File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ext);
             boolean need = !fp.equals(sLastFingerprint)
                     || !contentMatches(subfont, src)
                     || (named != null && src != null && src.isFile() && !contentMatches(named, src));
@@ -285,6 +305,8 @@ public final class MpvSubtitleStylePolicy {
             boolean ok = forceCopy(src, subfont);
             if (named != null) ok = ok && forceCopy(src, named);
             if (ok) {
+                removeOtherFontVariants(dir, "subfont", subfont);
+                if (named != null) removeOtherFontVariants(dir, id, named);
                 sLastFingerprint = fp;
             }
             return dir;
@@ -329,18 +351,30 @@ public final class MpvSubtitleStylePolicy {
                 FAMILY_CACHE.put(key, "");
                 return null;
             }
-            if (all[0] == 't' && all[1] == 't' && all[2] == 'c' && all[3] == 'f') {
-                FAMILY_CACHE.put(key, "");
-                return null;
-            }
             ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.BIG_ENDIAN);
-            int numTables = bb.getShort(4) & 0xFFFF;
+            int sfntOffset = 0;
+            if (all[0] == 't' && all[1] == 't' && all[2] == 'c' && all[3] == 'f') {
+                // TTC header: use the first face offset. Table offsets inside TTC
+                // records are absolute offsets from the beginning of the collection.
+                if (all.length < 16) {
+                    FAMILY_CACHE.put(key, "");
+                    return null;
+                }
+                long faceOffset = bb.getInt(12) & 0xFFFFFFFFL;
+                if (faceOffset > Integer.MAX_VALUE || faceOffset + 12 > all.length) {
+                    FAMILY_CACHE.put(key, "");
+                    return null;
+                }
+                sfntOffset = (int) faceOffset;
+            }
+            int numTables = bb.getShort(sfntOffset + 4) & 0xFFFF;
             int nameOffset = -1;
             for (int i = 0; i < numTables; i++) {
-                int off = 12 + i * 16;
+                int off = sfntOffset + 12 + i * 16;
                 if (off + 16 > all.length) break;
                 if (bb.getInt(off) == 0x6E616D65) {
-                    nameOffset = bb.getInt(off + 8);
+                    long tableOffset = bb.getInt(off + 8) & 0xFFFFFFFFL;
+                    if (tableOffset <= Integer.MAX_VALUE) nameOffset = (int) tableOffset;
                     break;
                 }
             }
@@ -360,28 +394,30 @@ public final class MpvSubtitleStylePolicy {
                 int length = bb.getShort(rec + 8) & 0xFFFF;
                 int offset = bb.getShort(rec + 10) & 0xFFFF;
                 if (nameID != 1 && nameID != 16) continue;
-                int abs = nameOffset + stringOffset + offset;
-                if (abs + length > all.length || length <= 0) continue;
-                String s;
+                long absLong = (long) nameOffset + stringOffset + offset;
+                if (absLong > Integer.MAX_VALUE) continue;
+                int abs = (int) absLong;
+                if (abs < 0 || abs + (long) length > all.length || length <= 0) continue;
+                String value;
                 if (platformID == 3) {
-                    s = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
+                    value = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
                 } else if (platformID == 1) {
                     try {
-                        s = new String(all, abs, length, Charset.forName("MacRoman")).trim();
-                    } catch (Throwable t) {
-                        s = new String(all, abs, length, StandardCharsets.ISO_8859_1).trim();
+                        value = new String(all, abs, length, Charset.forName("MacRoman")).trim();
+                    } catch (Throwable ignored) {
+                        value = new String(all, abs, length, StandardCharsets.ISO_8859_1).trim();
                     }
                 } else {
-                    s = new String(all, abs, length, StandardCharsets.UTF_8).trim();
+                    value = new String(all, abs, length, StandardCharsets.UTF_8).trim();
                 }
-                if (s.isEmpty()) continue;
-                boolean en = (platformID == 3 && languageID == 0x0409);
+                if (value.isEmpty()) continue;
+                boolean english = platformID == 3 && languageID == 0x0409;
                 if (nameID == 16) {
-                    if (en) id16En = s;
-                    else if (id16 == null) id16 = s;
+                    if (english) id16En = value;
+                    else if (id16 == null) id16 = value;
                 } else {
-                    if (en) id1En = s;
-                    else if (id1 == null) id1 = s;
+                    if (english) id1En = value;
+                    else if (id1 == null) id1 = value;
                 }
             }
             if (id16En != null) family = id16En;
