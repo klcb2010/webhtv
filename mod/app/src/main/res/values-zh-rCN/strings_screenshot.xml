@@ -7,4 +7,6 @@
     <string name="screenshot_ok">截图已保存</string>
     <string name="screenshot_fail">截图失败</string>
     <string name="screenshot_unavailable">当前无法截图</string>
+    <string name="setting_hdr_to_sdr">HDR转码为SDR</string>
+    <string name="play_screenshot">截图</string>
 </resources>

@@ -7,4 +7,6 @@
     <string name="screenshot_ok">Screenshot saved</string>
     <string name="screenshot_fail">Screenshot failed</string>
 <string name="screenshot_unavailable">Screenshot unavailable</string>
+    <string name="setting_hdr_to_sdr">HDR to SDR</string>
+    <string name="play_screenshot">Screenshot</string>
 </resources>
