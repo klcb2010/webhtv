@@ -15,28 +15,29 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * MPV 字幕策略：Family Name 解析 + 经 MpvPlayer 公开桥应用。
- * Family Name 成功 ≠ MPV 已加载字体；仅提供正确的 sub-font 字符串。
- */
 public final class MpvSubtitleStylePolicy {
 
     public static final String ASS_OVERRIDE = "force";
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
+    /** 同一次切字体/应用内短时去重，避免 UI 线程反复 copy */
+    private static volatile long sLastEnsureMs = 0L;
+    private static final long ENSURE_DEDUP_MS = 400L;
 
     private MpvSubtitleStylePolicy() {
     }
 
     public static File ensureFontsReady() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - sLastEnsureMs < ENSURE_DEDUP_MS) {
+            File dir = tryFontsDir();
+            if (dir != null) return dir;
+        }
+        sLastEnsureMs = now;
         try {
             SubtitleFontManager.prepareAllFonts();
         } catch (Throwable ignored) {
         }
-        File dir = null;
-        try {
-            dir = SubtitleFontManager.getFontsDir();
-        } catch (Throwable ignored) {
-        }
+        File dir = tryFontsDir();
         if (dir == null) {
             try {
                 dir = new File(App.get().getFilesDir(), "subtitle_fonts");
@@ -61,6 +62,14 @@ public final class MpvSubtitleStylePolicy {
         return dir;
     }
 
+    private static File tryFontsDir() {
+        try {
+            return SubtitleFontManager.getFontsDir();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private static void forceCopy(File src, File dst) {
         if (src == null || dst == null || !src.isFile()) return;
         try {
@@ -81,7 +90,8 @@ public final class MpvSubtitleStylePolicy {
 
     private static byte[] readFully(File file, int max) throws Exception {
         try (FileInputStream in = new FileInputStream(file)) {
-            byte[] buf = new byte[Math.min(max, (int) Math.min(file.length(), max))];
+            int size = (int) Math.min(file.length(), max);
+            byte[] buf = new byte[size];
             int off = 0;
             while (off < buf.length) {
                 int n = in.read(buf, off, buf.length - off);
@@ -95,12 +105,6 @@ public final class MpvSubtitleStylePolicy {
         }
     }
 
-    /**
-     * 读 TTF/OTF Family Name。
-     * TTC（ttcf）本轮明确不解析，返回 null 以回退文件 ID，避免误报成功。
-     * 兼容 minSdk 24（不使用 readAllBytes）。
-     * 优先 nameID 16 (Typographic Family)，否则 nameID 1；优先 Windows 英文。
-     */
     public static String readFontFamilyName(File fontFile) {
         if (fontFile == null || !fontFile.isFile()) return null;
         String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified();
@@ -113,10 +117,9 @@ public final class MpvSubtitleStylePolicy {
                 FAMILY_CACHE.put(key, "");
                 return null;
             }
-            // TTC signature 'ttcf'
             if (all[0] == 't' && all[1] == 't' && all[2] == 'c' && all[3] == 'f') {
                 FAMILY_CACHE.put(key, "");
-                return null;
+                return null; // TTC: 不解析，回退文件 ID
             }
             ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.BIG_ENDIAN);
             int numTables = bb.getShort(4) & 0xFFFF;
@@ -124,8 +127,7 @@ public final class MpvSubtitleStylePolicy {
             for (int i = 0; i < numTables; i++) {
                 int off = 12 + i * 16;
                 if (off + 16 > all.length) break;
-                int tag = bb.getInt(off);
-                if (tag == 0x6E616D65) { // 'name'
+                if (bb.getInt(off) == 0x6E616D65) {
                     nameOffset = bb.getInt(off + 8);
                     break;
                 }
@@ -182,7 +184,7 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static String getAssForceStyle() {
-        ensureFontsReady();
+        // getter 不强制 prepare（由 ensureFontsReady/apply 入口负责）
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
         String font = getSubFontProperty();
@@ -206,7 +208,6 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static String getSubFontProperty() {
-        ensureFontsReady();
         try {
             int idx = Setting.getSubtitleFontIndex();
             String id = SubtitleFontManager.idOf(idx);
@@ -221,7 +222,8 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static String getSubFontsDirProperty() {
-        File dir = ensureFontsReady();
+        File dir = tryFontsDir();
+        if (dir == null) dir = ensureFontsReady();
         return (dir != null && dir.isDirectory()) ? dir.getAbsolutePath() : "";
     }
 
@@ -231,7 +233,10 @@ public final class MpvSubtitleStylePolicy {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
             Object active = cl.getMethod("modGetActivePlayer").invoke(null);
             if (active == null) return false;
-            return applyRuntime(active);
+            // 避免二次 ensure：直接调实例方法
+            java.lang.reflect.Method m = active.getClass().getMethod("modApplyUserSubtitleStyleFromPolicy");
+            Object r = m.invoke(active);
+            return (r instanceof Boolean) && (Boolean) r;
         } catch (Throwable t) {
             return false;
         }
@@ -239,24 +244,12 @@ public final class MpvSubtitleStylePolicy {
 
     public static boolean applyRuntime(Object player) {
         if (player == null) return false;
-        ensureFontsReady();
         try {
             java.lang.reflect.Method m = player.getClass().getMethod("modApplyUserSubtitleStyleFromPolicy");
             Object r = m.invoke(player);
             return (r instanceof Boolean) && (Boolean) r;
         } catch (Throwable t) {
-            try {
-                java.lang.reflect.Method m = player.getClass().getMethod(
-                        "modApplySubtitleStyleRuntime", String.class, String.class, String.class, String.class);
-                Object r = m.invoke(player,
-                        getSubFontsDirProperty(),
-                        getSubFontProperty(),
-                        getAssForceStyle(),
-                        getSubColorProperty());
-                return (r instanceof Boolean) && (Boolean) r;
-            } catch (Throwable t2) {
-                return false;
-            }
+            return false;
         }
     }
 
