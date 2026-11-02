@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V12_BEGIN"
-MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V12_END"
+MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V13_BEGIN"
+MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V13_END"
 MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V12"
 MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V12"
 MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V12"
@@ -794,6 +794,31 @@ def inject_post_init(text: str) -> str:
     return text
 
 
+def inject_apply_subtitle_style_policy(text: str) -> str:
+    """Re-apply the selected app font after MpvPlayer's normal caption style."""
+    marker = "MPV_PHASE_C_STYLE_LAST_V13"
+    body = extract_method_body(text, "applySubtitleStyle")
+    if body and marker in body:
+        OK.append("selected subtitle style already applied last")
+        return text
+    method = find_method(text, "applySubtitleStyle")
+    if method is None:
+        ERR.append("applySubtitleStyle declaration not found")
+        return text
+    _, brace, end = method
+    body = text[brace + 1:end]
+    # Insert immediately before the method's closing brace, after every normal
+    # sub-font/sub-color assignment, so system CaptioningManager cannot overwrite
+    # the user's selected font.
+    insert = (
+        "\n        // " + marker + "\n"
+        "        try { modApplyUserSubtitleStyleFromPolicy(); } catch (Throwable ignored) {}\n"
+    )
+    text = text[:end] + insert + text[end:]
+    OK.append("selected app subtitle style applied after native caption style")
+    return text
+
+
 def inject_handle_release(text: str) -> str:
     if MARKER_RELEASE in text and "modUnregisterActive(this)" in text:
         OK.append("handleRelease already")
@@ -953,6 +978,10 @@ def verify_injected(text: str) -> None:
     hr = extract_method_body(text, "handleRelease")
     if not hr or "modUnregisterActive(this)" not in hr:
         ERR.append("VERIFY: handleRelease unregister missing")
+    style_body = extract_method_body(text, "applySubtitleStyle")
+    if not style_body or "MPV_PHASE_C_STYLE_LAST_V13" not in style_body or "modApplyUserSubtitleStyleFromPolicy()" not in style_body:
+        ERR.append("VERIFY: selected app font is not applied after applySubtitleStyle")
+
     owner_body = extract_method_body(text, "releaseNativeContextLocked")
     if not owner_body or MARKER_OWNER not in owner_body or "modUnregisterActive(this)" not in owner_body:
         ERR.append("VERIFY: owner unregister not inside releaseNativeContextLocked")
@@ -1056,6 +1085,7 @@ def main() -> int:
     text = inject_bridge(text)
     text = inject_init_slang(text)
     text = inject_post_init(text)
+    text = inject_apply_subtitle_style_policy(text)
     text = inject_handle_release(text)
     text = inject_owner_clear(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
