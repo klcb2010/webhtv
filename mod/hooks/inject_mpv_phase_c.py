@@ -947,6 +947,10 @@ def extract_method(text: str, method_name: str) -> str | None:
 def verify_injected(text: str) -> None:
     if MARKER_BRIDGE_BEGIN not in text or MARKER_BRIDGE_END not in text:
         ERR.append("VERIFY: bridge BEGIN/END missing")
+    if 'modSetRuntimeProperty("sub-ass-style-overrides", forceStyle)' not in text:
+        ERR.append("VERIFY: valid ASS style override property missing")
+    if "sub-ass-force-style" in text:
+        ERR.append("VERIFY: invalid sub-ass-force-style property remains")
     if text.count(MARKER_BRIDGE_BEGIN) != 1 or text.count(MARKER_BRIDGE_END) != 1:
         ERR.append("VERIFY: bridge marker count wrong")
     for meth in (
@@ -1031,6 +1035,11 @@ def verify_injected(text: str) -> None:
         ERR.append("VERIFY: owner unregister not inside releaseNativeContextLocked")
     OK.append("VERIFY all checks executed")
 
+
+    if "platformID == 0 || platformID == 3" not in POLICY_JAVA:
+        ERR.append("VERIFY: Unicode platform font names are not decoded as UTF-16BE")
+    if "id16Rank" not in POLICY_JAVA or "0x0804" not in POLICY_JAVA:
+        ERR.append("VERIFY: font family language priority is incomplete")
 
 def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
