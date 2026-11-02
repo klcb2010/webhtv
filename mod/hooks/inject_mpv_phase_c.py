@@ -634,9 +634,9 @@ def remove_method_defs(text: str, method_name: str) -> str:
 
 
 def strip_old(text: str) -> str:
-    # V8–V10 full bridge blocks by markers
+    # V8–V12 full bridge blocks by markers
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11)_END\n",
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12)_END\n",
         "\n",
         text,
         count=5,
