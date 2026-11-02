@@ -17,21 +17,19 @@ public final class LangUtil {
     private static final String TAG_HANT = "zh-Hant";
 
     public static String[] getPreferredTextLanguages() {
-        Locale locale = Locale.getDefault();
-        String tag = locale.toLanguageTag();
-        String language = locale.getLanguage();
-        if (!isChinese(locale)) return tag.equals(language) ? new String[]{language} : unique(tag, language);
-        return tag.equals(language) ? unique(getChineseScript(locale), language) : unique(tag, getChineseScript(locale), language);
+        // Shared fixed order for EXO and MPV. Never let the device region prefer Hant.
+        return unique("zh-Hans", "zh-CN", "chs", "sc", "zh", "zh-Hant", "zh-TW", "cht");
     }
 
     public static int getPreferredTextLanguageScore(String languageTag) {
-        Locale locale = Locale.getDefault();
-        String preferred = normalize(locale.toLanguageTag());
         String language = normalize(languageTag);
         if (language.isEmpty()) return 0;
-        if (language.equals(preferred)) return SCORE_EXACT;
-        if (isChinese(locale)) return getChineseScore(locale, language);
-        return getLanguageScore(preferred, locale.getLanguage(), language);
+        if (language.startsWith("zh-hans") || language.equals("zh-cn")
+                || language.equals("zh-sg") || language.equals("chs") || language.equals("sc")) return 400;
+        if (language.equals("zh")) return 200;
+        if (language.startsWith("zh-hant") || language.equals("zh-tw")
+                || language.equals("zh-hk") || language.equals("zh-mo") || language.equals("cht")) return 100;
+        return 0;
     }
 
     private static boolean isChinese(Locale locale) {
