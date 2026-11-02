@@ -730,7 +730,7 @@ def inject_init_slang(text: str) -> str:
     """Inject slang in the real ensureInitialized() body before mpvInit()."""
     slang = "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"
     body = extract_method_body(text, "ensureInitialized")
-    if body and MARKER_OPT in body and f'modSetInitOption("slang", "{slang}")' in body:
+    if body and MARKER_OPT in body and 'com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages()' in body:
         if body.find(MARKER_OPT) < body.find("mpvInit"):
             OK.append("init slang already in ensureInitialized")
             return text
@@ -925,7 +925,7 @@ def verify_injected(text: str) -> None:
     p_style = pos(re.escape(MARKER_POST))
     if p_slang < 0:
         ERR.append("VERIFY: slang marker not inside ensureInitialized")
-    elif 'modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht")' not in body:
+    elif 'modSetInitOption("slang", android.text.TextUtils.join(",", com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages()))' not in body:
         ERR.append("VERIFY: slang priority string incorrect or missing")
     if min(p_init, p_true, p_post, p_style) < 0:
         ERR.append("VERIFY: missing step in ensureInitialized")
