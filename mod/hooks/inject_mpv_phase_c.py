@@ -757,7 +757,7 @@ def inject_init_slang(text: str) -> str:
     indent = re.match(r"[ \t]*", body[line_start:]).group(0)
     block = (
         f"{indent}// {MARKER_OPT}\n"
-        f'{indent}try {{ modSetInitOption("slang", "{slang}"); }} catch (Throwable ignored) {{}}\n'
+        f'{indent}try {{ modSetInitOption("slang", android.text.TextUtils.join(",", com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages())); }} catch (Throwable ignored) {{}}\n'
     )
     text = text[:brace + 1] + body[:init.start()] + block + body[init.start():] + text[end:]
     OK.append("init slang before mpvInit in ensureInitialized")
