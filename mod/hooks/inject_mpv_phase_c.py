@@ -85,7 +85,7 @@ BRIDGE = r"""
             ok &= modSetRuntimeProperty("sub-font", font);
         }
         if (forceStyle != null && !forceStyle.isEmpty()) {
-            ok &= modSetRuntimeProperty("sub-ass-force-style", forceStyle);
+            ok &= modSetRuntimeProperty("sub-ass-style-overrides", forceStyle);
         }
         if (color != null && !color.isEmpty()) {
             ok &= modSetRuntimeProperty("sub-color", color);
@@ -387,45 +387,53 @@ public final class MpvSubtitleStylePolicy {
             }
             int count = bb.getShort(nameOffset + 2) & 0xFFFF;
             int stringOffset = bb.getShort(nameOffset + 4) & 0xFFFF;
-            String id16 = null, id1 = null, id16En = null, id1En = null;
+            String id16 = null, id1 = null;
+            int id16Rank = Integer.MAX_VALUE;
+            int id1Rank = Integer.MAX_VALUE;
             for (int i = 0; i < count; i++) {
                 int rec = nameOffset + 6 + i * 12;
-                if (rec + 12 > all.length) break;
+                if (rec < 0 || rec + 12L > all.length) break;
                 int platformID = bb.getShort(rec) & 0xFFFF;
+                int encodingID = bb.getShort(rec + 2) & 0xFFFF;
                 int languageID = bb.getShort(rec + 4) & 0xFFFF;
                 int nameID = bb.getShort(rec + 6) & 0xFFFF;
                 int length = bb.getShort(rec + 8) & 0xFFFF;
                 int offset = bb.getShort(rec + 10) & 0xFFFF;
                 if (nameID != 1 && nameID != 16) continue;
                 long absLong = (long) nameOffset + stringOffset + offset;
-                if (absLong > Integer.MAX_VALUE) continue;
+                if (absLong < 0 || absLong + length > all.length || length <= 0) continue;
                 int abs = (int) absLong;
-                if (abs < 0 || abs + (long) length > all.length || length <= 0) continue;
                 String value;
-                if (platformID == 3) {
-                    value = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
+                if (platformID == 0 || platformID == 3) {
+                    int validLength = length & ~1;
+                    if (validLength <= 0) continue;
+                    value = new String(all, abs, validLength, StandardCharsets.UTF_16BE).trim();
                 } else if (platformID == 1) {
                     try {
                         value = new String(all, abs, length, Charset.forName("MacRoman")).trim();
                     } catch (Throwable ignored) {
-                        value = new String(all, abs, length, StandardCharsets.ISO_8859_1).trim();
+                        continue;
                     }
                 } else {
-                    value = new String(all, abs, length, StandardCharsets.UTF_8).trim();
+                    continue;
                 }
-                if (value.isEmpty()) continue;
-                boolean english = platformID == 3 && languageID == 0x0409;
-                if (nameID == 16) {
-                    if (english) id16En = value;
-                    else if (id16 == null) id16 = value;
-                } else {
-                    if (english) id1En = value;
-                    else if (id1 == null) id1 = value;
+                if (value.isEmpty() || value.indexOf('\u0000') >= 0) continue;
+                int rank;
+                if (platformID == 3 && languageID == 0x0409) rank = 0;
+                else if (platformID == 0 && languageID == 0) rank = 1;
+                else if (platformID == 3 && languageID == 0x0804) rank = 2;
+                else if (platformID == 3) rank = 3;
+                else if (platformID == 0) rank = 4;
+                else rank = 5;
+                if (nameID == 16 && rank < id16Rank) {
+                    id16 = value;
+                    id16Rank = rank;
+                } else if (nameID == 1 && rank < id1Rank) {
+                    id1 = value;
+                    id1Rank = rank;
                 }
             }
-            if (id16En != null) family = id16En;
-            else if (id1En != null) family = id1En;
-            else if (id16 != null) family = id16;
+            if (id16 != null) family = id16;
             else family = id1;
         } catch (Throwable ignored) {
             family = null;
