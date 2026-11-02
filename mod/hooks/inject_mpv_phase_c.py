@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-MPV 阶段 C：
-1) 字幕字体/颜色：在 MpvPlayer 启动 option 后补强 sub-fonts-dir / sub-font / ass 样式
-2) 暂停时横竖屏撕裂：surface 尺寸变化后强制 android-surface-size + force-render，必要时短暂反转 pause 触发重绘
-
-不引入日志。
+MPV 阶段 C（编译安全版）：
+1) 字幕：只用 setOption（与阶段 A 相同注入点）
+2) 暂停旋转撕裂：helper 内全部反射调用，不直接引用不存在的 API
 """
 from __future__ import annotations
 
@@ -39,32 +37,31 @@ def find_mpv_player() -> Path | None:
     return None
 
 
+def detect_callee(text: str) -> str:
+    m = re.search(r'((?:this\.)?[A-Za-z_][\w\.]*)\s*\(\s*"hwdec"\s*,', text)
+    if m:
+        return m.group(1)
+    if "setOption(" in text:
+        return "setOption"
+    return "setOption"
+
+
 def inject_sub_options(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     if MARKER_OPT in text:
         OK.append(f"sub options already: {rel(path)}")
         return
     lines = text.splitlines(keepends=True)
-    # Prefer after PHASE_A block or after hwdec setOption
     idx = -1
-    callee = "setOption"
+    callee = detect_callee(text)
     for i, ln in enumerate(lines):
         if "MPV_PHASE_A_OPTIONS" in ln:
             idx = i
-        if idx < 0 and re.search(r'setOption\s*\(\s*"hwdec"', ln):
+        if idx < 0 and re.search(r'\(\s*"hwdec"\s*,', ln):
             idx = i
-            callee = "setOption"
-    if idx < 0:
-        for i, ln in enumerate(lines):
-            m = re.search(r'((?:this\.)?[A-Za-z_][\w\.]*)\s*\(\s*"hwdec"', ln)
-            if m:
-                idx = i
-                callee = m.group(1)
-                break
     if idx < 0:
         ERR.append(f"no inject site for sub options in {rel(path)}")
         return
-    # skip to end of contiguous try setOption block after marker
     j = idx + 1
     while j < len(lines) and (
         "setOption" in lines[j]
@@ -73,40 +70,43 @@ def inject_sub_options(path: Path) -> None:
         or lines[j].strip() == ""
         or "MPV_PHASE_A" in lines[j]
         or "catch (Throwable" in lines[j]
+        or 'try {' in lines[j]
     ):
         j += 1
-    insert_at = j
-    indent_m = re.match(r"^(\s*)", lines[idx])
-    ind = indent_m.group(1) if indent_m else "        "
-    block = (
-        f"{ind}// {MARKER_OPT}: subtitle fonts + colors (phase C)\n"
-        f"{ind}try {{ {callee}(\"sub-ass-override\", \"force\"); }} catch (Throwable ignored) {{}}\n"
-        f"{ind}try {{ {callee}(\"embeddedfonts\", \"yes\"); }} catch (Throwable ignored) {{}}\n"
-        f"{ind}try {{ {callee}(\"sub-font\", \"yiqicukai\"); }} catch (Throwable ignored) {{}}\n"
-        f"{ind}try {{\n"
-        f"{ind}    java.io.File _modFonts = new java.io.File(getContext().getFilesDir(), \"subtitle_fonts\");\n"
-        f"{ind}    if (!_modFonts.isDirectory()) _modFonts = new java.io.File(getContext().getFilesDir(), \"mpv/fonts\");\n"
-        f"{ind}    if (_modFonts.isDirectory()) {callee}(\"sub-fonts-dir\", _modFonts.getAbsolutePath());\n"
-        f"{ind}}} catch (Throwable ignored) {{}}\n"
-        f"{ind}try {{\n"
-        f"{ind}    // 与壳子用户字幕样式对齐（有则用反射调 policy）\n"
-        f"{ind}    Class<?> pol = Class.forName(\"com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy\");\n"
-        f"{ind}    java.lang.reflect.Method gf = pol.getMethod(\"getSubFontProperty\");\n"
-        f"{ind}    java.lang.reflect.Method gd = pol.getMethod(\"getSubFontsDirProperty\");\n"
-        f"{ind}    java.lang.reflect.Method gs = pol.getMethod(\"getAssForceStyle\");\n"
-        f"{ind}    Object font = gf.invoke(null);\n"
-        f"{ind}    Object dir = gd.invoke(null);\n"
-        f"{ind}    Object style = gs.invoke(null);\n"
-        f"{ind}    if (dir instanceof String && !((String) dir).isEmpty()) {callee}(\"sub-fonts-dir\", (String) dir);\n"
-        f"{ind}    if (font instanceof String && !((String) font).isEmpty()) {callee}(\"sub-font\", (String) font);\n"
-        f"{ind}    if (style instanceof String && !((String) style).isEmpty()) {callee}(\"sub-ass-force-style\", (String) style);\n"
-        f"{ind}}} catch (Throwable ignored) {{}}\n"
-        # Vulkan 在部分机型旋转暂停时易撕裂；保留用户 conf，但加 opengl 作为可回退注释在 surface 路径处理
-        f"{ind}try {{ {callee}(\"gpu-context\", \"android\"); }} catch (Throwable ignored) {{}}\n"
-    )
-    lines.insert(insert_at, block)
+    ind_m = re.match(r"^(\s*)", lines[idx])
+    ind = ind_m.group(1) if ind_m else "        "
+    # fonts dir via App.get()，避免 getContext()
+    block = f"""{ind}// {MARKER_OPT}: subtitle fonts + colors (phase C)
+{ind}try {{ {callee}("sub-ass-override", "force"); }} catch (Throwable ignored) {{}}
+{ind}try {{ {callee}("embeddedfonts", "yes"); }} catch (Throwable ignored) {{}}
+{ind}try {{ {callee}("sub-font", "yiqicukai"); }} catch (Throwable ignored) {{}}
+{ind}try {{
+{ind}    android.content.Context _modCtx = null;
+{ind}    try {{
+{ind}        Class<?> appCl = Class.forName("com.fongmi.android.tv.App");
+{ind}        Object app = appCl.getMethod("get").invoke(null);
+{ind}        if (app instanceof android.content.Context) _modCtx = (android.content.Context) app;
+{ind}    }} catch (Throwable ignored) {{}}
+{ind}    if (_modCtx != null) {{
+{ind}        java.io.File _modFonts = new java.io.File(_modCtx.getFilesDir(), "subtitle_fonts");
+{ind}        if (!_modFonts.isDirectory()) _modFonts = new java.io.File(_modCtx.getFilesDir(), "mpv/fonts");
+{ind}        if (_modFonts.isDirectory()) {callee}("sub-fonts-dir", _modFonts.getAbsolutePath());
+{ind}    }}
+{ind}}} catch (Throwable ignored) {{}}
+{ind}try {{
+{ind}    Class<?> pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
+{ind}    Object font = pol.getMethod("getSubFontProperty").invoke(null);
+{ind}    Object dir = pol.getMethod("getSubFontsDirProperty").invoke(null);
+{ind}    Object style = pol.getMethod("getAssForceStyle").invoke(null);
+{ind}    if (dir instanceof String && !((String) dir).isEmpty()) {callee}("sub-fonts-dir", (String) dir);
+{ind}    if (font instanceof String && !((String) font).isEmpty()) {callee}("sub-font", (String) font);
+{ind}    if (style instanceof String && !((String) style).isEmpty()) {callee}("sub-ass-force-style", (String) style);
+{ind}}} catch (Throwable ignored) {{}}
+{ind}try {{ {callee}("gpu-context", "android"); }} catch (Throwable ignored) {{}}
+"""
+    lines.insert(j, block)
     path.write_text("".join(lines), encoding="utf-8")
-    OK.append(f"sub options at line {insert_at} in {rel(path)}")
+    OK.append(f"sub options at line {j} via {callee} in {rel(path)}")
 
 
 def inject_surface_rebind(path: Path) -> None:
@@ -115,113 +115,122 @@ def inject_surface_rebind(path: Path) -> None:
         OK.append(f"surface rebind already: {rel(path)}")
         return
 
-    # Append a helper method and hook into surface size / setVideoSurfaceSize patterns
+    # 全部反射，兼容只有 setOption / 私有 native 的封装
     helper = f'''
     // {MARKER_SURF}
     private void modPhaseCOnSurfaceSize(int width, int height) {{
         if (width <= 0 || height <= 0) return;
+        final String size = width + "x" + height;
         try {{
-            String size = width + "x" + height;
-            try {{ setProperty("android-surface-size", size); }} catch (Throwable ignored) {{}}
-            try {{ setOption("android-surface-size", size); }} catch (Throwable ignored) {{}}
-            try {{ setProperty("force-render", "yes"); }} catch (Throwable ignored) {{}}
-            // 暂停时旋转：强制一次渲染管线刷新，避免撕裂/残帧
-            try {{
-                boolean paused = false;
+            // setOption / setProperty / command 均反射，避免硬编码不存在的方法
+            for (String name : new String[] {{ "setOption", "setProperty" }}) {{
                 try {{
-                    Object p = getProperty("pause");
-                    if (p instanceof Boolean) paused = (Boolean) p;
-                    else if (p != null) paused = "yes".equalsIgnoreCase(String.valueOf(p)) || "true".equalsIgnoreCase(String.valueOf(p));
+                    java.lang.reflect.Method m = getClass().getMethod(name, String.class, String.class);
+                    try {{ m.invoke(this, "android-surface-size", size); }} catch (Throwable ignored) {{}}
+                    try {{ m.invoke(this, "force-render", "yes"); }} catch (Throwable ignored) {{}}
                 }} catch (Throwable ignored) {{}}
-                if (paused) {{
-                    try {{ command(new String[] {{ "raw", "cycle", "force-window" }}); }} catch (Throwable ignored) {{}}
-                    try {{ setProperty("force-window", "yes"); }} catch (Throwable ignored) {{}}
-                    try {{ setProperty("force-render", "yes"); }} catch (Throwable ignored) {{}}
+            }}
+            boolean paused = false;
+            try {{
+                java.lang.reflect.Method gp = null;
+                try {{ gp = getClass().getMethod("getProperty", String.class); }} catch (Throwable ignored) {{}}
+                if (gp != null) {{
+                    Object p = gp.invoke(this, "pause");
+                    if (p instanceof Boolean) paused = (Boolean) p;
+                    else if (p != null) {{
+                        String s = String.valueOf(p);
+                        paused = "yes".equalsIgnoreCase(s) || "true".equalsIgnoreCase(s);
+                    }}
                 }}
             }} catch (Throwable ignored) {{}}
+            if (paused) {{
+                for (String name : new String[] {{ "setOption", "setProperty" }}) {{
+                    try {{
+                        java.lang.reflect.Method m = getClass().getMethod(name, String.class, String.class);
+                        try {{ m.invoke(this, "force-window", "yes"); }} catch (Throwable ignored) {{}}
+                        try {{ m.invoke(this, "force-render", "yes"); }} catch (Throwable ignored) {{}}
+                    }} catch (Throwable ignored) {{}}
+                }}
+                try {{
+                    java.lang.reflect.Method cmd = getClass().getMethod("command", String[].class);
+                    cmd.invoke(this, (Object) new String[] {{ "script-message", "mod-force-redraw" }});
+                }} catch (Throwable ignored) {{}}
+            }}
         }} catch (Throwable ignored) {{}}
     }}
 '''
 
-    # insert helper before last closing brace of class
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append(f"cannot find class end in {rel(path)}")
         return
     text = text[:idx] + "\n" + helper + text[idx:]
 
-    # Hook common surface size call sites
-    patterns = [
-        # surfaceChanged(SurfaceHolder holder, int format, int width, int height)
-        (
-            re.compile(
-                r"(void\s+surfaceChanged\s*\(\s*[^)]*\)\s*\{)",
-                re.M,
-            ),
-            r"\1\n        try { modPhaseCOnSurfaceSize(width, height); } catch (Throwable ignored) {}",
-        ),
-        (
-            re.compile(
-                r"(public\s+void\s+onSurfaceTextureSizeChanged\s*\(\s*[^)]*\)\s*\{)",
-                re.M,
-            ),
-            r"\1\n        try { modPhaseCOnSurfaceSize(width, height); } catch (Throwable ignored) {}",
-        ),
-        (
-            re.compile(
-                r"(void\s+setVideoSurfaceSize\s*\(\s*int\s+(\w+)\s*,\s*int\s+(\w+)\s*\)\s*\{)",
-                re.M,
-            ),
-            None,  # special
-        ),
-    ]
-
     hooked = 0
-    for cre, repl in patterns:
-        if repl is None:
-            def repl_size(m):
-                nonlocal hooked
-                hooked += 1
-                w, h = m.group(2), m.group(3)
-                return (
-                    m.group(1)
-                    + f"\n        try {{ modPhaseCOnSurfaceSize({w}, {h}); }} catch (Throwable ignored) {{}}"
-                )
-
-            text2, n = cre.subn(repl_size, text, count=3)
-            text = text2
-            continue
+    for cre, repl in [
+        (
+            re.compile(r"(void\s+surfaceChanged\s*\(\s*[^)]*\)\s*\{)", re.M),
+            r"\1\n        try { modPhaseCOnSurfaceSize(width, height); } catch (Throwable ignored) {}",
+        ),
+        (
+            re.compile(r"(public\s+void\s+onSurfaceTextureSizeChanged\s*\(\s*[^)]*\)\s*\{)", re.M),
+            r"\1\n        try { modPhaseCOnSurfaceSize(width, height); } catch (Throwable ignored) {}",
+        ),
+    ]:
         text2, n = cre.subn(repl, text, count=3)
         if n:
             hooked += n
             text = text2
 
-    # Also patch after setVideoSurface / attach if present
-    if "setVideoSurface" in text and "modPhaseCOnSurfaceSize" in text:
-        # try to find surface holder frame size usage
-        pass
-
-    if hooked == 0:
-        # Fallback: inject into any method that assigns surface width/height fields
-        text2, n = re.subn(
-            r"(surfaceWidth\s*=\s*(\w+)\s*;\s*\n\s*surfaceHeight\s*=\s*(\w+)\s*;)",
-            r"\1\n        try { modPhaseCOnSurfaceSize(\2, \3); } catch (Throwable ignored) {}",
-            text,
-            count=5,
+    def repl_size(m):
+        nonlocal hooked
+        hooked += 1
+        return (
+            m.group(1)
+            + f"\n        try {{ modPhaseCOnSurfaceSize({m.group(2)}, {m.group(3)}); }} catch (Throwable ignored) {{}}"
         )
-        if n:
-            hooked += n
-            text = text2
+
+    text2, n = re.subn(
+        r"(void\s+setVideoSurfaceSize\s*\(\s*int\s+(\w+)\s*,\s*int\s+(\w+)\s*\)\s*\{)",
+        repl_size,
+        text,
+        count=3,
+    )
+    text = text2
+
+    text2, n = re.subn(
+        r"(surfaceWidth\s*=\s*(\w+)\s*;\s*\n\s*surfaceHeight\s*=\s*(\w+)\s*;)",
+        r"\1\n        try { modPhaseCOnSurfaceSize(\2, \3); } catch (Throwable ignored) {}",
+        text,
+        count=5,
+    )
+    if n:
+        hooked += n
+        text = text2
 
     path.write_text(text, encoding="utf-8")
-    if hooked:
-        OK.append(f"surface rebind hooked x{hooked} in {rel(path)}")
+    OK.append(f"surface helper + hooks={hooked} in {rel(path)}")
+
+
+def soften_vulkan_for_android(path: Path) -> None:
+    t = path.read_text(encoding="utf-8")
+    if "MPV_PHASE_C_GPU_API" in t:
+        OK.append("gpu-api already softened")
+        return
+    nt, n = re.subn(
+        r'setOption\("gpu-api",\s*"vulkan"\)',
+        'setOption("gpu-api", "opengl") /* MPV_PHASE_C_GPU_API: opengl for rotate stability */',
+        t,
+        count=2,
+    )
+    if n:
+        path.write_text(nt, encoding="utf-8")
+        OK.append(f"gpu-api vulkan->opengl x{n}")
     else:
-        OK.append(f"surface helper added (no standard hook site) in {rel(path)}")
+        OK.append("gpu-api vulkan string not found (ok)")
 
 
 def patch_video_activity_config() -> None:
-    """Rotation while paused: request layout + optional player surface refresh."""
     marker = "MPV_PHASE_C_CONFIG_CHANGE"
     targets = [
         ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
@@ -235,10 +244,8 @@ def patch_video_activity_config() -> None:
         if marker in t:
             OK.append(f"config already: {rel(path)}")
             continue
-        # Find onConfigurationChanged
         m = re.search(
-            r"(void\s+onConfigurationChanged\s*\(\s*@?NonNull\s+Configuration\s+\w+\s*\)\s*\{"
-            r"|void\s+onConfigurationChanged\s*\(\s*Configuration\s+\w+\s*\)\s*\{)",
+            r"(void\s+onConfigurationChanged\s*\(\s*(?:@\w+\s+)*Configuration\s+\w+\s*\)\s*\{)",
             t,
         )
         if not m:
@@ -247,15 +254,16 @@ def patch_video_activity_config() -> None:
         insert = (
             m.group(0)
             + f"""
-        // {marker}: MPV pause+rotate tear mitigation
+        // {marker}
         try {{
             if (com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
                     == com.fongmi.android.tv.setting.PlayerSetting.MPV) {{
                 android.view.View pv = null;
                 try {{ pv = getExoView(); }} catch (Throwable ignored) {{}}
                 if (pv != null) {{
-                    pv.post(() -> {{
-                        try {{ pv.requestLayout(); pv.invalidate(); }} catch (Throwable ignored) {{}}
+                    final android.view.View v = pv;
+                    v.post(() -> {{
+                        try {{ v.requestLayout(); v.invalidate(); }} catch (Throwable ignored) {{}}
                     }});
                 }}
             }}
@@ -265,26 +273,6 @@ def patch_video_activity_config() -> None:
         t = t[: m.start()] + insert + t[m.end() :]
         path.write_text(t, encoding="utf-8")
         OK.append(f"onConfigurationChanged patched: {rel(path)}")
-
-
-def soften_vulkan_for_android(path: Path) -> None:
-    """Optional: switch phase-A gpu-api vulkan -> opengl on Android for rotate stability."""
-    t = path.read_text(encoding="utf-8")
-    if "MPV_PHASE_C_GPU_API" in t:
-        OK.append("gpu-api already softened")
-        return
-    # Replace injected vulkan default with opengl (more stable with surface recreate)
-    nt, n = re.subn(
-        r'setOption\("gpu-api",\s*"vulkan"\)',
-        'setOption("gpu-api", "opengl") /* MPV_PHASE_C_GPU_API: opengl for rotate stability */',
-        t,
-        count=2,
-    )
-    if n:
-        path.write_text(nt, encoding="utf-8")
-        OK.append(f"gpu-api vulkan->opengl x{n} in {rel(path)}")
-    else:
-        OK.append("gpu-api vulkan string not found (ok if not yet injected)")
 
 
 def main() -> int:
