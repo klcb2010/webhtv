@@ -8,12 +8,14 @@ public class MpvPlayer {
         mpvSetOptionString("hwdec", "auto");
         // MPV_PHASE_A_OPTIONS
         try { setOption("vo", "gpu"); } catch (Throwable ignored) {}
-        // MPV_PHASE_C_INIT_OPTIONS_V8
+
+        // MPV_PHASE_C_INIT_OPTIONS_V9
         try { modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"); } catch (Throwable ignored) {}
         mpvInit();
+
         initialized = true;
         applyPostInitOptions();
-        // MPV_PHASE_C_POST_INIT_STYLE_V8
+        // MPV_PHASE_C_POST_INIT_STYLE_V9
         try {
             modRegisterActive(this);
             modApplyUserSubtitleStyleFromPolicy();
@@ -26,18 +28,19 @@ public class MpvPlayer {
     private int mpvSetOptionString(String a, String b) { return 0; }
     private int mpvSetPropertyString(String a, String b) { return 0; }
     protected Object handleRelease() {
-        // MPV_MOD_HANDLE_RELEASE_V8: unregister at handleRelease entry (compareAndSet); before native teardown
+        // MPV_MOD_HANDLE_RELEASE_V9: unregister at handleRelease entry (compareAndSet); before native teardown
         try { modUnregisterActive(this); } catch (Throwable ignored) {}
 
         released = true;
         nativeContextOwner = null;
-                try { // MPV_MOD_OWNER_CLEAR_V8
+                try { // MPV_MOD_OWNER_CLEAR_V9
                     modUnregisterActive(this);
                 } catch (Throwable ignored) {}
+
         return null;
     }
 
-    // MPV_MOD_PUBLIC_BRIDGE_V8_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V9_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -127,7 +130,7 @@ public class MpvPlayer {
     public boolean modApplyUserSubtitleStyleFromPolicy() {
         try {
             Class<?> pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
-            pol.getMethod("ensureFontsReady").invoke(null);
+            // ensureFontsReady already done by Setting/applyRuntimeToActive; getters use tryFontsDir
             Object dir = pol.getMethod("getSubFontsDirProperty").invoke(null);
             Object font = pol.getMethod("getSubFontProperty").invoke(null);
             Object style = pol.getMethod("getAssForceStyle").invoke(null);
@@ -141,6 +144,6 @@ public class MpvPlayer {
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V8_END
+    // MPV_MOD_PUBLIC_BRIDGE_V9_END
 
 }

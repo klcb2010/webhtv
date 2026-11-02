@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class MpvSubtitleStylePolicy {
@@ -21,13 +22,65 @@ public final class MpvSubtitleStylePolicy {
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
     private static final Object ENSURE_LOCK = new Object();
     private static volatile String sLastFingerprint = "";
+    private static final ConcurrentHashMap<String, String> CONTENT_HASH_CACHE = new ConcurrentHashMap<>();
 
     private MpvSubtitleStylePolicy() {
     }
 
+    private static String contentHashSample(File src) {
+        if (src == null || !src.isFile()) return "x";
+        String key = src.getAbsolutePath() + "|" + src.length() + "|" + src.lastModified();
+        String cached = CONTENT_HASH_CACHE.get(key);
+        if (cached != null) return cached;
+        String hash = "x";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            long len = src.length();
+            try (FileInputStream in = new FileInputStream(src)) {
+                byte[] buf = new byte[8192];
+                // sample: first 8K + middle 8K + last 8K
+                int n = in.read(buf);
+                if (n > 0) md.update(buf, 0, n);
+                if (len > 24576) {
+                    long mid = Math.max(0, len / 2 - 4096);
+                    long skipped = 0;
+                    while (skipped < mid) {
+                        long s = in.skip(mid - skipped);
+                        if (s <= 0) break;
+                        skipped += s;
+                    }
+                    n = in.read(buf);
+                    if (n > 0) md.update(buf, 0, n);
+                    long remain = len - in.getChannel().position();
+                    if (remain > 8192) {
+                        long toSkip = remain - 8192;
+                        skipped = 0;
+                        while (skipped < toSkip) {
+                            long s = in.skip(toSkip - skipped);
+                            if (s <= 0) break;
+                            skipped += s;
+                        }
+                    }
+                    n = in.read(buf);
+                    if (n > 0) md.update(buf, 0, n);
+                }
+            }
+            byte[] dig = md.digest();
+            StringBuilder sb = new StringBuilder(16);
+            for (int i = 0; i < 8 && i < dig.length; i++) {
+                sb.append(String.format("%02x", dig[i]));
+            }
+            hash = sb.toString();
+        } catch (Throwable ignored) {
+            hash = "x";
+        }
+        CONTENT_HASH_CACHE.put(key, hash);
+        return hash;
+    }
+
     private static String fingerprint(String id, File src) {
         if (src == null || !src.isFile()) return id + "|missing";
-        return id + "|" + src.length() + "|" + src.lastModified();
+        return id + "|" + src.length() + "|" + src.lastModified() + "|" + contentHashSample(src);
     }
 
     private static boolean targetOk(File dst, File src) {
@@ -35,12 +88,31 @@ public final class MpvSubtitleStylePolicy {
         return dst.length() == src.length() && dst.length() > 0;
     }
 
+    /** @return true only if copy completed and destination size matches source */
+    private static boolean forceCopy(File src, File dst) {
+        if (src == null || dst == null || !src.isFile()) return false;
+        try {
+            File parent = dst.getParentFile();
+            if (parent != null && !parent.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                if (!parent.mkdirs() && !parent.isDirectory()) return false;
+            }
+            try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst, false)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                out.flush();
+            }
+            //noinspection ResultOfMethodCallIgnored
+            dst.setLastModified(System.currentTimeMillis());
+            return targetOk(dst, src);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static File ensureFontsReady() {
         synchronized (ENSURE_LOCK) {
-            try {
-                SubtitleFontManager.prepareAllFonts();
-            } catch (Throwable ignored) {
-            }
             File dir = tryFontsDir();
             if (dir == null) {
                 try {
@@ -51,24 +123,50 @@ public final class MpvSubtitleStylePolicy {
                 }
             }
             if (dir == null) return null;
+
+            int idx;
+            String id;
+            File src;
             try {
-                int idx = Setting.getSubtitleFontIndex();
-                String id = SubtitleFontManager.idOf(idx);
+                idx = Setting.getSubtitleFontIndex();
+                id = SubtitleFontManager.idOf(idx);
                 if (id == null) id = "";
-                File src = SubtitleFontManager.getFontFile(idx);
-                String fp = fingerprint(id, src);
-                File subfont = new File(dir, "subfont.ttf");
-                File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
-                boolean need = !fp.equals(sLastFingerprint)
-                        || !targetOk(subfont, src)
-                        || (named != null && src != null && src.isFile() && !targetOk(named, src));
-                if (need && src != null && src.isFile()) {
-                    forceCopy(src, subfont);
-                    if (named != null) forceCopy(src, named);
-                    sLastFingerprint = fp;
-                }
+                src = SubtitleFontManager.getFontFile(idx);
+            } catch (Throwable t) {
+                return dir;
+            }
+
+            String fp = fingerprint(id, src);
+            File subfont = new File(dir, "subfont.ttf");
+            File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
+            boolean need = !fp.equals(sLastFingerprint)
+                    || !targetOk(subfont, src)
+                    || (named != null && src != null && src.isFile() && !targetOk(named, src));
+
+            if (!need) return dir;
+
+            // prepare upstream assets only when we actually need to refresh copies
+            try {
+                SubtitleFontManager.prepareAllFonts();
             } catch (Throwable ignored) {
             }
+            // refresh src after prepare
+            try {
+                src = SubtitleFontManager.getFontFile(idx);
+                fp = fingerprint(id, src);
+            } catch (Throwable ignored) {
+            }
+
+            if (src == null || !src.isFile()) return dir;
+
+            boolean ok = forceCopy(src, subfont);
+            if (named != null) {
+                ok = ok && forceCopy(src, named);
+            }
+            if (ok) {
+                sLastFingerprint = fp;
+            }
+            // failure: leave sLastFingerprint unchanged so next call retries
             return dir;
         }
     }
@@ -78,24 +176,6 @@ public final class MpvSubtitleStylePolicy {
             return SubtitleFontManager.getFontsDir();
         } catch (Throwable ignored) {
             return null;
-        }
-    }
-
-    private static void forceCopy(File src, File dst) {
-        if (src == null || dst == null || !src.isFile()) return;
-        try {
-            File parent = dst.getParentFile();
-            if (parent != null && !parent.exists()) //noinspection ResultOfMethodCallIgnored
-                parent.mkdirs();
-            try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst, false)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                out.flush();
-            }
-            //noinspection ResultOfMethodCallIgnored
-            dst.setLastModified(System.currentTimeMillis());
-        } catch (Throwable ignored) {
         }
     }
 
@@ -238,6 +318,7 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static boolean applyRuntimeToActive() {
+        // ensure once here; instance method must NOT call ensure again when already ready
         ensureFontsReady();
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");

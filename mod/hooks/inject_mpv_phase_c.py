@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""MPV phase C V8 — full bridge strip, fingerprint fonts, strict verify."""
+"""MPV phase C V9 — full bridge strip, fingerprint fonts, strict verify."""
 from __future__ import annotations
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V8_BEGIN"
-MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V8_END"
-MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V8"
-MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V8"
-MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V8"
-MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V8"
+MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V9_BEGIN"
+MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V9_END"
+MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V9"
+MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V9"
+MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V9"
+MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V9"
 OK: list[str] = []
 ERR: list[str] = []
 
 BRIDGE = r"""
-    // MPV_MOD_PUBLIC_BRIDGE_V8_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V9_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -106,7 +106,7 @@ BRIDGE = r"""
     public boolean modApplyUserSubtitleStyleFromPolicy() {
         try {
             Class<?> pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
-            pol.getMethod("ensureFontsReady").invoke(null);
+            // ensureFontsReady already done by Setting/applyRuntimeToActive; getters use tryFontsDir
             Object dir = pol.getMethod("getSubFontsDirProperty").invoke(null);
             Object font = pol.getMethod("getSubFontProperty").invoke(null);
             Object style = pol.getMethod("getAssForceStyle").invoke(null);
@@ -120,7 +120,7 @@ BRIDGE = r"""
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V8_END
+    // MPV_MOD_PUBLIC_BRIDGE_V9_END
 """
 
 POLICY_JAVA = r"""package com.fongmi.android.tv.player.mpv;
@@ -138,6 +138,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class MpvSubtitleStylePolicy {
@@ -146,13 +147,65 @@ public final class MpvSubtitleStylePolicy {
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
     private static final Object ENSURE_LOCK = new Object();
     private static volatile String sLastFingerprint = "";
+    private static final ConcurrentHashMap<String, String> CONTENT_HASH_CACHE = new ConcurrentHashMap<>();
 
     private MpvSubtitleStylePolicy() {
     }
 
+    private static String contentHashSample(File src) {
+        if (src == null || !src.isFile()) return "x";
+        String key = src.getAbsolutePath() + "|" + src.length() + "|" + src.lastModified();
+        String cached = CONTENT_HASH_CACHE.get(key);
+        if (cached != null) return cached;
+        String hash = "x";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            long len = src.length();
+            try (FileInputStream in = new FileInputStream(src)) {
+                byte[] buf = new byte[8192];
+                // sample: first 8K + middle 8K + last 8K
+                int n = in.read(buf);
+                if (n > 0) md.update(buf, 0, n);
+                if (len > 24576) {
+                    long mid = Math.max(0, len / 2 - 4096);
+                    long skipped = 0;
+                    while (skipped < mid) {
+                        long s = in.skip(mid - skipped);
+                        if (s <= 0) break;
+                        skipped += s;
+                    }
+                    n = in.read(buf);
+                    if (n > 0) md.update(buf, 0, n);
+                    long remain = len - in.getChannel().position();
+                    if (remain > 8192) {
+                        long toSkip = remain - 8192;
+                        skipped = 0;
+                        while (skipped < toSkip) {
+                            long s = in.skip(toSkip - skipped);
+                            if (s <= 0) break;
+                            skipped += s;
+                        }
+                    }
+                    n = in.read(buf);
+                    if (n > 0) md.update(buf, 0, n);
+                }
+            }
+            byte[] dig = md.digest();
+            StringBuilder sb = new StringBuilder(16);
+            for (int i = 0; i < 8 && i < dig.length; i++) {
+                sb.append(String.format("%02x", dig[i]));
+            }
+            hash = sb.toString();
+        } catch (Throwable ignored) {
+            hash = "x";
+        }
+        CONTENT_HASH_CACHE.put(key, hash);
+        return hash;
+    }
+
     private static String fingerprint(String id, File src) {
         if (src == null || !src.isFile()) return id + "|missing";
-        return id + "|" + src.length() + "|" + src.lastModified();
+        return id + "|" + src.length() + "|" + src.lastModified() + "|" + contentHashSample(src);
     }
 
     private static boolean targetOk(File dst, File src) {
@@ -160,12 +213,31 @@ public final class MpvSubtitleStylePolicy {
         return dst.length() == src.length() && dst.length() > 0;
     }
 
+    /** @return true only if copy completed and destination size matches source */
+    private static boolean forceCopy(File src, File dst) {
+        if (src == null || dst == null || !src.isFile()) return false;
+        try {
+            File parent = dst.getParentFile();
+            if (parent != null && !parent.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                if (!parent.mkdirs() && !parent.isDirectory()) return false;
+            }
+            try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst, false)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                out.flush();
+            }
+            //noinspection ResultOfMethodCallIgnored
+            dst.setLastModified(System.currentTimeMillis());
+            return targetOk(dst, src);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static File ensureFontsReady() {
         synchronized (ENSURE_LOCK) {
-            try {
-                SubtitleFontManager.prepareAllFonts();
-            } catch (Throwable ignored) {
-            }
             File dir = tryFontsDir();
             if (dir == null) {
                 try {
@@ -176,24 +248,50 @@ public final class MpvSubtitleStylePolicy {
                 }
             }
             if (dir == null) return null;
+
+            int idx;
+            String id;
+            File src;
             try {
-                int idx = Setting.getSubtitleFontIndex();
-                String id = SubtitleFontManager.idOf(idx);
+                idx = Setting.getSubtitleFontIndex();
+                id = SubtitleFontManager.idOf(idx);
                 if (id == null) id = "";
-                File src = SubtitleFontManager.getFontFile(idx);
-                String fp = fingerprint(id, src);
-                File subfont = new File(dir, "subfont.ttf");
-                File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
-                boolean need = !fp.equals(sLastFingerprint)
-                        || !targetOk(subfont, src)
-                        || (named != null && src != null && src.isFile() && !targetOk(named, src));
-                if (need && src != null && src.isFile()) {
-                    forceCopy(src, subfont);
-                    if (named != null) forceCopy(src, named);
-                    sLastFingerprint = fp;
-                }
+                src = SubtitleFontManager.getFontFile(idx);
+            } catch (Throwable t) {
+                return dir;
+            }
+
+            String fp = fingerprint(id, src);
+            File subfont = new File(dir, "subfont.ttf");
+            File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
+            boolean need = !fp.equals(sLastFingerprint)
+                    || !targetOk(subfont, src)
+                    || (named != null && src != null && src.isFile() && !targetOk(named, src));
+
+            if (!need) return dir;
+
+            // prepare upstream assets only when we actually need to refresh copies
+            try {
+                SubtitleFontManager.prepareAllFonts();
             } catch (Throwable ignored) {
             }
+            // refresh src after prepare
+            try {
+                src = SubtitleFontManager.getFontFile(idx);
+                fp = fingerprint(id, src);
+            } catch (Throwable ignored) {
+            }
+
+            if (src == null || !src.isFile()) return dir;
+
+            boolean ok = forceCopy(src, subfont);
+            if (named != null) {
+                ok = ok && forceCopy(src, named);
+            }
+            if (ok) {
+                sLastFingerprint = fp;
+            }
+            // failure: leave sLastFingerprint unchanged so next call retries
             return dir;
         }
     }
@@ -203,24 +301,6 @@ public final class MpvSubtitleStylePolicy {
             return SubtitleFontManager.getFontsDir();
         } catch (Throwable ignored) {
             return null;
-        }
-    }
-
-    private static void forceCopy(File src, File dst) {
-        if (src == null || dst == null || !src.isFile()) return;
-        try {
-            File parent = dst.getParentFile();
-            if (parent != null && !parent.exists()) //noinspection ResultOfMethodCallIgnored
-                parent.mkdirs();
-            try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst, false)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                out.flush();
-            }
-            //noinspection ResultOfMethodCallIgnored
-            dst.setLastModified(System.currentTimeMillis());
-        } catch (Throwable ignored) {
         }
     }
 
@@ -363,6 +443,7 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static boolean applyRuntimeToActive() {
+        // ensure once here; instance method must NOT call ensure again when already ready
         ensureFontsReady();
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
@@ -411,14 +492,13 @@ def find_mpv_player() -> Path | None:
 
 
 def strip_old(text: str) -> str:
-    # V8 complete block by BEGIN/END
+    # --- Complete historical MOD strip (V4–V9) ---
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V8_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V8_END\n",
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[89]_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V[89]_END\n",
         "\n",
         text,
         count=5,
     )
-    # V4-V7: from bridge marker through modApplyUserSubtitleStyleFromPolicy OR modNotifySurfaceSize
     text = re.sub(
         r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4567]\b[\s\S]*?"
         r"public boolean modApplyUserSubtitleStyleFromPolicy\(\) \{[\s\S]*?\n    \}\n",
@@ -433,8 +513,43 @@ def strip_old(text: str) -> str:
         text,
         count=5,
     )
-    # orphan methods (any leftover)
-    for meth in (
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_AFTER_INIT_V5[\s\S]{0,2000}?catch \(Throwable ignored\) \{\}\n",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V[5-9]\n[^\n]*modSetInitOption[^\n]*\n",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_SUB_OPTIONS_V[3-9][\s\S]{0,1500}?\n",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V[5-9][\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V[5-9][^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V[5-9][\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
+        "\n",
+        text,
+        count=5,
+    )
+    methods = [
         "modApplyUserSubtitleStyleFromPolicy",
         "modApplySubtitleStyleRuntime",
         "modSetRuntimeProperty",
@@ -444,9 +559,20 @@ def strip_old(text: str) -> str:
         "modGetActivePlayer",
         "modRegisterActive",
         "modUnregisterActive",
-    ):
+    ]
+    for meth in methods:
         text = re.sub(
-            rf"\n\s*(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+{meth}\s*\([^)]*\)\s*\{{[\s\S]*?\n    \}}\n",
+            r"\n\s*(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+"
+            + meth
+            + r"\s*\([^)]*\)\s*\{[\s\S]*?\n    \}\n",
+            "\n",
+            text,
+            count=10,
+        )
+        text = re.sub(
+            r"\n\s*(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+"
+            + meth
+            + r"\s*\([^)]*\)\s*\{[^}]*\}\n",
             "\n",
             text,
             count=10,
@@ -457,44 +583,22 @@ def strip_old(text: str) -> str:
         text,
         count=5,
     )
-    # do NOT globally strip modUnregisterActive — would remove handleRelease/owner hooks while leaving markers
-    text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V[678][\s\S]{0,800}?catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V[678]\n[^\n]*modSetInitOption[^\n]*\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(
-        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V[678][^\n]*\n\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(
-        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V[678][\s\S]{0,200}?catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-        count=5,
-    )
+    text = re.sub(r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4-7]\b[^\n]*\n", "\n", text, count=5)
+    text = re.sub(r"\n\s*try \{ modRegisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text
 
 
 def inject_bridge(text: str) -> str:
     if MARKER_BRIDGE_BEGIN in text and MARKER_BRIDGE_END in text:
-        OK.append("bridge V8 already")
+        OK.append("bridge V9 already")
         return text
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("class end not found")
         return text
     text = text[:idx] + "\n" + BRIDGE + text[idx:]
-    OK.append("bridge V8 inserted")
+    OK.append("bridge V9 inserted")
     return text
 
 
@@ -720,11 +824,11 @@ def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
-    OK.append("policy V8 written")
+    OK.append("policy V9 written")
 
 
 def patch_setting() -> None:
-    marker = "MPV_FONT_APPLY_AFTER_PUT_V8"
+    marker = "MPV_FONT_APPLY_AFTER_PUT_V9"
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     if not path.is_file():
         OK.append("Setting.java not in tree (skip)")
@@ -770,7 +874,7 @@ def normalize_java(text: str) -> str:
     return text
 
 def main() -> int:
-    print(f"[mod] inject_mpv_phase_c V8 ROOT={ROOT}")
+    print(f"[mod] inject_mpv_phase_c V9 ROOT={ROOT}")
     path = find_mpv_player()
     if path is None:
         ERR.append("MpvPlayer.java not found")
