@@ -1723,13 +1723,15 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 previousOwner.releaseNativeContextLocked("takeover");
                 previousOwner.stopMainThreadWatchdog();
             }
+            // Prepare Fontconfig and its environment before loading MPV's native
+            // libraries: libass/Fontconfig may initialize during native library loading.
+            copySupportAssets();
             if (!MPVLib.ensureLoaded(context)) {
                 Throwable e = MPVLib.getLoadError();
                 if (e instanceof IOException io) throw io;
                 if (e instanceof RuntimeException runtime) throw runtime;
                 throw new IOException(e == null ? "MPV native libraries are unavailable" : e.getMessage(), e);
             }
-            copySupportAssets();
             nativeContextOwner = this;
             if (!mpvTryCreate(context)) {
                 throw new IOException("MPV native context creation is already in progress");
