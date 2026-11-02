@@ -676,13 +676,13 @@ def strip_old(text: str) -> str:
         text = remove_marked_try_blocks(text, mk)
 
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11)\n[^\n]*modSetInitOption[^\n]*\n",
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11|12)\n[^\n]*modSetInitOption[^\n]*\n",
         "\n",
         text,
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V(?:5|6|7|8|9|10|11)[\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V(?:5|6|7|8|9|10|11|12)[\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         text,
         count=5,
@@ -694,7 +694,7 @@ def strip_old(text: str) -> str:
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V(?:5|6|7|8|9|10|11)[^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
+        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V(?:5|6|7|8|9|10|11|12)[^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
         "\n",
         text,
         count=5,
