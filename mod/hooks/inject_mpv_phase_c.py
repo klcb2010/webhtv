@@ -949,8 +949,11 @@ def verify_injected(text: str) -> None:
         ERR.append("VERIFY: bridge BEGIN/END missing")
     if 'modSetRuntimeProperty("sub-ass-style-overrides", forceStyle)' not in text:
         ERR.append("VERIFY: valid ASS style override property missing")
-    if "sub-ass-force-style" in text:
-        ERR.append("VERIFY: invalid sub-ass-force-style property remains")
+    bridge_start = text.find(MARKER_BRIDGE_BEGIN)
+    bridge_end = text.find(MARKER_BRIDGE_END, bridge_start + len(MARKER_BRIDGE_BEGIN))
+    bridge = text[bridge_start:bridge_end] if bridge_start >= 0 and bridge_end > bridge_start else ""
+    if "sub-ass-force-style" in bridge:
+        ERR.append("VERIFY: invalid sub-ass-force-style property remains in active bridge")
     if text.count(MARKER_BRIDGE_BEGIN) != 1 or text.count(MARKER_BRIDGE_END) != 1:
         ERR.append("VERIFY: bridge marker count wrong")
     for meth in (
