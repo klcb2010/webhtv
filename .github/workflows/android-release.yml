@@ -3,7 +3,7 @@ name: Android Release
 on:
   schedule:
     # 每天6小时检查是否需要打包
-    - cron: "0 */6 * * *"
+    - cron: "30 */6 * * *"
   workflow_dispatch:
     inputs:
       release_channel:
