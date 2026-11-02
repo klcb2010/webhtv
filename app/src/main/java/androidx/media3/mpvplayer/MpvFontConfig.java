@@ -31,8 +31,16 @@ final class MpvFontConfig {
         List<File> directories = new ArrayList<>(readableSystemFontDirectories());
         File appSubtitleFonts = new File(configDir, "subtitle_fonts");
         if (appSubtitleFonts.isDirectory() && appSubtitleFonts.canRead()) directories.add(appSubtitleFonts);
-        writeIfChanged(new File(configDir, "fonts.conf"),
-                build(directories, fontCacheDir));
+        File fontConfig = new File(configDir, "fonts.conf");
+        writeIfChanged(fontConfig, build(directories, fontCacheDir));
+
+        // Fontconfig does not discover fonts.conf from MPV's config-dir.
+        // Point the native Fontconfig instance at the file before mpv_create().
+        try {
+            android.system.Os.setenv("FONTCONFIG_FILE", fontConfig.getAbsolutePath(), true);
+        } catch (android.system.ErrnoException e) {
+            throw new IOException("Unable to configure Fontconfig environment", e);
+        }
     }
 
     static List<File> readableSystemFontDirectories() {
