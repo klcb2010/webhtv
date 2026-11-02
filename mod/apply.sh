@@ -48,6 +48,38 @@ while IFS= read -r -d '' src; do
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
 
+# 阶段B：禁止 mobile/main 双份 MpvScreenshot（历史包曾误放 mobile）
+rm -f "$ROOT/app/src/mobile/java/com/fongmi/android/tv/utils/MpvScreenshot.java"
+rm -f "$MOD/app/src/mobile/java/com/fongmi/android/tv/utils/MpvScreenshot.java"
+# 只保留 main 实现
+if [[ ! -f "$ROOT/app/src/main/java/com/fongmi/android/tv/utils/MpvScreenshot.java" ]]; then
+  echo "[mod] WARN missing main MpvScreenshot"
+fi
+
+# EventIndex 由 APT 生成；若生成失败会导致 Startup 编译挂掉。改为不依赖 index（反射订阅，功能等价）。
+if [[ -f "$ROOT/app/src/main/java/com/fongmi/android/tv/Startup.java" ]]; then
+  python3 - "$ROOT/app/src/main/java/com/fongmi/android/tv/Startup.java" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+t = p.read_text(encoding="utf-8")
+orig = t
+t = t.replace("import com.fongmi.android.tv.event.EventIndex;
+", "")
+t = t.replace(
+    "EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();",
+    "EventBus.builder().installDefaultEventBus(); // MOD: no EventIndex (APT optional)",
+)
+if t != orig:
+    p.write_text(t, encoding="utf-8")
+    print("[mod] Startup: EventBus without EventIndex")
+else:
+    print("[mod] Startup: EventIndex already absent or pattern mismatch")
+PY
+fi
+
+
+
 
 # 清除误加的 vod_home 独立资源，避免与 strings.xml 重复
 rm -f "$ROOT/app/src/mobile/res/values/strings_vod_home.xml" \
