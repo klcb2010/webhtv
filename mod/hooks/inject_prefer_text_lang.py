@@ -21,7 +21,7 @@ changed = False
 # --- getPreferredTextLanguages ---
 # EXO and MPV consume the same fixed Simplified-Chinese-first order.
 m = re.search(
-    r"public static String\\[\\] getPreferredTextLanguages\\(\\)\\s*\\{[\\s\\S]*?\\n    \\}",
+    r"public static String\[\] getPreferredTextLanguages\(\)\s*\{[\s\S]*?\n    \}",
     t,
 )
 if not m:
@@ -70,7 +70,7 @@ if changed:
     path.write_text(t, encoding="utf-8")
 # verify languages
 vt = path.read_text(encoding="utf-8")
-vm = re.search(r"public static String\\[\\] getPreferredTextLanguages\\(\\)\\s*\\{([\\s\\S]*?)\\n    \\}", vt)
+vm = re.search(r"public static String\[\] getPreferredTextLanguages\(\)\s*\{([\s\S]*?)\n    \}", vt)
 expected = ['"zh-Hans"', '"zh-CN"', '"chs"', '"sc"', '"zh"', '"zh-Hant"', '"zh-TW"', '"cht"']
 if not vm or any(x not in vm.group(1) for x in expected) or [vm.group(1).find(x) for x in expected] != sorted(vm.group(1).find(x) for x in expected):
     print("[mod] VERIFY FAIL fixed Hans-first order")
