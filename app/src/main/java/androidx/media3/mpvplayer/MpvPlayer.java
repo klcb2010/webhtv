@@ -6176,6 +6176,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private void copySupportAssets() throws IOException {
         copyAsset("cacert.pem", config.caFile());
+        // Make the selected user subtitle font available before libass/fontconfig starts.
+        MpvSubtitleStylePolicy.ensureFontsReady();
         MpvFontConfig.write(config.configDir(), config.cacheDir());
     }
 
