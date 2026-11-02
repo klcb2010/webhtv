@@ -929,7 +929,7 @@ public class Setting {
 
     public static String getScreenshotBrightnessBoostLabel() {
         int v = getScreenshotBrightnessBoost();
-        return v <= 0 ? "关" : String.valueOf(v);
+        return v <= 0 ? "关" : ("+" + v);
     }
 
     /** 阶段B：EXO / MPV 分轨截图 */
