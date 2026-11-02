@@ -947,11 +947,11 @@ def extract_method(text: str, method_name: str) -> str | None:
 def verify_injected(text: str) -> None:
     if MARKER_BRIDGE_BEGIN not in text or MARKER_BRIDGE_END not in text:
         ERR.append("VERIFY: bridge BEGIN/END missing")
-    if 'modSetRuntimeProperty("sub-ass-style-overrides", forceStyle)' not in text:
-        ERR.append("VERIFY: valid ASS style override property missing")
     bridge_start = text.find(MARKER_BRIDGE_BEGIN)
     bridge_end = text.find(MARKER_BRIDGE_END, bridge_start + len(MARKER_BRIDGE_BEGIN))
     bridge = text[bridge_start:bridge_end] if bridge_start >= 0 and bridge_end > bridge_start else ""
+    if 'modSetRuntimeProperty("sub-ass-style-overrides", forceStyle)' not in bridge:
+        ERR.append("VERIFY: valid ASS style override property missing from active bridge")
     if "sub-ass-force-style" in bridge:
         ERR.append("VERIFY: invalid sub-ass-force-style property remains in active bridge")
     if text.count(MARKER_BRIDGE_BEGIN) != 1 or text.count(MARKER_BRIDGE_END) != 1:
