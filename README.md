@@ -1,6 +1,6 @@
 # 注意： 算法助手之类类很容易拦 WebView 导致html不加载
 
-# 注意： 本仓库暂未集成MPV解码
+# 注意：  MPV分支  主打原画截图   https://github.com/klcb2010/webhtv/tree/MPV
 
 # pg兼容本项目 他实行纯本地化 不拉闸 推荐作为主jar
 
