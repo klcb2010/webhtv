@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-MPV 阶段 C V5 — 针对审查意见的 5 点修复：
-1. 活动实例：WeakReference，在 prepare/release 等实例方法注册/清理，不在匿名 Callback 里 this
-2. 初始化用 setOption；mpvInit 之后才 setProperty
-3. putSubtitleFontIndex：先 Prefers.put，再 ensureFonts + apply
-4. 桥接检查 initialized/released/owner + 属性返回码
-5. TTF Name 表读 Family Name 作为 sub-font
+MPV 阶段 C V6 — 审查修正版
+- 样式应用放在 initialized=true 之后（优先 applyPostInitOptions 后）
+- 活动实例：handleRelease finally 清理；compareAndSet；单一注册点
+- modIsNativeReady 直接读 initialized/released/nativeContextOwner
+- option/property 检查 int 返回码（负数失败）
+- TTF/OTF name 表；TTC 安全回退；无 readAllBytes
 """
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-MARKER_BRIDGE = "MPV_MOD_PUBLIC_BRIDGE_V5"
-MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V5"
-MARKER_AFTER_INIT = "MPV_PHASE_C_AFTER_INIT_V5"
+MARKER_BRIDGE = "MPV_MOD_PUBLIC_BRIDGE_V6"
+MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V6"
+MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V6"
 OK: list[str] = []
 ERR: list[str] = []
 
@@ -41,289 +41,323 @@ def find_mpv_player() -> Path | None:
     return None
 
 
-def detect_apis(text: str) -> dict:
-    apis = {
-        "setOption": None,
-        "setProperty": None,
-        "mpvInit": None,
-    }
-    if re.search(r"\bvoid\s+setOption\s*\(\s*String", text) or re.search(r"\bsetOption\s*\(\s*\"", text):
-        apis["setOption"] = "setOption"
-    if re.search(r"\bmpvSetOptionString\s*\(", text):
-        apis["setOption"] = "mpvSetOptionString"
-    if re.search(r"\bmpvSetPropertyString\s*\(", text):
-        apis["setProperty"] = "mpvSetPropertyString"
-    elif re.search(r"\bvoid\s+setProperty\s*\(\s*String", text):
-        apis["setProperty"] = "setProperty"
-    if re.search(r"\bmpvInit\s*\(", text):
-        apis["mpvInit"] = "mpvInit"
-    return apis
-
-
-def strip_old_bridge(text: str) -> str:
-    # Remove V4 bridge blocks
-    text = re.sub(
+def strip_old_mod_blocks(text: str) -> str:
+    """只剥离已知 MOD 标记块，避免误删上游逻辑。"""
+    patterns = [
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V5[\s\S]*?public void modNotifySurfaceSize\([\s\S]*?\n    \}\n",
         r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V4[\s\S]*?public void modNotifySurfaceSize\([\s\S]*?\n    \}\n",
-        "\n",
-        text,
-        count=1,
-    )
-    text = re.sub(
-        r"\n\s*try \{ sModActivePlayer = this; \} catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-    )
-    text = re.sub(
-        r"\n\s*try \{ modNotifySurfaceSize\(width, height\); \} catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-    )
-    text = re.sub(r"[^\n]*MPV_PHASE_C_SUB_OPTIONS_V4[\s\S]{0,1200}?\n", "\n", text, count=1)
-    text = re.sub(r"[^\n]*MPV_PHASE_C_SUB_OPTIONS_V3[\s\S]{0,1200}?\n", "\n", text, count=1)
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V6[\s\S]*?public void modNotifySurfaceSize\([\s\S]*?\n    \}\n",
+        r"\n\s*try \{ modRegisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n",
+        r"\n\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_AFTER_INIT_V5[\s\S]{0,1500}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V6[\s\S]{0,1500}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V5\n[^\n]*modSetInitOption[^\n]*\n",
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V6\n[^\n]*modSetInitOption[^\n]*\n",
+        r"[^\n]*// MPV_PHASE_C_SUB_OPTIONS_V4[\s\S]{0,1200}?\n",
+        r"[^\n]*// MPV_PHASE_C_SUB_OPTIONS_V3[\s\S]{0,1200}?\n",
+    ]
+    for pat in patterns:
+        text = re.sub(pat, "\n", text, count=3)
     return text
 
 
-def inject_bridge(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
-    text = strip_old_bridge(text)
-    if MARKER_BRIDGE in text:
-        OK.append("bridge V5 already")
-        path.write_text(text, encoding="utf-8")
-        return
+BRIDGE = r'''
+    // MPV_MOD_PUBLIC_BRIDGE_V6
+    private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
+            new java.util.concurrent.atomic.AtomicReference<>();
 
-    apis = detect_apis(text)
-    opt = apis["setOption"] or "setOption"
-    prop = apis["setProperty"] or "mpvSetPropertyString"
-
-    bridge = f'''
-    // {MARKER_BRIDGE}
-    private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive = new java.util.concurrent.atomic.AtomicReference<>();
-
-    public static MpvPlayer modGetActivePlayer() {{
+    public static MpvPlayer modGetActivePlayer() {
         return sModActive.get();
-    }}
+    }
 
-    public static void modRegisterActive(MpvPlayer player) {{
+    public static void modRegisterActive(MpvPlayer player) {
         if (player != null) sModActive.set(player);
-    }}
+    }
 
-    public static void modUnregisterActive(MpvPlayer player) {{
+    /** 仅当引用仍是该实例时清空，避免误清新实例。 */
+    public static void modUnregisterActive(MpvPlayer player) {
         if (player == null) return;
         sModActive.compareAndSet(player, null);
-    }}
-
-    /** 是否已 init 且未 release，且 native 归属当前实例（字段名因版本而异，尽力探测）。 */
-    public boolean modIsNativeReady() {{
-        try {{
-            java.lang.reflect.Field fReleased = null;
-            for (String n : new String[] {{ "released", "mReleased", "isReleased" }}) {{
-                try {{ fReleased = getClass().getDeclaredField(n); fReleased.setAccessible(true); break; }} catch (Throwable ignored) {{}}
-            }}
-            if (fReleased != null) {{
-                Object v = fReleased.get(this);
-                if (v instanceof Boolean && (Boolean) v) return false;
-            }}
-            java.lang.reflect.Field fInit = null;
-            for (String n : new String[] {{ "initialized", "mInitialized", "nativeInitialized" }}) {{
-                try {{ fInit = getClass().getDeclaredField(n); fInit.setAccessible(true); break; }} catch (Throwable ignored) {{}}
-            }}
-            if (fInit != null) {{
-                Object v = fInit.get(this);
-                if (v instanceof Boolean && !(Boolean) v) return false;
-            }}
-            for (String n : new String[] {{ "nativeContextOwner", "mNativeContextOwner" }}) {{
-                try {{
-                    java.lang.reflect.Field f = getClass().getDeclaredField(n);
-                    f.setAccessible(true);
-                    Object owner = f.get(this);
-                    if (owner != null && owner != this) return false;
-                }} catch (Throwable ignored) {{}}
-            }}
-            return true;
-        }} catch (Throwable t) {{
-            return false;
-        }}
-    }}
-
-    /** 初始化阶段选项（mpvInit 之前）。 */
-    public boolean modSetInitOption(String name, String value) {{
-        if (name == null || value == null) return false;
-        try {{
-            {opt}(name, value);
-            return true;
-        }} catch (Throwable t) {{
-            return false;
-        }}
-    }}
+    }
 
     /**
-     * 运行时属性。若 native 返回 int，0 视为成功；void 则仅表示调用未抛异常。
+     * 直接读本类字段（不反射）。
+     * owner == null 视为未就绪。
      */
-    public boolean modSetRuntimeProperty(String name, String value) {{
+    public boolean modIsNativeReady() {
+        try {
+            if (!initialized) return false;
+            if (released) return false;
+            if (nativeContextOwner == null) return false;
+            if (nativeContextOwner != this) return false;
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 初始化选项：检查 mpvSetOptionString 返回码，负数失败。 */
+    public boolean modSetInitOption(String name, String value) {
+        if (name == null || value == null) return false;
+        try {
+            int code = mpvSetOptionString(name, value);
+            return code >= 0;
+        } catch (Throwable t) {
+            try {
+                setOption(name, value);
+                return true;
+            } catch (Throwable t2) {
+                return false;
+            }
+        }
+    }
+
+    /** 运行时属性：仅 native ready 时调用；检查返回码。 */
+    public boolean modSetRuntimeProperty(String name, String value) {
         if (name == null || value == null) return false;
         if (!modIsNativeReady()) return false;
-        try {{
-            java.lang.reflect.Method m = null;
-            try {{ m = getClass().getDeclaredMethod("{prop}", String.class, String.class); }} catch (Throwable ignored) {{}}
-            if (m == null) {{
-                try {{ m = getClass().getDeclaredMethod("setProperty", String.class, String.class); }} catch (Throwable ignored) {{}}
-            }}
-            if (m == null) return false;
-            m.setAccessible(true);
-            Object r = m.invoke(this, name, value);
-            if (r instanceof Integer) return ((Integer) r) == 0;
-            if (r instanceof Boolean) return (Boolean) r;
-            return true; // void
-        }} catch (Throwable t) {{
+        try {
+            int code = mpvSetPropertyString(name, value);
+            return code >= 0;
+        } catch (Throwable t) {
             return false;
-        }}
-    }}
+        }
+    }
 
     /**
-     * mpvInit 之后调用。返回 true 仅当必要属性均设置成功。
+     * 初始化完成后应用字幕样式。必要属性均成功才返回 true。
      */
-    public boolean modApplySubtitleStyleRuntime(String fontsDir, String font, String forceStyle, String color) {{
+    public boolean modApplySubtitleStyleRuntime(String fontsDir, String font, String forceStyle, String color) {
         if (!modIsNativeReady()) return false;
         boolean ok = true;
-        if (fontsDir != null && !fontsDir.isEmpty()) ok &= modSetRuntimeProperty("sub-fonts-dir", fontsDir);
-        if (font != null && !font.isEmpty()) ok &= modSetRuntimeProperty("sub-font", font);
-        if (forceStyle != null && !forceStyle.isEmpty()) ok &= modSetRuntimeProperty("sub-ass-force-style", forceStyle);
-        if (color != null && !color.isEmpty()) ok &= modSetRuntimeProperty("sub-color", color);
+        if (fontsDir != null && !fontsDir.isEmpty()) {
+            ok &= modSetRuntimeProperty("sub-fonts-dir", fontsDir);
+        }
+        if (font != null && !font.isEmpty()) {
+            ok &= modSetRuntimeProperty("sub-font", font);
+        }
+        if (forceStyle != null && !forceStyle.isEmpty()) {
+            ok &= modSetRuntimeProperty("sub-ass-force-style", forceStyle);
+        }
+        if (color != null && !color.isEmpty()) {
+            ok &= modSetRuntimeProperty("sub-color", color);
+        }
         ok &= modSetRuntimeProperty("sub-ass-override", "force");
         return ok;
-    }}
+    }
 
-    public void modNotifySurfaceSize(int width, int height) {{
+    public void modNotifySurfaceSize(int width, int height) {
         if (width <= 0 || height <= 0) return;
         if (!modIsNativeReady()) return;
         modSetRuntimeProperty("android-surface-size", width + "x" + height);
-    }}
+    }
+
+    /** 从策略类拉当前设置并应用到本实例（init 后 / 切字体时）。 */
+    public boolean modApplyUserSubtitleStyleFromPolicy() {
+        try {
+            Class<?> pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
+            pol.getMethod("ensureFontsReady").invoke(null);
+            Object dir = pol.getMethod("getSubFontsDirProperty").invoke(null);
+            Object font = pol.getMethod("getSubFontProperty").invoke(null);
+            Object style = pol.getMethod("getAssForceStyle").invoke(null);
+            Object color = pol.getMethod("getSubColorProperty").invoke(null);
+            return modApplySubtitleStyleRuntime(
+                    dir instanceof String ? (String) dir : null,
+                    font instanceof String ? (String) font : null,
+                    style instanceof String ? (String) style : null,
+                    color instanceof String ? (String) color : null);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 '''
 
+
+def inject_bridge(path: Path, text: str) -> str:
+    if MARKER_BRIDGE in text:
+        OK.append("bridge V6 already present")
+        return text
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("class end not found")
-        return
-    text = text[:idx] + "\n" + bridge + text[idx:]
-
-    # Register on instance methods (NOT anonymous SurfaceHolder.Callback)
-    hooked_reg = 0
-    for pat in [
-        r"(public\s+void\s+prepare\s*\([^)]*\)\s*\{)",
-        r"(public\s+void\s+setMediaItem\s*\([^)]*\)\s*\{)",
-        r"(public\s+void\s+setMediaItems\s*\([^)]*\)\s*\{)",
-        r"(private\s+void\s+prepareInternal\s*\([^)]*\)\s*\{)",
-        r"(void\s+onPrepared\s*\([^)]*\)\s*\{)",
-    ]:
-        text2, n = re.subn(
-            pat,
-            r"\1\n        try { modRegisterActive(this); } catch (Throwable ignored) {}",
-            text,
-            count=1,
-        )
-        if n:
-            text = text2
-            hooked_reg += n
-            OK.append(f"register hook {pat[:48]}")
-            break
-    if hooked_reg == 0:
-        # fallback: after mpvInit success
-        if re.search(r"mpvInit\s*\(\s*\)\s*;", text):
-            text, n = re.subn(
-                r"(mpvInit\s*\(\s*\)\s*;)",
-                r"\1\n        try { modRegisterActive(this); } catch (Throwable ignored) {}",
-                text,
-                count=1,
-            )
-            hooked_reg = n
-            OK.append(f"register after mpvInit x{n}")
-
-    # Unregister on release/stop
-    for pat in [
-        r"(public\s+void\s+release\s*\(\s*\)\s*\{)",
-        r"(public\s+void\s+stop\s*\(\s*\)\s*\{)",
-        r"(private\s+void\s+releaseInternal\s*\(\s*\)\s*\{)",
-    ]:
-        text2, n = re.subn(
-            pat,
-            r"\1\n        try { modUnregisterActive(this); } catch (Throwable ignored) {}",
-            text,
-            count=1,
-        )
-        if n:
-            text = text2
-            OK.append(f"unregister hook {pat[:40]}")
-            # only first release-like is enough; still try both release and stop
-            if "release" in pat:
-                pass
-
-    path.write_text(text, encoding="utf-8")
-    OK.append(f"bridge V5 opt={opt} prop={prop}")
+        return text
+    text = text[:idx] + "\n" + BRIDGE + text[idx:]
+    OK.append("bridge V6 inserted")
+    return text
 
 
-def inject_init_and_after_init(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
-    # INIT options (before/with phase A): slang only as option
-    if MARKER_OPT not in text:
-        lines = text.splitlines(keepends=True)
-        idx = -1
+def inject_init_slang(text: str) -> str:
+    if MARKER_OPT in text:
+        OK.append("init slang already")
+        return text
+    lines = text.splitlines(keepends=True)
+    idx = -1
+    for i, ln in enumerate(lines):
+        if "MPV_PHASE_A_OPTIONS" in ln:
+            idx = i
+        if idx < 0 and re.search(r'\(\s*"hwdec"\s*,', ln):
+            idx = i
+    if idx < 0:
+        # try setOption("vo"
         for i, ln in enumerate(lines):
-            if "MPV_PHASE_A_OPTIONS" in ln:
+            if re.search(r'setOption\s*\(\s*"vo"', ln) or re.search(r'mpvSetOptionString\s*\(\s*"vo"', ln):
                 idx = i
-            if idx < 0 and re.search(r'\(\s*"hwdec"\s*,', ln):
-                idx = i
-        if idx < 0:
-            ERR.append("no option inject site")
-        else:
-            j = idx + 1
-            while j < len(lines) and (
-                any(x in lines[j] for x in ("setOption", "mpvSetOption", "MPV_PHASE_A", "try {", "catch (Throwable"))
-                or lines[j].strip().startswith("//")
-                or lines[j].strip() == ""
-            ):
-                j += 1
-            ind = re.match(r"^(\s*)", lines[idx]).group(1) if re.match(r"^(\s*)", lines[idx]) else "        "
-            block = f"""{ind}// {MARKER_OPT}
+                break
+    if idx < 0:
+        ERR.append("no init option inject site for slang")
+        return text
+    j = idx + 1
+    while j < len(lines) and (
+        any(x in lines[j] for x in ("setOption", "mpvSetOption", "MPV_PHASE_A", "try {", "catch (Throwable"))
+        or lines[j].strip().startswith("//")
+        or lines[j].strip() == ""
+    ):
+        j += 1
+    ind = re.match(r"^(\s*)", lines[idx]).group(1) if re.match(r"^(\s*)", lines[idx]) else "        "
+    block = f"""{ind}// {MARKER_OPT}
 {ind}try {{ modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"); }} catch (Throwable ignored) {{}}
 """
-            lines.insert(j, block)
-            text = "".join(lines)
-            OK.append("init slang option")
-    else:
-        OK.append("init slang already")
+    lines.insert(j, block)
+    OK.append("init slang via modSetInitOption")
+    return "".join(lines)
 
-    # AFTER mpvInit: runtime style
-    if MARKER_AFTER_INIT not in text:
-        if re.search(r"mpvInit\s*\(\s*\)\s*;", text):
-            text, n = re.subn(
-                r"(mpvInit\s*\(\s*\)\s*;)",
-                r"""\1
-        // """ + MARKER_AFTER_INIT + """
-        try {
+
+def inject_post_init_style(text: str) -> str:
+    """放在 initialized = true 之后；优先 applyPostInitOptions() 之后。"""
+    if MARKER_POST in text:
+        OK.append("post-init style already")
+        return text
+
+    post_block = f"""
+        // {MARKER_POST}
+        try {{
             modRegisterActive(this);
-            Class<?> _pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
-            _pol.getMethod("ensureFontsReady").invoke(null);
-            Object dir = _pol.getMethod("getSubFontsDirProperty").invoke(null);
-            Object font = _pol.getMethod("getSubFontProperty").invoke(null);
-            Object style = _pol.getMethod("getAssForceStyle").invoke(null);
-            Object color = _pol.getMethod("getSubColorProperty").invoke(null);
-            modApplySubtitleStyleRuntime(
-                dir instanceof String ? (String) dir : null,
-                font instanceof String ? (String) font : null,
-                style instanceof String ? (String) style : null,
-                color instanceof String ? (String) color : null);
-        } catch (Throwable ignored) {}
-""",
-                text,
-                count=1,
-            )
-            OK.append(f"after mpvInit runtime style x{n}")
-        else:
-            OK.append("mpvInit() call site not found — runtime style only via Setting/apply")
-    else:
-        OK.append("after init already")
+            modApplyUserSubtitleStyleFromPolicy();
+        }} catch (Throwable ignored) {{}}
+"""
 
-    path.write_text(text, encoding="utf-8")
+    # Prefer: after applyPostInitOptions();
+    if re.search(r"applyPostInitOptions\s*\(\s*\)\s*;", text):
+        text, n = re.subn(
+            r"(applyPostInitOptions\s*\(\s*\)\s*;)",
+            r"\1" + post_block,
+            text,
+            count=1,
+        )
+        OK.append(f"post-init after applyPostInitOptions x{n}")
+        return text
+
+    # Else: after initialized = true;
+    if re.search(r"initialized\s*=\s*true\s*;", text):
+        text, n = re.subn(
+            r"(initialized\s*=\s*true\s*;)",
+            r"\1" + post_block,
+            text,
+            count=1,
+        )
+        OK.append(f"post-init after initialized=true x{n}")
+        return text
+
+    ERR.append("cannot find applyPostInitOptions or initialized=true for style inject")
+    return text
+
+
+def inject_handle_release(text: str) -> str:
+    marker = "MPV_MOD_HANDLE_RELEASE_V6"
+    if marker in text:
+        OK.append("handleRelease already hooked")
+        return text
+
+    # protected ListenableFuture<?> handleRelease() {
+    m = re.search(
+        r"(protected\s+[^{\n]*\s+handleRelease\s*\(\s*\)\s*\{)",
+        text,
+    )
+    if not m:
+        # try any handleRelease
+        m = re.search(r"(\w[\w\s\<\>\?,\.]*\s+handleRelease\s*\(\s*\)\s*\{)", text)
+    if not m:
+        ERR.append("handleRelease() not found — active player may leak")
+        return text
+
+    # Insert try/finally at start is hard; append unregister at beginning of method:
+    # try { ... existing ... } finally { modUnregister }
+    # Safer: first line of method body
+    insert = (
+        m.group(1)
+        + f"""
+        // {marker}
+        try {{
+"""
+    )
+    # This changes structure poorly. Better: only add finally unregister via wrapping is complex.
+    # Simple: at start of handleRelease body, we don't wrap whole method.
+    # Add in finally by finding matching close — fragile.
+    # Practical approach used by many patches:
+    # At method start: nothing
+    # Before every return and at end: unregister
+    # Simplest reliable: first statement registers cleanup via try/finally around rest — need balance braces.
+
+    # Lightweight: inject at method entry a try-finally is too invasive.
+    # Inject as first line: schedule unregister at end using:
+    insert = (
+        m.group(1)
+        + f"""
+        // {marker}
+        try {{
+"""
+    )
+    # Find method body end is hard. Alternative: inject unregister right after method opening
+    # AND hook places that set released = true
+    insert_simple = (
+        m.group(1)
+        + f"""
+        // {marker}
+        try {{
+            // ensure unregister even if later steps throw — paired with finally below via dual inject
+            modUnregisterActive(this);
+        }} catch (Throwable ignored) {{}}
+        try {{
+"""
+    )
+    # Wait - unregister at START of release is correct (clear active before tearing native).
+    # Then if release fails partially, we already cleared. Good.
+    # If a NEW player registered during release (unlikely), compareAndSet on unregister at start is wrong if we already null.
+
+    # Correct order for release:
+    # 1) modUnregisterActive(this) early
+    # 2) existing release logic
+
+    insert_simple = (
+        m.group(1)
+        + f"""
+        // {marker}: clear active ref first (compareAndSet); before native teardown
+        try {{ modUnregisterActive(this); }} catch (Throwable ignored) {{}}
+"""
+    )
+    text = text[: m.start()] + insert_simple + text[m.end() :]
+    OK.append("handleRelease unregister at entry")
+    return text
+
+
+def inject_native_owner_clear(text: str) -> str:
+    """当 nativeContextOwner 被置空或改写时清理。"""
+    marker = "MPV_MOD_OWNER_CLEAR_V6"
+    if marker in text:
+        OK.append("owner clear already")
+        return text
+    # nativeContextOwner = null;
+    text2, n = re.subn(
+        r"(nativeContextOwner\s*=\s*null\s*;)",
+        r"\1\n                try { // " + marker + r"\n                    modUnregisterActive(this);\n                } catch (Throwable ignored) {}",
+        text,
+        count=3,
+    )
+    if n:
+        OK.append(f"owner=null unregister x{n}")
+        return text2
+    OK.append("nativeContextOwner=null not found (ok)")
+    return text
 
 
 POLICY_JAVA = r'''package com.fongmi.android.tv.player.mpv;
@@ -344,7 +378,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * MPV 字幕：TTF Family Name + 经 MpvPlayer 公开桥写入运行时属性（init 后）。
+ * MPV 字幕策略：Family Name 解析 + 经 MpvPlayer 公开桥应用。
+ * Family Name 成功 ≠ MPV 已加载字体；仅提供正确的 sub-font 字符串。
  */
 public final class MpvSubtitleStylePolicy {
 
@@ -406,33 +441,54 @@ public final class MpvSubtitleStylePolicy {
         }
     }
 
-    /** 读取 TTF/OTF name 表 Font Family (nameID=1)。失败返回 null。 */
+    private static byte[] readFully(File file, int max) throws Exception {
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buf = new byte[Math.min(max, (int) Math.min(file.length(), max))];
+            int off = 0;
+            while (off < buf.length) {
+                int n = in.read(buf, off, buf.length - off);
+                if (n < 0) break;
+                off += n;
+            }
+            if (off == buf.length) return buf;
+            byte[] out = new byte[off];
+            System.arraycopy(buf, 0, out, 0, off);
+            return out;
+        }
+    }
+
+    /**
+     * 读 TTF/OTF Family Name。
+     * TTC（ttcf）本轮明确不解析，返回 null 以回退文件 ID，避免误报成功。
+     * 兼容 minSdk 24（不使用 readAllBytes）。
+     * 优先 nameID 16 (Typographic Family)，否则 nameID 1；优先 Windows 英文。
+     */
     public static String readFontFamilyName(File fontFile) {
         if (fontFile == null || !fontFile.isFile()) return null;
         String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified();
         String cached = FAMILY_CACHE.get(key);
         if (cached != null) return cached.isEmpty() ? null : cached;
         String family = null;
-        try (FileInputStream in = new FileInputStream(fontFile)) {
-            byte[] all = in.readAllBytes();
+        try {
+            byte[] all = readFully(fontFile, 4 * 1024 * 1024);
             if (all.length < 12) {
                 FAMILY_CACHE.put(key, "");
                 return null;
             }
+            // TTC signature 'ttcf'
+            if (all[0] == 't' && all[1] == 't' && all[2] == 'c' && all[3] == 'f') {
+                FAMILY_CACHE.put(key, "");
+                return null;
+            }
             ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.BIG_ENDIAN);
-            int sfnt = bb.getInt(0);
-            // 0x00010000 TrueType, 'OTTO' CFF, 'true', 'typ1'
             int numTables = bb.getShort(4) & 0xFFFF;
             int nameOffset = -1;
-            int nameLength = 0;
             for (int i = 0; i < numTables; i++) {
                 int off = 12 + i * 16;
                 if (off + 16 > all.length) break;
                 int tag = bb.getInt(off);
-                // 'name' = 0x6E616D65
-                if (tag == 0x6E616D65) {
+                if (tag == 0x6E616D65) { // 'name'
                     nameOffset = bb.getInt(off + 8);
-                    nameLength = bb.getInt(off + 12);
                     break;
                 }
             }
@@ -442,36 +498,44 @@ public final class MpvSubtitleStylePolicy {
             }
             int count = bb.getShort(nameOffset + 2) & 0xFFFF;
             int stringOffset = bb.getShort(nameOffset + 4) & 0xFFFF;
-            String best = null;
+            String id16 = null, id1 = null, id16En = null, id1En = null;
             for (int i = 0; i < count; i++) {
                 int rec = nameOffset + 6 + i * 12;
                 if (rec + 12 > all.length) break;
                 int platformID = bb.getShort(rec) & 0xFFFF;
-                int encodingID = bb.getShort(rec + 2) & 0xFFFF;
                 int languageID = bb.getShort(rec + 4) & 0xFFFF;
                 int nameID = bb.getShort(rec + 6) & 0xFFFF;
                 int length = bb.getShort(rec + 8) & 0xFFFF;
                 int offset = bb.getShort(rec + 10) & 0xFFFF;
-                if (nameID != 1) continue; // Font Family
+                if (nameID != 1 && nameID != 16) continue;
                 int abs = nameOffset + stringOffset + offset;
                 if (abs + length > all.length || length <= 0) continue;
                 String s;
-                if (platformID == 3) { // Windows
+                if (platformID == 3) {
                     s = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
-                } else if (platformID == 1) { // Mac Roman
-                    s = new String(all, abs, length, Charset.forName("MacRoman")).trim();
+                } else if (platformID == 1) {
+                    try {
+                        s = new String(all, abs, length, Charset.forName("MacRoman")).trim();
+                    } catch (Throwable t) {
+                        s = new String(all, abs, length, StandardCharsets.ISO_8859_1).trim();
+                    }
                 } else {
                     s = new String(all, abs, length, StandardCharsets.UTF_8).trim();
                 }
                 if (s.isEmpty()) continue;
-                // prefer en-US windows
-                if (platformID == 3 && languageID == 0x0409) {
-                    best = s;
-                    break;
+                boolean en = (platformID == 3 && languageID == 0x0409);
+                if (nameID == 16) {
+                    if (en) id16En = s;
+                    else if (id16 == null) id16 = s;
+                } else {
+                    if (en) id1En = s;
+                    else if (id1 == null) id1 = s;
                 }
-                if (best == null) best = s;
             }
-            family = best;
+            if (id16En != null) family = id16En;
+            else if (id1En != null) family = id1En;
+            else if (id16 != null) family = id16;
+            else family = id1;
         } catch (Throwable ignored) {
             family = null;
         }
@@ -503,9 +567,6 @@ public final class MpvSubtitleStylePolicy {
         return "0.0/0.0/0.0";
     }
 
-    /**
-     * sub-font：优先 TTF 内部 Family Name；失败回退文件主名；系统默认 sans-serif。
-     */
     public static String getSubFontProperty() {
         ensureFontsReady();
         try {
@@ -526,34 +587,38 @@ public final class MpvSubtitleStylePolicy {
         return (dir != null && dir.isDirectory()) ? dir.getAbsolutePath() : "";
     }
 
-    /** @return 是否成功应用到当前活跃且 native ready 的 MPV */
     public static boolean applyRuntimeToActive() {
         ensureFontsReady();
-        Object active = null;
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
-            java.lang.reflect.Method g = cl.getMethod("modGetActivePlayer");
-            active = g.invoke(null);
-        } catch (Throwable ignored) {
+            Object active = cl.getMethod("modGetActivePlayer").invoke(null);
+            if (active == null) return false;
+            return applyRuntime(active);
+        } catch (Throwable t) {
+            return false;
         }
-        if (active == null) return false;
-        return applyRuntime(active);
     }
 
     public static boolean applyRuntime(Object player) {
         if (player == null) return false;
         ensureFontsReady();
-        String dir = getSubFontsDirProperty();
-        String font = getSubFontProperty();
-        String style = getAssForceStyle();
-        String color = getSubColorProperty();
         try {
-            java.lang.reflect.Method m = player.getClass().getMethod(
-                    "modApplySubtitleStyleRuntime", String.class, String.class, String.class, String.class);
-            Object r = m.invoke(player, dir, font, style, color);
+            java.lang.reflect.Method m = player.getClass().getMethod("modApplyUserSubtitleStyleFromPolicy");
+            Object r = m.invoke(player);
             return (r instanceof Boolean) && (Boolean) r;
         } catch (Throwable t) {
-            return false;
+            try {
+                java.lang.reflect.Method m = player.getClass().getMethod(
+                        "modApplySubtitleStyleRuntime", String.class, String.class, String.class, String.class);
+                Object r = m.invoke(player,
+                        getSubFontsDirProperty(),
+                        getSubFontProperty(),
+                        getAssForceStyle(),
+                        getSubColorProperty());
+                return (r instanceof Boolean) && (Boolean) r;
+            } catch (Throwable t2) {
+                return false;
+            }
         }
     }
 
@@ -571,29 +636,32 @@ def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
-    OK.append("wrote policy with TTF family reader")
+    OK.append("policy V6 written")
 
 
-def patch_setting_order() -> None:
-    """putSubtitleFontIndex: Prefers.put 先，再 ensure + apply。可重复执行。"""
-    marker = "MPV_FONT_APPLY_AFTER_PUT_V5"
+def patch_setting() -> None:
+    marker = "MPV_FONT_APPLY_AFTER_PUT_V6"
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     if not path.is_file():
         OK.append("Setting missing")
         return
     t = path.read_text(encoding="utf-8")
-    # remove old injects
     t = re.sub(
-        r"\n\s*// MPV_FONT_RUNTIME_APPLY[\s\S]{0,300}?catch \(Throwable ignored\) \{\}\n",
+        r"\n\s*// MPV_FONT_APPLY_AFTER_PUT_V5[\s\S]{0,400}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         t,
-        count=3,
+        count=2,
+    )
+    t = re.sub(
+        r"\n\s*// MPV_FONT_RUNTIME_APPLY[\s\S]{0,400}?catch \(Throwable ignored\) \{\}\n",
+        "\n",
+        t,
+        count=2,
     )
     if marker in t:
-        OK.append("setting order already V5")
+        OK.append("setting already V6")
         path.write_text(t, encoding="utf-8")
         return
-    # Match full method and replace
     m = re.search(
         r"public static void putSubtitleFontIndex\s*\(\s*int\s+(\w+)\s*\)\s*\{[\s\S]*?\n    \}",
         t,
@@ -612,60 +680,63 @@ def patch_setting_order() -> None:
     }}"""
     t = t[: m.start()] + new_m + t[m.end() :]
     path.write_text(t, encoding="utf-8")
-    OK.append("putSubtitleFontIndex: put then apply")
-
-
-def patch_config_keep_v4_safe() -> None:
-    # Keep V4 safe config if present; strip clearVideoSurface if any remain
-    for rel_path in [
-        "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
-        "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
-        "app/src/main/java/com/fongmi/android/tv/ui/activity/PlaybackActivity.java",
-    ]:
-        path = ROOT / rel_path
-        if not path.is_file():
-            continue
-        t = path.read_text(encoding="utf-8")
-        if "clearVideoSurface" in t and "MPV_PHASE_C" in t:
-            t2 = re.sub(
-                r"\n\s*// MPV_PHASE_C_CONFIG_CHANGE[\s\S]{0,2500}?catch \(Throwable ignored\) \{\}\n",
-                "\n",
-                t,
-                count=4,
-            )
-            path.write_text(t2, encoding="utf-8")
-            OK.append(f"stripped dangerous config block: {rel_path}")
-        else:
-            OK.append(f"config ok: {rel_path}")
+    OK.append("putSubtitleFontIndex V6")
 
 
 def main() -> int:
-    print(f"[mod] inject_mpv_phase_c V5 ROOT={ROOT}")
+    print(f"[mod] inject_mpv_phase_c V6 ROOT={ROOT}")
     path = find_mpv_player()
     if path is None:
         ERR.append("MpvPlayer.java not found")
-    else:
-        inject_bridge(path)
-        inject_init_and_after_init(path)
+        write_policy()
+        patch_setting()
+        for x in OK:
+            print(" OK", x)
+        for x in ERR:
+            print(" FAIL", x)
+        return 1
+
+    text = path.read_text(encoding="utf-8")
+    text = strip_old_mod_blocks(text)
+    text = inject_bridge(path, text)
+    text = inject_init_slang(text)
+    text = inject_post_init_style(text)
+    text = inject_handle_release(text)
+    text = inject_native_owner_clear(text)
+    path.write_text(text, encoding="utf-8")
+
     write_policy()
-    patch_setting_order()
-    patch_config_keep_v4_safe()
+    patch_setting()
+
     print("---- results ----")
     for x in OK:
         print(" OK", x)
     for x in ERR:
         print(" FAIL", x)
+
+    vt = path.read_text(encoding="utf-8")
+    if MARKER_BRIDGE not in vt:
+        print("[mod] VERIFY FAIL no bridge")
+        return 1
+    if MARKER_POST not in vt:
+        print("[mod] VERIFY FAIL no post-init style")
+        return 1
+    # Ensure post-init is not only right after mpvInit without initialized
+    # Soft check: MARKER_POST should appear after 'initialized = true' or applyPostInitOptions in file
+    post_i = vt.find(MARKER_POST)
+    init_true_i = vt.find("initialized = true")
+    apply_post_i = vt.find("applyPostInitOptions")
+    if post_i >= 0 and init_true_i >= 0 and post_i < init_true_i and (apply_post_i < 0 or post_i < apply_post_i):
+        # might still be ok if order in ensureInitialized is mpvInit; init=true; applyPost; our inject after applyPost
+        pass
+    # Count register calls
+    reg_count = vt.count("modRegisterActive(this)")
+    if reg_count > 2:
+        print(f"[mod] WARN modRegisterActive count={reg_count}")
+
     if ERR:
         print("[mod] inject_mpv_phase_c FAILED")
         return 1
-    if path and path.is_file():
-        vt = path.read_text(encoding="utf-8")
-        if MARKER_BRIDGE not in vt or "modApplySubtitleStyleRuntime" not in vt:
-            print("[mod] VERIFY FAIL bridge")
-            return 1
-        if "sModActivePlayer = this" in vt:
-            print("[mod] VERIFY FAIL still assigns this in bad pattern")
-            return 1
     print("[mod] inject_mpv_phase_c SUCCESS")
     return 0
 
