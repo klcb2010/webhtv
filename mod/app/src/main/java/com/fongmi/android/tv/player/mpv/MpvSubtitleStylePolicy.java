@@ -233,43 +233,53 @@ public final class MpvSubtitleStylePolicy {
             }
             int count = bb.getShort(nameOffset + 2) & 0xFFFF;
             int stringOffset = bb.getShort(nameOffset + 4) & 0xFFFF;
-            String id16 = null, id1 = null, id16En = null, id1En = null;
+            String id16 = null, id1 = null;
+            int id16Rank = Integer.MAX_VALUE;
+            int id1Rank = Integer.MAX_VALUE;
             for (int i = 0; i < count; i++) {
                 int rec = nameOffset + 6 + i * 12;
-                if (rec + 12 > all.length) break;
+                if (rec < 0 || rec + 12L > all.length) break;
                 int platformID = bb.getShort(rec) & 0xFFFF;
+                int encodingID = bb.getShort(rec + 2) & 0xFFFF;
                 int languageID = bb.getShort(rec + 4) & 0xFFFF;
                 int nameID = bb.getShort(rec + 6) & 0xFFFF;
                 int length = bb.getShort(rec + 8) & 0xFFFF;
                 int offset = bb.getShort(rec + 10) & 0xFFFF;
                 if (nameID != 1 && nameID != 16) continue;
-                int abs = nameOffset + stringOffset + offset;
-                if (abs + length > all.length || length <= 0) continue;
-                String s;
-                if (platformID == 3) {
-                    s = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
+                long absLong = (long) nameOffset + stringOffset + offset;
+                if (absLong < 0 || absLong + length > all.length || length <= 0) continue;
+                int abs = (int) absLong;
+                String value;
+                if (platformID == 0 || platformID == 3) {
+                    int validLength = length & ~1;
+                    if (validLength <= 0) continue;
+                    value = new String(all, abs, validLength, StandardCharsets.UTF_16BE).trim();
                 } else if (platformID == 1) {
                     try {
-                        s = new String(all, abs, length, Charset.forName("MacRoman")).trim();
-                    } catch (Throwable t) {
-                        s = new String(all, abs, length, StandardCharsets.ISO_8859_1).trim();
+                        value = new String(all, abs, length, Charset.forName("MacRoman")).trim();
+                    } catch (Throwable ignored) {
+                        continue;
                     }
                 } else {
-                    s = new String(all, abs, length, StandardCharsets.UTF_8).trim();
+                    continue;
                 }
-                if (s.isEmpty()) continue;
-                boolean en = (platformID == 3 && languageID == 0x0409);
-                if (nameID == 16) {
-                    if (en) id16En = s;
-                    else if (id16 == null) id16 = s;
-                } else {
-                    if (en) id1En = s;
-                    else if (id1 == null) id1 = s;
+                if (value.isEmpty() || value.indexOf('\u0000') >= 0) continue;
+                int rank;
+                if (platformID == 3 && languageID == 0x0409) rank = 0;
+                else if (platformID == 0 && languageID == 0) rank = 1;
+                else if (platformID == 3 && languageID == 0x0804) rank = 2;
+                else if (platformID == 3) rank = 3;
+                else if (platformID == 0) rank = 4;
+                else rank = 5;
+                if (nameID == 16 && rank < id16Rank) {
+                    id16 = value;
+                    id16Rank = rank;
+                } else if (nameID == 1 && rank < id1Rank) {
+                    id1 = value;
+                    id1Rank = rank;
                 }
             }
-            if (id16En != null) family = id16En;
-            else if (id1En != null) family = id1En;
-            else if (id16 != null) family = id16;
+            if (id16 != null) family = id16;
             else family = id1;
         } catch (Throwable ignored) {
             family = null;
