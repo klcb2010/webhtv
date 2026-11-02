@@ -222,19 +222,19 @@ if [[ -f "$MOD/hooks/patch_protect_clear_py.py" ]]; then
   echo "[mod] patch_protect_clear_py"
   python3 "$MOD/hooks/patch_protect_clear_py.py" "$ROOT" || true
 fi
-# 全局禁用 MPV（若脚本存在）
-if [[ -f "$MOD/hooks/inject_disable_mpv.py" ]]; then
-  echo "[mod] inject_disable_mpv"
-  python3 "$MOD/hooks/inject_disable_mpv.py" "$ROOT" || exit 1
+# ===== MPV 阶段 A（2026-11-02 +08）：恢复可选 MPV，默认仍 EXO =====
+# 不再执行 inject_disable_mpv / inject_strip_mpv_assets
+# 仅注入播放默认 option；原画截图与字体深度对接见阶段 B/C
+if [[ -f "$MOD/hooks/inject_restore_mpv_phase_a.py" ]]; then
+  echo "[mod] inject_restore_mpv_phase_a"
+  python3 "$MOD/hooks/inject_restore_mpv_phase_a.py" "$ROOT" || exit 1
 fi
+# 静音 MPV_SIZE 调试日志仍可保留（与是否禁用内核无关）
 if [[ -f "$MOD/hooks/inject_silence_mpv_size.py" ]]; then
   echo "[mod] inject_silence_mpv_size"
-  python3 "$MOD/hooks/inject_silence_mpv_size.py" "$ROOT" || exit 1
+  python3 "$MOD/hooks/inject_silence_mpv_size.py" "$ROOT" || true
 fi
-if [[ -f "$MOD/hooks/inject_strip_mpv_assets.py" ]]; then
-  echo "[mod] inject_strip_mpv_assets"
-  python3 "$MOD/hooks/inject_strip_mpv_assets.py" "$ROOT" || exit 1
-fi
+# 回退到「无 MPV」时：恢复上面两段 disable/strip，并去掉 inject_restore_mpv_phase_a
 if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi
