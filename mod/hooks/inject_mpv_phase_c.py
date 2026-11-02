@@ -735,9 +735,28 @@ def inject_init_slang(text: str) -> str:
             OK.append("init slang and selected font options already in ensureInitialized")
             return text
 
+    # Remove the previous generated font-options block using balanced braces.
+    font_marker = text.find("// MPV_PHASE_C_FONT_OPTIONS_V14")
+    if font_marker >= 0:
+        line_start = text.rfind("\n", 0, font_marker) + 1
+        try_start = text.find("try {", font_marker)
+        open_brace = text.find("{", try_start)
+        close_brace = find_matching_brace(text, open_brace) if try_start >= 0 and open_brace >= 0 else -1
+        if close_brace < 0:
+            ERR.append("unable to safely locate previous V14 font-options block")
+            return text
+        catch_end = re.match(r"\s*catch\s*\(Throwable ignored\)\s*\{\s*\}", text[close_brace + 1:])
+        if not catch_end:
+            ERR.append("unable to safely remove previous V14 font-options catch")
+            return text
+        end = close_brace + 1 + catch_end.end()
+        if end < len(text) and text[end] == "\n":
+            end += 1
+        text = text[:line_start] + text[end:]
+
     # Remove previous phase-C slang lines only; do not guess from unrelated options.
     text = re.sub(
-        r'^[ \t]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11|12)\r?\n'
+        r'^[ \t]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11|12|13)\r?\n'
         r'^[ \t]*try \{ modSetInitOption\("slang"[^ \r\n]*.*\r?\n',
         "",
         text,
