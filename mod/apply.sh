@@ -241,6 +241,13 @@ if [[ -f "$MOD/hooks/inject_restore_mpv_phase_a.py" ]]; then
   echo "[mod] inject_restore_mpv_phase_a"
   python3 "$MOD/hooks/inject_restore_mpv_phase_a.py" "$ROOT" || exit 1
 fi
+
+# ===== MPV 阶段 C：字幕字体/颜色 + 暂停旋转撕裂 =====
+if [[ -f "$MOD/hooks/inject_mpv_phase_c.py" ]]; then
+  echo "[mod] inject_mpv_phase_c"
+  python3 "$MOD/hooks/inject_mpv_phase_c.py" "$ROOT" || exit 1
+fi
+
 # 静音 MPV_SIZE 调试日志仍可保留（与是否禁用内核无关）
 if [[ -f "$MOD/hooks/inject_silence_mpv_size.py" ]]; then
   echo "[mod] inject_silence_mpv_size"
