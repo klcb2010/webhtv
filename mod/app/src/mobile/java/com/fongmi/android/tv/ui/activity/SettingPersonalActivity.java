@@ -76,6 +76,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.hideHomeTypeMore.setOnClickListener(this::setHideHomeTypeMore); } catch (Throwable ignored) {}
         try { mBinding.playbackScreenshotBtn.setOnClickListener(this::setPlaybackScreenshotBtn); } catch (Throwable ignored) {}
         try { mBinding.screenshotBrightnessBoost.setOnClickListener(this::setScreenshotBrightnessBoost); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotBtn.setOnClickListener(this::setMpvScreenshotBtn); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotBrightnessBoost.setOnClickListener(this::setMpvScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
@@ -124,8 +126,10 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.searchPanFirstText.setText(Setting.getSearchResultPreferText()); } catch (Throwable ignored) {}
         try { mBinding.playDirectPanPreferText.setText(getSwitch(Setting.isPlayDirectPanPrefer())); } catch (Throwable ignored) {}
         try { mBinding.hideHomeTypeMoreText.setText(getSwitch(Setting.isHideHomeTypeMore())); } catch (Throwable ignored) {}
-        try { mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel()); } catch (Throwable ignored) {}
+        try { mBinding.playbackScreenshotBtnText.setText(Setting.getExoScreenshotModeLabel()); } catch (Throwable ignored) {}
         try { mBinding.screenshotBrightnessBoostText.setText(Setting.getScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
@@ -394,9 +398,9 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setPlaybackScreenshotBtn(View view) {
         try {
-            Setting.cyclePlaybackScreenshotMode();
-            mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel());
-            try { com.fongmi.android.tv.utils.Notify.show(Setting.getPlaybackScreenshotModeLabel()); } catch (Throwable ignored) {}
+            Setting.cycleExoScreenshotMode();
+            mBinding.playbackScreenshotBtnText.setText(Setting.getExoScreenshotModeLabel());
+            try { com.fongmi.android.tv.utils.Notify.show(Setting.getExoScreenshotModeLabel()); } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
     }

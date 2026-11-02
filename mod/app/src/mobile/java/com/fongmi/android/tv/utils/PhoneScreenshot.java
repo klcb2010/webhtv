@@ -70,50 +70,53 @@ public final class PhoneScreenshot {
             fail(main, callback);
             return;
         }
-        Runnable startDecode = () -> {
-            final Snapshot snap = snapshotPlayer(playerView);
-            if (DIAG) try {
-                Log.i(TAG, "snapshot uri=" + (snap == null ? "null" : String.valueOf(snap.uri))
-                        + " posMs=" + (snap == null ? -1 : snap.posMs)
-                        + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
+        Runnable start = () -> {
+            boolean mpv = false;
+            try {
+                mpv = com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
+                        == com.fongmi.android.tv.setting.PlayerSetting.MPV;
             } catch (Throwable ignored) {}
-            // 质量优先：始终独立解码冲片源分辨率（含 GO/127.0.0.1）。
-            // 串行 Retriever→Codec（不做双线程并行，避免与播放硬解冲突 CRASH_NATIVE）。
-            // Codec 优先软解。失败才 Surface（分辨率可能低于片源，但保证有图）。
-            Task.execute(() -> {
-                try {
-                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
-                } catch (Throwable ignored) {
-                }
-                Bitmap frame = null;
-                long t0 = android.os.SystemClock.elapsedRealtime();
-                try {
-                    if (snap != null && snap.uri != null) {
-                        frame = decodeFromSnapshot(snap); // 串行：避免与播放中硬解并行二次 MediaCodec 导致 CRASH_NATIVE
-                    }
-                } catch (Throwable e) {
-                    if (DIAG) try { Log.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
-                }
-                if (DIAG) try {
-                    Log.i(TAG, "decode costMs=" + (android.os.SystemClock.elapsedRealtime() - t0)
-                            + " frame=" + (frame == null ? "null" : (frame.getWidth() + "x" + frame.getHeight())));
-                } catch (Throwable ignored) {}
-                if (frame != null) {
-                    if (DIAG) try { Log.i(TAG, "path=DECODE frame=" + frame.getWidth() + "x" + frame.getHeight()); } catch (Throwable ignored) {}
-                    Bitmap out = scaleToMax(frame, MAX_EDGE);
-                    if (out != frame) {
-                        if (DIAG) try { Log.i(TAG, "after scaleToMax=" + out.getWidth() + "x" + out.getHeight()); } catch (Throwable ignored) {}
-                        try { frame.recycle(); } catch (Throwable ignored) {}
-                    }
-                    saveAsync(activity, out, callback);
+            if (mpv) {
+                int mode;
+                try { mode = com.fongmi.android.tv.setting.Setting.getMpvScreenshotMode(); }
+                catch (Throwable e) { mode = com.fongmi.android.tv.setting.Setting.SCREENSHOT_PNG; }
+                if (mode == com.fongmi.android.tv.setting.Setting.SCREENSHOT_OFF) {
+                    fail(main, callback);
                     return;
                 }
-                if (DIAG) try { Log.i(TAG, "path=SURFACE_FALLBACK decodeFrame=null"); } catch (Throwable ignored) {}
-                main.post(() -> captureSurface(activity, playerView, main, callback));
-            });
+                // MPV：优先原画 screenshot；失败再 Surface
+                Task.execute(() -> {
+                    Bitmap frame = null;
+                    try {
+                        frame = com.fongmi.android.tv.utils.MpvScreenshot.captureVideoFrame(activity, playerView);
+                    } catch (Throwable ignored) {}
+                    if (frame != null) {
+                        Bitmap out = scaleToMax(frame, MAX_EDGE);
+                        if (out != frame) {
+                            try { frame.recycle(); } catch (Throwable ignored) {}
+                        }
+                        saveAsync(activity, out, callback);
+                        return;
+                    }
+                    main.post(() -> captureSurface(activity, playerView, main, callback));
+                });
+                return;
+            }
+            // EXO / 其它：仅 Surface，不再独立解码（降延迟、避免偏帧/崩溃）
+            int mode;
+            try {
+                mode = com.fongmi.android.tv.setting.Setting.getExoScreenshotMode();
+            } catch (Throwable e) {
+                mode = com.fongmi.android.tv.setting.Setting.SCREENSHOT_PNG;
+            }
+            if (mode == com.fongmi.android.tv.setting.Setting.SCREENSHOT_OFF) {
+                fail(main, callback);
+                return;
+            }
+            captureSurface(activity, playerView, main, callback);
         };
-        if (Looper.myLooper() == Looper.getMainLooper()) startDecode.run();
-        else main.post(startDecode);
+        if (Looper.myLooper() == Looper.getMainLooper()) start.run();
+        else main.post(start);
     }
 
     private static final class Snapshot {
@@ -440,7 +443,16 @@ public final class PhoneScreenshot {
         if (src == null || src.isRecycled()) return src;
         int boost = 0;
         try {
-            boost = com.fongmi.android.tv.setting.Setting.getScreenshotBrightnessBoost();
+            try {
+                if (com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
+                        == com.fongmi.android.tv.setting.PlayerSetting.MPV) {
+                    boost = com.fongmi.android.tv.setting.Setting.getMpvScreenshotBrightnessBoost();
+                } else {
+                    boost = com.fongmi.android.tv.setting.Setting.getScreenshotBrightnessBoost();
+                }
+            } catch (Throwable ignored2) {
+                boost = com.fongmi.android.tv.setting.Setting.getScreenshotBrightnessBoost();
+            }
         } catch (Throwable ignored) {
         }
         if (boost <= 0) return src;
@@ -660,7 +672,13 @@ public final class PhoneScreenshot {
     private static Uri saveImage(Activity activity, Bitmap bitmap) throws Exception {
         int mode = com.fongmi.android.tv.setting.Setting.SCREENSHOT_PNG;
         try {
-            mode = com.fongmi.android.tv.setting.Setting.getPlaybackScreenshotMode();
+            mode = com.fongmi.android.tv.setting.Setting.getExoScreenshotMode();
+                try {
+                    if (com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
+                            == com.fongmi.android.tv.setting.PlayerSetting.MPV) {
+                        mode = com.fongmi.android.tv.setting.Setting.getMpvScreenshotMode();
+                    }
+                } catch (Throwable ignored) {}
         } catch (Throwable ignored) {
         }
         boolean webp = mode == com.fongmi.android.tv.setting.Setting.SCREENSHOT_WEBP

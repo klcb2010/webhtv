@@ -879,21 +879,11 @@ public class Setting {
     }
 
     public static void cyclePlaybackScreenshotMode() {
-        putPlaybackScreenshotMode((getPlaybackScreenshotMode() + 1) % 4);
+        cycleExoScreenshotMode();
     }
 
     public static String getPlaybackScreenshotModeLabel() {
-        switch (getPlaybackScreenshotMode()) {
-            case SCREENSHOT_OFF:
-                return "关";
-            case SCREENSHOT_WEBP:
-                return "WebP";
-            case SCREENSHOT_WEBP98:
-                return "WebP98";
-            case SCREENSHOT_PNG:
-            default:
-                return "PNG";
-        }
+        return getExoScreenshotModeLabel();
     }
 
 
@@ -942,6 +932,93 @@ public class Setting {
         return v <= 0 ? "关" : String.valueOf(v);
     }
 
+    /** 阶段B：EXO / MPV 分轨截图 */
+    public static int getExoScreenshotMode() {
+        try {
+            int m = Prefers.getInt("exo_screenshot_mode", -1);
+            if (m >= 0 && m <= 3) return m;
+        } catch (Throwable ignored) {}
+        return getPlaybackScreenshotMode();
+    }
+
+    public static void putExoScreenshotMode(int mode) {
+        if (mode < 0 || mode > 3) mode = SCREENSHOT_PNG;
+        Prefers.put("exo_screenshot_mode", mode);
+        try { putPlaybackScreenshotMode(mode); } catch (Throwable ignored) {}
+    }
+
+    public static void cycleExoScreenshotMode() {
+        putExoScreenshotMode((getExoScreenshotMode() + 1) % 4);
+    }
+
+    public static String getExoScreenshotModeLabel() {
+        return labelScreenshotMode(getExoScreenshotMode());
+    }
+
+    public static int getMpvScreenshotMode() {
+        try {
+            int m = Prefers.getInt("mpv_screenshot_mode", -1);
+            if (m >= 0 && m <= 3) return m;
+        } catch (Throwable ignored) {}
+        return SCREENSHOT_PNG;
+    }
+
+    public static void putMpvScreenshotMode(int mode) {
+        if (mode < 0 || mode > 3) mode = SCREENSHOT_PNG;
+        Prefers.put("mpv_screenshot_mode", mode);
+    }
+
+    public static void cycleMpvScreenshotMode() {
+        putMpvScreenshotMode((getMpvScreenshotMode() + 1) % 4);
+    }
+
+    public static String getMpvScreenshotModeLabel() {
+        return labelScreenshotMode(getMpvScreenshotMode());
+    }
+
+    private static String labelScreenshotMode(int mode) {
+        switch (mode) {
+            case SCREENSHOT_OFF: return "关";
+            case SCREENSHOT_WEBP: return "WebP";
+            case SCREENSHOT_WEBP98: return "WebP98";
+            case SCREENSHOT_PNG:
+            default: return "PNG";
+        }
+    }
+
+    public static int getMpvScreenshotBrightnessBoost() {
+        try {
+            int v = Prefers.getInt("mpv_screenshot_brightness_boost", 15);
+            for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
+                if (level == v) return v;
+            }
+        } catch (Throwable ignored) {}
+        return 15;
+    }
+
+    public static void putMpvScreenshotBrightnessBoost(int value) {
+        int picked = 15;
+        for (int level : SCREENSHOT_BRIGHTNESS_LEVELS) {
+            if (level == value) { picked = value; break; }
+        }
+        Prefers.put("mpv_screenshot_brightness_boost", picked);
+    }
+
+    public static void cycleMpvScreenshotBrightnessBoost() {
+        int cur = getMpvScreenshotBrightnessBoost();
+        int idx = 0;
+        for (int i = 0; i < SCREENSHOT_BRIGHTNESS_LEVELS.length; i++) {
+            if (SCREENSHOT_BRIGHTNESS_LEVELS[i] == cur) { idx = i; break; }
+        }
+        putMpvScreenshotBrightnessBoost(SCREENSHOT_BRIGHTNESS_LEVELS[(idx + 1) % SCREENSHOT_BRIGHTNESS_LEVELS.length]);
+    }
+
+    public static String getMpvScreenshotBrightnessBoostLabel() {
+        int v = getMpvScreenshotBrightnessBoost();
+        return v <= 0 ? "关" : ("+" + v);
+    }
+
+
 
     /** HDR 转 SDR（OpenGL tone mapping），默认关闭。 */
     public static boolean isHdrToSdrEnabled() {
@@ -957,7 +1034,13 @@ public class Setting {
     }
 
     public static boolean isPlaybackScreenshotBtn() {
-        return getPlaybackScreenshotMode() != SCREENSHOT_OFF;
+        try {
+            int p = com.fongmi.android.tv.setting.PlayerSetting.getPlayer();
+            if (p == com.fongmi.android.tv.setting.PlayerSetting.MPV) {
+                return getMpvScreenshotMode() != SCREENSHOT_OFF;
+            }
+        } catch (Throwable ignored) {}
+        return getExoScreenshotMode() != SCREENSHOT_OFF;
     }
 
     public static void putPlaybackScreenshotBtn(boolean value) {
