@@ -48,18 +48,6 @@ while IFS= read -r -d '' src; do
   echo "[mod] copy $rel"
 done < <(find "$MOD" -type f -print0)
 
-# 阶段B：禁止 mobile/main 双份 MpvScreenshot（历史包曾误放 mobile）
-rm -f "$ROOT/app/src/mobile/java/com/fongmi/android/tv/utils/MpvScreenshot.java"
-rm -f "$MOD/app/src/mobile/java/com/fongmi/android/tv/utils/MpvScreenshot.java"
-# 只保留 main 实现
-if [[ ! -f "$ROOT/app/src/main/java/com/fongmi/android/tv/utils/MpvScreenshot.java" ]]; then
-  echo "[mod] WARN missing main MpvScreenshot"
-fi
-
-# EventIndex：用独立 hook，避免 apply.sh heredoc 引号问题
-if [[ -f "$MOD/hooks/inject_startup_no_eventindex.py" ]]; then
-  python3 "$MOD/hooks/inject_startup_no_eventindex.py" "$ROOT" || exit 1
-fi
 
 # 清除误加的 vod_home 独立资源，避免与 strings.xml 重复
 rm -f "$ROOT/app/src/mobile/res/values/strings_vod_home.xml" \
@@ -219,8 +207,7 @@ run_hook "$MOD/hooks/fix_update_setting_stubs.py"
 run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
 if [[ -f "$MOD/hooks/inject_subtitle_style.py" ]]; then
-  echo "[mod] inject_subtitle_style"
-  python3 "$MOD/hooks/inject_subtitle_style.py" "$ROOT" || exit 1
+  python3 "$MOD/hooks/inject_subtitle_style.py" "$ROOT"
 fi
 # 楷体自动放大：必须在 inject_subtitle_style 之后（改写 reapplySubtitleStyle）
 if [[ -f "$MOD/hooks/inject_kaiti_scale.py" ]]; then
@@ -235,26 +222,19 @@ if [[ -f "$MOD/hooks/patch_protect_clear_py.py" ]]; then
   echo "[mod] patch_protect_clear_py"
   python3 "$MOD/hooks/patch_protect_clear_py.py" "$ROOT" || true
 fi
-# ===== MPV 阶段 A（2026-11-02 +08）：恢复可选 MPV，默认仍 EXO =====
-# 不再执行 inject_disable_mpv / inject_strip_mpv_assets
-# 仅注入播放默认 option；原画截图与字体深度对接见阶段 B/C
-if [[ -f "$MOD/hooks/inject_restore_mpv_phase_a.py" ]]; then
-  echo "[mod] inject_restore_mpv_phase_a"
-  python3 "$MOD/hooks/inject_restore_mpv_phase_a.py" "$ROOT" || exit 1
+# 全局禁用 MPV（若脚本存在）
+if [[ -f "$MOD/hooks/inject_disable_mpv.py" ]]; then
+  echo "[mod] inject_disable_mpv"
+  python3 "$MOD/hooks/inject_disable_mpv.py" "$ROOT" || exit 1
 fi
-
-# ===== MPV 阶段 C：字幕字体/颜色 + 暂停旋转撕裂 =====
-if [[ -f "$MOD/hooks/inject_mpv_phase_c.py" ]]; then
-  echo "[mod] inject_mpv_phase_c"
-  python3 "$MOD/hooks/inject_mpv_phase_c.py" "$ROOT" || exit 1
-fi
-
-# 静音 MPV_SIZE 调试日志仍可保留（与是否禁用内核无关）
 if [[ -f "$MOD/hooks/inject_silence_mpv_size.py" ]]; then
   echo "[mod] inject_silence_mpv_size"
-  python3 "$MOD/hooks/inject_silence_mpv_size.py" "$ROOT" || true
+  python3 "$MOD/hooks/inject_silence_mpv_size.py" "$ROOT" || exit 1
 fi
-# 回退到「无 MPV」时：恢复上面两段 disable/strip，并去掉 inject_restore_mpv_phase_a
+if [[ -f "$MOD/hooks/inject_strip_mpv_assets.py" ]]; then
+  echo "[mod] inject_strip_mpv_assets"
+  python3 "$MOD/hooks/inject_strip_mpv_assets.py" "$ROOT" || exit 1
+fi
 if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi

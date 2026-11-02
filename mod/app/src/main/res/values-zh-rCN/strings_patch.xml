@@ -146,6 +146,4 @@
     <string name="setting_search_pan_first">搜索结果排序优先</string>
     <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
     <string name="setting_hide_home_type_more">隐藏首页更多按钮</string>
-    <string name="setting_hdr_to_sdr">HDR转码为SDR</string>
-    <string name="play_screenshot">截图</string>
 </resources>

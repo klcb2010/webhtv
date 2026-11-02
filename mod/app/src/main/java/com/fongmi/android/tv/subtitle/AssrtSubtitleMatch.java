@@ -1877,29 +1877,15 @@ public final class AssrtSubtitleMatch {
     }
 
     private static String detectSubLang(String label, String lang) {
-        String raw = ((label == null ? "" : label) + " " + (lang == null ? "" : lang));
-        String blob = raw.toLowerCase(Locale.ROOT);
-        String langL = lang == null ? "" : lang.trim().toLowerCase(Locale.ROOT).replace('_', '-');
-        // 语言码优先：zh-cn/hans=简体，zh-tw/hk/mo/hant=繁体
-        if (langL.startsWith("zh-hans") || langL.equals("zh-cn") || langL.equals("zh-sg")
-                || langL.equals("chs") || langL.equals("cc"))
-            return "simp";
-        if (langL.startsWith("zh-hant") || langL.equals("zh-tw") || langL.equals("zh-hk")
-                || langL.equals("zh-mo") || langL.equals("cht"))
-            return "trad";
-        boolean isTrad = blob.contains("繁体") || blob.contains("繁體") || blob.contains("繁中")
-                || blob.contains("traditional") || blob.contains("cht") || blob.contains("hant")
-                || blob.contains("zh-hant") || blob.contains("zh_hant") || blob.contains("zh-tw")
-                || blob.contains("zh-hk");
-        boolean isSimp = blob.contains("简体") || blob.contains("簡體") || blob.contains("简中")
-                || blob.contains("simplified") || blob.contains("chs") || blob.contains("hans")
-                || blob.contains("zh-hans") || blob.contains("zh_hans") || blob.contains("zh-cn");
-        // 标签同时带简繁时：简体优先（用户明确要求）
-        if (isSimp && isTrad) return "simp";
-        if (isSimp) return "simp";
-        if (isTrad) return "trad";
+        String blob = ((label == null ? "" : label) + " " + (lang == null ? "" : lang)).toLowerCase(Locale.ROOT);
+        boolean isTrad = blob.contains("繁体") || blob.contains("繁中") || blob.contains("traditional")
+                || blob.contains("cht") || blob.contains("hant") || blob.contains("zh-hant") || blob.contains("zh_hant");
+        boolean isSimp = blob.contains("简体") || blob.contains("简中") || blob.contains("simplified")
+                || blob.contains("chs") || blob.contains("hans") || blob.contains("zh-hans") || blob.contains("zh_hans");
+        if (isSimp && !isTrad) return "simp";
+        if (isTrad && !isSimp) return "trad";
         if (blob.contains("中文") || blob.contains("chinese") || blob.startsWith("zh")
-                || "zh".equalsIgnoreCase(lang) || langL.startsWith("zh"))
+                || "zh".equalsIgnoreCase(lang) || (lang != null && lang.toLowerCase(Locale.ROOT).startsWith("zh")))
             return "zh";
         return "";
     }

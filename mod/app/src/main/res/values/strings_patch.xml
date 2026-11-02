@@ -146,6 +146,4 @@
     <string name="setting_search_pan_first">Search result prefer</string>
     <string name="setting_play_direct_pan_prefer">Direct play: prefer cloud drive</string>
     <string name="setting_hide_home_type_more">Hide home more button</string>
-    <string name="setting_hdr_to_sdr">HDR to SDR</string>
-    <string name="play_screenshot">Screenshot</string>
 </resources>

@@ -404,8 +404,8 @@ public class SettingPersonalActivity extends BaseActivity {
 
     private void setPlaybackScreenshotBtn(View view) {
         try {
-            Setting.cycleExoScreenshotMode();
-            mBinding.playbackScreenshotBtnText.setText(Setting.getExoScreenshotModeLabel());
+            Setting.cyclePlaybackScreenshotMode();
+            mBinding.playbackScreenshotBtnText.setText(Setting.getPlaybackScreenshotModeLabel());
         } catch (Throwable ignored) {
         }
     }
@@ -417,21 +417,6 @@ public class SettingPersonalActivity extends BaseActivity {
             mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled()));
         } catch (Throwable ignored) {
         }
-    }
-
-
-    private void setMpvScreenshotBtn(View view) {
-        try {
-            Setting.cycleMpvScreenshotMode();
-            mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel());
-        } catch (Throwable ignored) {}
-    }
-
-    private void setMpvScreenshotBrightnessBoost(View view) {
-        try {
-            Setting.cycleMpvScreenshotBrightnessBoost();
-            mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel());
-        } catch (Throwable ignored) {}
     }
 
 }

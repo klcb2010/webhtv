@@ -6,8 +6,3 @@
   - **清除缓存**会删掉该目录。
 - 关闭：`Prefers.put("mod_debug_log", false)`。
 - 系统 logcat / 其他 App 的 Log 无法整体搬家，只能管魔改自己的输出。
-
-## 2026-11-02 +08 MPV phase A
-- Disabled inject_disable_mpv + inject_strip_mpv_assets in apply.sh
-- Added inject_restore_mpv_phase_a.py (default mpv options, default kernel EXO)
-- apply-mpv-tail.sh no longer disables MPV
