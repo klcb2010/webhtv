@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MPV phase C V12 — source-aware injection, brace-depth strip, owner-clear in release only."""
+"""MPV phase C V13 — source-aware injection, brace-depth strip, owner-clear in release only."""
 # Upstream lifecycle reference: https://github.com/webhtv/webhtv
 # Font pipeline reference: https://github.com/100pangci/mpvKt
 # Always inject against the fork's real androidx.media3.mpvplayer.MpvPlayer source.
@@ -20,7 +20,7 @@ OK: list[str] = []
 ERR: list[str] = []
 
 BRIDGE = r"""
-    // MPV_MOD_PUBLIC_BRIDGE_V12_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V13_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -115,7 +115,7 @@ BRIDGE = r"""
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V12_END
+    // MPV_MOD_PUBLIC_BRIDGE_V13_END
 """
 
 POLICY_JAVA = r"""package com.fongmi.android.tv.player.mpv;
@@ -637,9 +637,9 @@ def remove_method_defs(text: str, method_name: str) -> str:
 
 
 def strip_old(text: str) -> str:
-    # V8–V12 full bridge blocks by markers
+    # V8–V13 full bridge blocks by markers
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12)_END\n",
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12|13)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11|12|13)_END\n",
         "\n",
         text,
         count=5,
