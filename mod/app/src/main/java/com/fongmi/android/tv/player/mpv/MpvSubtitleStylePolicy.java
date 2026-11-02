@@ -11,8 +11,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * MPV 字幕：字体目录 + subfont.ttf（mpvKt 思路）+ 运行时属性由调用方 setProperty 写入。
- * sub-font 使用字体文件主名（yiqicukai 等），与目录中 yiqicukai.ttf 对应，避免未验证的中文族名。
+ * MPV 字幕样式：准备字体文件 + 通过 MpvPlayer 公开桥接方法写入运行时属性。
+ * 不反射 private setOption / mpvSetPropertyString。
  */
 public final class MpvSubtitleStylePolicy {
 
@@ -45,12 +45,9 @@ public final class MpvSubtitleStylePolicy {
             String id = SubtitleFontManager.idOf(idx);
             File src = SubtitleFontManager.getFontFile(idx);
             if (src != null && src.isFile()) {
-                // 始终覆盖 subfont.ttf（内容以源文件为准，不靠 size/mtime 短路）
-                File subfont = new File(dir, "subfont.ttf");
-                forceCopy(src, subfont);
+                forceCopy(src, new File(dir, "subfont.ttf"));
                 if (id != null && !id.isEmpty() && !"system".equals(id)) {
-                    File named = new File(dir, id + ".ttf");
-                    forceCopy(src, named);
+                    forceCopy(src, new File(dir, id + ".ttf"));
                 }
             }
         } catch (Throwable ignored) {
@@ -80,7 +77,6 @@ public final class MpvSubtitleStylePolicy {
         ensureFontsReady();
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
-        // FontName 用文件主名（与 sub-fonts-dir 中 *.ttf 对应），不用未验证中文显示名
         String font = getSubFontProperty();
         return "FontName=" + font
                 + ",PrimaryColour=" + primary
@@ -101,7 +97,7 @@ public final class MpvSubtitleStylePolicy {
         return "0.0/0.0/0.0";
     }
 
-    /** 文件主名：yiqicukai / huipianheyuan / fangzhengzhunyuan；系统默认用 sans-serif */
+    /** 文件主名与目录内 id.ttf 对齐；系统默认 sans-serif */
     public static String getSubFontProperty() {
         ensureFontsReady();
         try {
@@ -111,59 +107,56 @@ public final class MpvSubtitleStylePolicy {
             if (id != null && !id.isEmpty()) return id;
         } catch (Throwable ignored) {
         }
-        try {
-            String id = Setting.getSubtitleFontId();
-            if (id != null && !id.isEmpty()) return id;
-        } catch (Throwable ignored) {
-        }
         return "yiqicukai";
     }
 
     public static String getSubFontsDirProperty() {
         File dir = ensureFontsReady();
-        if (dir != null && dir.isDirectory()) return dir.getAbsolutePath();
-        return "";
+        return (dir != null && dir.isDirectory()) ? dir.getAbsolutePath() : "";
     }
 
     /**
-     * 对已创建的 MPV 引擎写入运行时属性（setProperty），不是 setOption。
-     * invokeOn 可为 MpvPlayer 或内部 native 包装。
+     * 对「当前活跃」MPV 实例应用样式。优先 sModActivePlayer 公开 API。
+     * @return true 表示已调用到公开桥接；false 表示当前无活跃 MPV（例如正在用 EXO）
      */
-    public static void applyRuntime(Object player) {
-        if (player == null) return;
+    public static boolean applyRuntimeToActive() {
+        ensureFontsReady();
+        Object active = null;
+        try {
+            Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
+            active = cl.getField("sModActivePlayer").get(null);
+        } catch (Throwable ignored) {
+        }
+        if (active == null) {
+            try {
+                Class<?> cl = Class.forName("com.fongmi.android.tv.player.mpv.MpvPlayer");
+                active = cl.getField("sModActivePlayer").get(null);
+            } catch (Throwable ignored) {
+            }
+        }
+        if (active == null) return false;
+        return applyRuntime(active);
+    }
+
+    /**
+     * @param player 必须是 MpvPlayer 实例（含 modApplySubtitleStyleRuntime）
+     * @return 是否成功调用公开方法
+     */
+    public static boolean applyRuntime(Object player) {
+        if (player == null) return false;
         ensureFontsReady();
         String dir = getSubFontsDirProperty();
         String font = getSubFontProperty();
         String style = getAssForceStyle();
         String color = getSubColorProperty();
-        trySet(player, "sub-ass-override", ASS_OVERRIDE);
-        trySet(player, "embeddedfonts", "yes");
-        if (dir != null && !dir.isEmpty()) trySet(player, "sub-fonts-dir", dir);
-        if (font != null && !font.isEmpty()) trySet(player, "sub-font", font);
-        if (style != null && !style.isEmpty()) trySet(player, "sub-ass-force-style", style);
-        if (color != null && !color.isEmpty()) trySet(player, "sub-color", color);
-        trySet(player, "sub-border-color", "0.0/0.0/0.0");
-        trySet(player, "sub-border-size", "2");
-        // 简体优先：MPV 原生 slang（mpvKt defaultPreferredSubtitleLanguages 思路）
-        trySet(player, "slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht");
-        trySet(player, "subs-with-matching-audio", "no");
-    }
-
-    private static void trySet(Object player, String key, String value) {
-        if (player == null || key == null || value == null) return;
-        // 优先 setProperty（运行时），再 setOption
-        for (String method : new String[]{"setProperty", "setOption"}) {
-            try {
-                java.lang.reflect.Method m = player.getClass().getMethod(method, String.class, String.class);
-                m.invoke(player, key, value);
-                return;
-            } catch (Throwable ignored) {
-            }
-        }
         try {
-            java.lang.reflect.Method cmd = player.getClass().getMethod("command", String[].class);
-            cmd.invoke(player, (Object) new String[]{"set", key, value});
-        } catch (Throwable ignored) {
+            java.lang.reflect.Method m = player.getClass().getMethod(
+                    "modApplySubtitleStyleRuntime", String.class, String.class, String.class, String.class);
+            m.invoke(player, dir, font, style, color);
+            return true;
+        } catch (Throwable t) {
+            // 公开方法不存在则失败，不再假装成功
+            return false;
         }
     }
 
