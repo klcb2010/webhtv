@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""MPV phase C V9 — full bridge strip, fingerprint fonts, strict verify."""
+"""MPV phase C V10 — content verify, brace-depth strip, owner-clear in release only."""
 from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V9_BEGIN"
-MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V9_END"
-MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V9"
-MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V9"
-MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V9"
-MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V9"
+MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V10_BEGIN"
+MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V10_END"
+MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V10"
+MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V10"
+MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V10"
+MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V10"
 OK: list[str] = []
 ERR: list[str] = []
 
 BRIDGE = r"""
-    // MPV_MOD_PUBLIC_BRIDGE_V9_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V10_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -28,7 +29,6 @@ BRIDGE = r"""
         if (player != null) sModActive.set(player);
     }
 
-    /** 仅当引用仍是该实例时清空，避免误清新实例。 */
     public static void modUnregisterActive(MpvPlayer player) {
         if (player == null) return;
         sModActive.compareAndSet(player, null);
@@ -46,10 +46,6 @@ BRIDGE = r"""
         }
     }
 
-    /**
-     * 初始化选项：仅 mpvSetOptionString，检查返回码。
-     * 负数失败；非负成功。无 setOption 假成功回退。
-     */
     public boolean modSetInitOption(String name, String value) {
         if (name == null || value == null) return false;
         try {
@@ -60,9 +56,6 @@ BRIDGE = r"""
         }
     }
 
-    /**
-     * 运行时属性：在 NATIVE_CONTEXT_LOCK 内二次确认状态后再写。
-     */
     public boolean modSetRuntimeProperty(String name, String value) {
         if (name == null || value == null) return false;
         try {
@@ -106,7 +99,6 @@ BRIDGE = r"""
     public boolean modApplyUserSubtitleStyleFromPolicy() {
         try {
             Class<?> pol = Class.forName("com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy");
-            // ensureFontsReady already done by Setting/applyRuntimeToActive; getters use tryFontsDir
             Object dir = pol.getMethod("getSubFontsDirProperty").invoke(null);
             Object font = pol.getMethod("getSubFontProperty").invoke(null);
             Object style = pol.getMethod("getAssForceStyle").invoke(null);
@@ -120,7 +112,7 @@ BRIDGE = r"""
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V9_END
+    // MPV_MOD_PUBLIC_BRIDGE_V10_END
 """
 
 POLICY_JAVA = r"""package com.fongmi.android.tv.player.mpv;
@@ -147,60 +139,69 @@ public final class MpvSubtitleStylePolicy {
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
     private static final Object ENSURE_LOCK = new Object();
     private static volatile String sLastFingerprint = "";
-    private static final ConcurrentHashMap<String, String> CONTENT_HASH_CACHE = new ConcurrentHashMap<>();
 
     private MpvSubtitleStylePolicy() {
     }
 
-    private static String contentHashSample(File src) {
-        if (src == null || !src.isFile()) return "x";
-        String key = src.getAbsolutePath() + "|" + src.length() + "|" + src.lastModified();
-        String cached = CONTENT_HASH_CACHE.get(key);
-        if (cached != null) return cached;
-        String hash = "x";
+    /**
+     * 抽样哈希：文件首 8K + 中部 8K + 尾部 8K。
+     * 不按 path|len|mtime 缓存哈希结果，避免同元信息不同内容被旧缓存掩盖。
+     */
+
+    private static String contentHashSample(File file) {
+        if (file == null || !file.isFile()) return "x";
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            long len = src.length();
-            try (FileInputStream in = new FileInputStream(src)) {
+            long len = file.length();
+            // head
+            try (FileInputStream in = new FileInputStream(file)) {
                 byte[] buf = new byte[8192];
-                // sample: first 8K + middle 8K + last 8K
                 int n = in.read(buf);
                 if (n > 0) md.update(buf, 0, n);
-                if (len > 24576) {
-                    long mid = Math.max(0, len / 2 - 4096);
-                    long skipped = 0;
-                    while (skipped < mid) {
-                        long s = in.skip(mid - skipped);
-                        if (s <= 0) break;
-                        skipped += s;
-                    }
-                    n = in.read(buf);
+            }
+            // middle
+            if (len > 16384L) {
+                try (FileInputStream in = new FileInputStream(file)) {
+                    long mid = Math.max(0L, len / 2L - 4096L);
+                    skipFully(in, mid);
+                    byte[] buf = new byte[8192];
+                    int n = in.read(buf);
                     if (n > 0) md.update(buf, 0, n);
-                    long remain = len - in.getChannel().position();
-                    if (remain > 8192) {
-                        long toSkip = remain - 8192;
-                        skipped = 0;
-                        while (skipped < toSkip) {
-                            long s = in.skip(toSkip - skipped);
-                            if (s <= 0) break;
-                            skipped += s;
-                        }
-                    }
-                    n = in.read(buf);
+                }
+            }
+            // tail
+            if (len > 8192L) {
+                try (FileInputStream in = new FileInputStream(file)) {
+                    long tail = Math.max(0L, len - 8192L);
+                    skipFully(in, tail);
+                    byte[] buf = new byte[8192];
+                    int n = in.read(buf);
                     if (n > 0) md.update(buf, 0, n);
                 }
             }
             byte[] dig = md.digest();
             StringBuilder sb = new StringBuilder(16);
             for (int i = 0; i < 8 && i < dig.length; i++) {
-                sb.append(String.format("%02x", dig[i]));
+                sb.append(String.format("%02x", dig[i] & 0xff));
             }
-            hash = sb.toString();
-        } catch (Throwable ignored) {
-            hash = "x";
+            return sb.toString();
+        } catch (Throwable t) {
+            return "x";
         }
-        CONTENT_HASH_CACHE.put(key, hash);
-        return hash;
+    }
+
+
+    private static void skipFully(FileInputStream in, long target) throws Exception {
+        long skipped = 0;
+        while (skipped < target) {
+            long s = in.skip(target - skipped);
+            if (s <= 0) {
+                if (in.read() < 0) break;
+                skipped++;
+            } else {
+                skipped += s;
+            }
+        }
     }
 
     private static String fingerprint(String id, File src) {
@@ -208,12 +209,13 @@ public final class MpvSubtitleStylePolicy {
         return id + "|" + src.length() + "|" + src.lastModified() + "|" + contentHashSample(src);
     }
 
-    private static boolean targetOk(File dst, File src) {
-        if (dst == null || !dst.isFile() || src == null || !src.isFile()) return false;
-        return dst.length() == src.length() && dst.length() > 0;
+    /** 长度 + 抽样内容哈希一致才算匹配 */
+    private static boolean contentMatches(File a, File b) {
+        if (a == null || b == null || !a.isFile() || !b.isFile()) return false;
+        if (a.length() != b.length() || a.length() <= 0) return false;
+        return contentHashSample(a).equals(contentHashSample(b));
     }
 
-    /** @return true only if copy completed and destination size matches source */
     private static boolean forceCopy(File src, File dst) {
         if (src == null || dst == null || !src.isFile()) return false;
         try {
@@ -230,7 +232,7 @@ public final class MpvSubtitleStylePolicy {
             }
             //noinspection ResultOfMethodCallIgnored
             dst.setLastModified(System.currentTimeMillis());
-            return targetOk(dst, src);
+            return contentMatches(src, dst);
         } catch (Throwable t) {
             return false;
         }
@@ -265,33 +267,26 @@ public final class MpvSubtitleStylePolicy {
             File subfont = new File(dir, "subfont.ttf");
             File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
             boolean need = !fp.equals(sLastFingerprint)
-                    || !targetOk(subfont, src)
-                    || (named != null && src != null && src.isFile() && !targetOk(named, src));
-
+                    || !contentMatches(subfont, src)
+                    || (named != null && src != null && src.isFile() && !contentMatches(named, src));
             if (!need) return dir;
 
-            // prepare upstream assets only when we actually need to refresh copies
             try {
                 SubtitleFontManager.prepareAllFonts();
             } catch (Throwable ignored) {
             }
-            // refresh src after prepare
             try {
                 src = SubtitleFontManager.getFontFile(idx);
                 fp = fingerprint(id, src);
             } catch (Throwable ignored) {
             }
-
             if (src == null || !src.isFile()) return dir;
 
             boolean ok = forceCopy(src, subfont);
-            if (named != null) {
-                ok = ok && forceCopy(src, named);
-            }
+            if (named != null) ok = ok && forceCopy(src, named);
             if (ok) {
                 sLastFingerprint = fp;
             }
-            // failure: leave sLastFingerprint unchanged so next call retries
             return dir;
         }
     }
@@ -323,7 +318,8 @@ public final class MpvSubtitleStylePolicy {
 
     public static String readFontFamilyName(File fontFile) {
         if (fontFile == null || !fontFile.isFile()) return null;
-        String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified();
+        String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified()
+                + ":" + contentHashSample(fontFile);
         String cached = FAMILY_CACHE.get(key);
         if (cached != null) return cached.isEmpty() ? null : cached;
         String family = null;
@@ -443,7 +439,6 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static boolean applyRuntimeToActive() {
-        // ensure once here; instance method must NOT call ensure again when already ready
         ensureFontsReady();
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
@@ -491,24 +486,103 @@ def find_mpv_player() -> Path | None:
     return None
 
 
+def find_matching_brace(text: str, open_idx: int) -> int:
+    """open_idx points to '{'. Return index of matching '}' or -1."""
+    depth = 0
+    i = open_idx
+    n = len(text)
+    in_str = False
+    str_ch = ""
+    in_line_comment = False
+    in_block_comment = False
+    while i < n:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if in_line_comment:
+            if c == "\n":
+                in_line_comment = False
+            i += 1
+            continue
+        if in_block_comment:
+            if c == "*" and nxt == "/":
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_str:
+            if c == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if c == str_ch:
+                in_str = False
+            i += 1
+            continue
+        if c == "/" and nxt == "/":
+            in_line_comment = True
+            i += 2
+            continue
+        if c == "/" and nxt == "*":
+            in_block_comment = True
+            i += 2
+            continue
+        if c in ('"', "'"):
+            in_str = True
+            str_ch = c
+            i += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def remove_method_defs(text: str, method_name: str) -> str:
+    """Remove all method definitions named method_name using brace depth."""
+    pattern = re.compile(
+        rf"(?:\n|^)([ \t]*)(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+{method_name}\s*\([^;]*?\)\s*\{{",
+        re.M,
+    )
+    while True:
+        m = pattern.search(text)
+        if not m:
+            break
+        brace = text.find("{", m.end() - 1)
+        end = find_matching_brace(text, brace)
+        if end < 0:
+            break
+        text = text[: m.start()] + "\n" + text[end + 1 :]
+    return text
+
+
 def strip_old(text: str) -> str:
-    # --- Complete historical MOD strip (V4–V9) ---
+    # V8–V10 full bridge blocks by markers
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[89]_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V[89]_END\n",
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10)_END\n",
         "\n",
         text,
         count=5,
     )
+    # V4–V7 header + methods via method name removal
+    text = re.sub(r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4-7]\b[^\n]*\n", "\n", text, count=5)
+    for meth in (
+        "modApplyUserSubtitleStyleFromPolicy",
+        "modApplySubtitleStyleRuntime",
+        "modSetRuntimeProperty",
+        "modSetInitOption",
+        "modIsNativeReady",
+        "modNotifySurfaceSize",
+        "modGetActivePlayer",
+        "modRegisterActive",
+        "modUnregisterActive",
+    ):
+        text = remove_method_defs(text, meth)
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4567]\b[\s\S]*?"
-        r"public boolean modApplyUserSubtitleStyleFromPolicy\(\) \{[\s\S]*?\n    \}\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4567]\b[\s\S]*?"
-        r"public void modNotifySurfaceSize\([\s\S]*?\n    \}\n",
+        r"\n\s*private static final java\.util\.concurrent\.atomic\.AtomicReference<MpvPlayer> sModActive[\s\S]*?;\n",
         "\n",
         text,
         count=5,
@@ -520,7 +594,13 @@ def strip_old(text: str) -> str:
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V[5-9]\n[^\n]*modSetInitOption[^\n]*\n",
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10)\n[^\n]*modSetInitOption[^\n]*\n",
+        "\n",
+        text,
+        count=5,
+    )
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V(?:5|6|7|8|9|10)[\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         text,
         count=5,
@@ -532,58 +612,17 @@ def strip_old(text: str) -> str:
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V[5-9][\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V(?:5|6|7|8|9|10)[^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
         "\n",
         text,
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V[5-9][^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
+        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V(?:5|6|7|8|9|10)[\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         text,
         count=5,
     )
-    text = re.sub(
-        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V[5-9][\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
-        "\n",
-        text,
-        count=5,
-    )
-    methods = [
-        "modApplyUserSubtitleStyleFromPolicy",
-        "modApplySubtitleStyleRuntime",
-        "modSetRuntimeProperty",
-        "modSetInitOption",
-        "modIsNativeReady",
-        "modNotifySurfaceSize",
-        "modGetActivePlayer",
-        "modRegisterActive",
-        "modUnregisterActive",
-    ]
-    for meth in methods:
-        text = re.sub(
-            r"\n\s*(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+"
-            + meth
-            + r"\s*\([^)]*\)\s*\{[\s\S]*?\n    \}\n",
-            "\n",
-            text,
-            count=10,
-        )
-        text = re.sub(
-            r"\n\s*(?:public|private|protected)\s+(?:static\s+)?[\w\<\>\[\]\s]+\s+"
-            + meth
-            + r"\s*\([^)]*\)\s*\{[^}]*\}\n",
-            "\n",
-            text,
-            count=10,
-        )
-    text = re.sub(
-        r"\n\s*private static final java\.util\.concurrent\.atomic\.AtomicReference<MpvPlayer> sModActive[\s\S]*?;\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V[4-7]\b[^\n]*\n", "\n", text, count=5)
     text = re.sub(r"\n\s*try \{ modRegisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text
@@ -591,14 +630,14 @@ def strip_old(text: str) -> str:
 
 def inject_bridge(text: str) -> str:
     if MARKER_BRIDGE_BEGIN in text and MARKER_BRIDGE_END in text:
-        OK.append("bridge V9 already")
+        OK.append("bridge V10 already")
         return text
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("class end not found")
         return text
     text = text[:idx] + "\n" + BRIDGE + text[idx:]
-    OK.append("bridge V9 inserted")
+    OK.append("bridge V10 inserted")
     return text
 
 
@@ -668,7 +707,7 @@ def inject_handle_release(text: str) -> str:
         return text
     insert = (
         m.group(1)
-        + f"\n        // {MARKER_RELEASE}: unregister at handleRelease entry (compareAndSet); before native teardown\n"
+        + f"\n        // {MARKER_RELEASE}: unregister at handleRelease entry (compareAndSet)\n"
         + "        try { modUnregisterActive(this); } catch (Throwable ignored) {}\n"
     )
     text = text[: m.start()] + insert + text[m.end() :]
@@ -677,21 +716,48 @@ def inject_handle_release(text: str) -> str:
 
 
 def inject_owner_clear(text: str) -> str:
+    """Only inject inside handleRelease() body, not whole file."""
     if MARKER_OWNER in text:
-        OK.append("owner clear already")
+        # verify location
+        hr = extract_method_body(text, "handleRelease")
+        if hr and MARKER_OWNER in hr:
+            OK.append("owner clear already in handleRelease")
+            return text
+        # marker elsewhere — strip and redo
+        text = re.sub(
+            r"[^\n]*// " + re.escape(MARKER_OWNER) + r"[\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
+            "\n",
+            text,
+            count=5,
+        )
+
+    m = re.search(r"\bhandleRelease\s*\(\s*\)\s*\{", text)
+    if not m:
+        ERR.append("handleRelease not found for owner clear")
         return text
-    text2, n = re.subn(
+    brace = text.find("{", m.end() - 1)
+    end = find_matching_brace(text, brace)
+    if end < 0:
+        ERR.append("handleRelease brace match failed")
+        return text
+    body = text[brace : end + 1]
+    if "nativeContextOwner" not in body or "null" not in body:
+        ERR.append("nativeContextOwner=null not in handleRelease body")
+        return text
+    # replace only within body
+    new_body, n = re.subn(
         r"(nativeContextOwner\s*=\s*null\s*;)",
         r"\1\n                try { // "
         + MARKER_OWNER
         + "\n                    modUnregisterActive(this);\n                } catch (Throwable ignored) {}",
-        text,
-        count=3,
+        body,
+        count=1,
     )
-    if n:
-        OK.append(f"owner=null unregister x{n}")
-        return text2
-    ERR.append("nativeContextOwner=null not found in release path")
+    if n == 0:
+        ERR.append("failed to inject owner clear inside handleRelease")
+        return text
+    text = text[:brace] + new_body + text[end + 1 :]
+    OK.append("owner clear inside handleRelease")
     return text
 
 
@@ -699,16 +765,11 @@ def extract_method_body(text: str, method_name: str) -> str | None:
     m = re.search(rf"\b{method_name}\s*\([^)]*\)\s*\{{", text)
     if not m:
         return None
-    start = m.end() - 1
-    depth = 0
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-    return None
+    brace = text.find("{", m.end() - 1)
+    end = find_matching_brace(text, brace)
+    if end < 0:
+        return None
+    return text[brace : end + 1]
 
 
 def extract_method(text: str, method_name: str) -> str | None:
@@ -718,26 +779,18 @@ def extract_method(text: str, method_name: str) -> str | None:
     )
     if not m:
         return None
-    start = m.start()
     brace = text.find("{", m.end() - 1)
-    depth = 0
-    for i in range(brace, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-    return None
+    end = find_matching_brace(text, brace)
+    if end < 0:
+        return None
+    return text[m.start() : end + 1]
 
 
 def verify_injected(text: str) -> None:
     if MARKER_BRIDGE_BEGIN not in text or MARKER_BRIDGE_END not in text:
-        ERR.append("VERIFY: bridge BEGIN/END markers missing")
+        ERR.append("VERIFY: bridge BEGIN/END missing")
     if text.count(MARKER_BRIDGE_BEGIN) != 1 or text.count(MARKER_BRIDGE_END) != 1:
-        ERR.append(
-            f"VERIFY: bridge marker count begin={text.count(MARKER_BRIDGE_BEGIN)} end={text.count(MARKER_BRIDGE_END)}"
-        )
+        ERR.append("VERIFY: bridge marker count wrong")
     for meth in (
         "modApplyUserSubtitleStyleFromPolicy",
         "modSetRuntimeProperty",
@@ -760,7 +813,7 @@ def verify_injected(text: str) -> None:
 
     body = extract_method_body(text, "ensureInitialized")
     if body is None:
-        ERR.append("VERIFY: ensureInitialized() not found")
+        ERR.append("VERIFY: ensureInitialized missing")
         return
 
     def pos(pat: str) -> int:
@@ -771,52 +824,32 @@ def verify_injected(text: str) -> None:
     p_true = pos(r"initialized\s*=\s*true\s*;")
     p_post = pos(r"applyPostInitOptions\s*\(\s*\)\s*;")
     p_style = pos(re.escape(MARKER_POST))
-    if p_init < 0:
-        ERR.append("VERIFY: mpvInit(); missing in ensureInitialized")
-    if p_true < 0:
-        ERR.append("VERIFY: initialized=true missing in ensureInitialized")
-    if p_post < 0:
-        ERR.append("VERIFY: applyPostInitOptions() missing in ensureInitialized")
-    if p_style < 0:
-        ERR.append("VERIFY: POST_INIT_STYLE marker missing in ensureInitialized")
-    if all(p >= 0 for p in (p_init, p_true, p_post, p_style)):
-        if not (p_init < p_true < p_post < p_style):
-            ERR.append(
-                f"VERIFY: bad order init={p_init} true={p_true} post={p_post} style={p_style}"
-            )
+    if min(p_init, p_true, p_post, p_style) < 0:
+        ERR.append("VERIFY: missing step in ensureInitialized")
+    elif not (p_init < p_true < p_post < p_style):
+        ERR.append("VERIFY: bad order in ensureInitialized")
 
     reg = len(re.findall(r"modRegisterActive\s*\(\s*this\s*\)", text))
     if reg != 1:
-        ERR.append(f"VERIFY: expected exactly 1 modRegisterActive(this), got {reg}")
+        ERR.append(f"VERIFY: modRegisterActive(this) count={reg}")
 
     rt = extract_method(text, "modSetRuntimeProperty")
-    if rt is None:
-        ERR.append("VERIFY: modSetRuntimeProperty method missing")
-    else:
-        if "synchronized (NATIVE_CONTEXT_LOCK)" not in rt:
-            ERR.append("VERIFY: modSetRuntimeProperty missing NATIVE_CONTEXT_LOCK")
-        for field in ("initialized", "released", "nativeContextOwner"):
-            if field not in rt:
-                ERR.append(f"VERIFY: modSetRuntimeProperty missing check {field}")
+    if not rt or "synchronized (NATIVE_CONTEXT_LOCK)" not in rt:
+        ERR.append("VERIFY: modSetRuntimeProperty lock missing")
+    elif any(f not in rt for f in ("initialized", "released", "nativeContextOwner")):
+        ERR.append("VERIFY: modSetRuntimeProperty state checks missing")
 
     ini = extract_method(text, "modSetInitOption")
-    if ini is None:
-        ERR.append("VERIFY: modSetInitOption missing")
-    else:
-        if re.search(r"catch\s*\([^)]*\)\s*\{[^}]*setOption\s*\(", ini):
-            ERR.append("VERIFY: modSetInitOption has setOption fallback")
-        if "mpvSetOptionString" not in ini:
-            ERR.append("VERIFY: modSetInitOption must call mpvSetOptionString")
+    if not ini or "mpvSetOptionString" not in ini:
+        ERR.append("VERIFY: modSetInitOption invalid")
+    elif re.search(r"catch\s*\([^)]*\)\s*\{[^}]*setOption\s*\(", ini or ""):
+        ERR.append("VERIFY: setOption fallback present")
 
-    if MARKER_RELEASE not in text:
-        ERR.append("VERIFY: handleRelease unregister marker missing")
     hr = extract_method_body(text, "handleRelease")
-    if hr is None:
-        ERR.append("VERIFY: handleRelease body missing")
-    elif "modUnregisterActive(this)" not in hr:
-        ERR.append("VERIFY: handleRelease missing modUnregisterActive")
-    if MARKER_OWNER not in text:
-        ERR.append("VERIFY: owner=null clear marker missing")
+    if not hr or "modUnregisterActive(this)" not in hr:
+        ERR.append("VERIFY: handleRelease unregister missing")
+    if not hr or MARKER_OWNER not in hr:
+        ERR.append("VERIFY: owner clear not inside handleRelease")
     OK.append("VERIFY all checks executed")
 
 
@@ -824,11 +857,11 @@ def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
-    OK.append("policy V9 written")
+    OK.append("policy V10 written")
 
 
 def patch_setting() -> None:
-    marker = "MPV_FONT_APPLY_AFTER_PUT_V9"
+    marker = "MPV_FONT_APPLY_AFTER_PUT_V10"
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     if not path.is_file():
         OK.append("Setting.java not in tree (skip)")
@@ -861,20 +894,14 @@ def patch_setting() -> None:
         return
     body = m.group(1)
     if not (0 <= body.find("Prefers.put") < body.find("ensureFontsReady") < body.find("applyRuntimeToActive")):
-        ERR.append("VERIFY: putSubtitleFontIndex order not put→ensure→apply")
+        ERR.append("VERIFY: put order wrong")
         return
     path.write_text(t2, encoding="utf-8")
     OK.append("Setting putSubtitleFontIndex order verified")
 
 
-
-def normalize_java(text: str) -> str:
-    # collapse excessive blank lines introduced by strip/reinject (idempotent content)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text
-
 def main() -> int:
-    print(f"[mod] inject_mpv_phase_c V9 ROOT={ROOT}")
+    print(f"[mod] inject_mpv_phase_c V10 ROOT={ROOT}")
     path = find_mpv_player()
     if path is None:
         ERR.append("MpvPlayer.java not found")
@@ -888,7 +915,6 @@ def main() -> int:
         return 1
 
     text = path.read_text(encoding="utf-8")
-    # 已完整注入且校验通过则不重写，保证二次运行文件字节一致
     if (
         MARKER_BRIDGE_BEGIN in text
         and MARKER_BRIDGE_END in text
@@ -911,13 +937,14 @@ def main() -> int:
             return 0
         ERR.clear()
         OK.clear()
+
     text = strip_old(text)
     text = inject_bridge(text)
     text = inject_init_slang(text)
     text = inject_post_init(text)
     text = inject_handle_release(text)
     text = inject_owner_clear(text)
-    text = normalize_java(text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     path.write_text(text, encoding="utf-8")
     write_policy()
     patch_setting()

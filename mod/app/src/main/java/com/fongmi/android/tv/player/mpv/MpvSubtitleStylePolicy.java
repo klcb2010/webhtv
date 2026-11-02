@@ -22,60 +22,69 @@ public final class MpvSubtitleStylePolicy {
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
     private static final Object ENSURE_LOCK = new Object();
     private static volatile String sLastFingerprint = "";
-    private static final ConcurrentHashMap<String, String> CONTENT_HASH_CACHE = new ConcurrentHashMap<>();
 
     private MpvSubtitleStylePolicy() {
     }
 
-    private static String contentHashSample(File src) {
-        if (src == null || !src.isFile()) return "x";
-        String key = src.getAbsolutePath() + "|" + src.length() + "|" + src.lastModified();
-        String cached = CONTENT_HASH_CACHE.get(key);
-        if (cached != null) return cached;
-        String hash = "x";
+    /**
+     * 抽样哈希：文件首 8K + 中部 8K + 尾部 8K。
+     * 不按 path|len|mtime 缓存哈希结果，避免同元信息不同内容被旧缓存掩盖。
+     */
+
+    private static String contentHashSample(File file) {
+        if (file == null || !file.isFile()) return "x";
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            long len = src.length();
-            try (FileInputStream in = new FileInputStream(src)) {
+            long len = file.length();
+            // head
+            try (FileInputStream in = new FileInputStream(file)) {
                 byte[] buf = new byte[8192];
-                // sample: first 8K + middle 8K + last 8K
                 int n = in.read(buf);
                 if (n > 0) md.update(buf, 0, n);
-                if (len > 24576) {
-                    long mid = Math.max(0, len / 2 - 4096);
-                    long skipped = 0;
-                    while (skipped < mid) {
-                        long s = in.skip(mid - skipped);
-                        if (s <= 0) break;
-                        skipped += s;
-                    }
-                    n = in.read(buf);
+            }
+            // middle
+            if (len > 16384L) {
+                try (FileInputStream in = new FileInputStream(file)) {
+                    long mid = Math.max(0L, len / 2L - 4096L);
+                    skipFully(in, mid);
+                    byte[] buf = new byte[8192];
+                    int n = in.read(buf);
                     if (n > 0) md.update(buf, 0, n);
-                    long remain = len - in.getChannel().position();
-                    if (remain > 8192) {
-                        long toSkip = remain - 8192;
-                        skipped = 0;
-                        while (skipped < toSkip) {
-                            long s = in.skip(toSkip - skipped);
-                            if (s <= 0) break;
-                            skipped += s;
-                        }
-                    }
-                    n = in.read(buf);
+                }
+            }
+            // tail
+            if (len > 8192L) {
+                try (FileInputStream in = new FileInputStream(file)) {
+                    long tail = Math.max(0L, len - 8192L);
+                    skipFully(in, tail);
+                    byte[] buf = new byte[8192];
+                    int n = in.read(buf);
                     if (n > 0) md.update(buf, 0, n);
                 }
             }
             byte[] dig = md.digest();
             StringBuilder sb = new StringBuilder(16);
             for (int i = 0; i < 8 && i < dig.length; i++) {
-                sb.append(String.format("%02x", dig[i]));
+                sb.append(String.format("%02x", dig[i] & 0xff));
             }
-            hash = sb.toString();
-        } catch (Throwable ignored) {
-            hash = "x";
+            return sb.toString();
+        } catch (Throwable t) {
+            return "x";
         }
-        CONTENT_HASH_CACHE.put(key, hash);
-        return hash;
+    }
+
+
+    private static void skipFully(FileInputStream in, long target) throws Exception {
+        long skipped = 0;
+        while (skipped < target) {
+            long s = in.skip(target - skipped);
+            if (s <= 0) {
+                if (in.read() < 0) break;
+                skipped++;
+            } else {
+                skipped += s;
+            }
+        }
     }
 
     private static String fingerprint(String id, File src) {
@@ -83,12 +92,13 @@ public final class MpvSubtitleStylePolicy {
         return id + "|" + src.length() + "|" + src.lastModified() + "|" + contentHashSample(src);
     }
 
-    private static boolean targetOk(File dst, File src) {
-        if (dst == null || !dst.isFile() || src == null || !src.isFile()) return false;
-        return dst.length() == src.length() && dst.length() > 0;
+    /** 长度 + 抽样内容哈希一致才算匹配 */
+    private static boolean contentMatches(File a, File b) {
+        if (a == null || b == null || !a.isFile() || !b.isFile()) return false;
+        if (a.length() != b.length() || a.length() <= 0) return false;
+        return contentHashSample(a).equals(contentHashSample(b));
     }
 
-    /** @return true only if copy completed and destination size matches source */
     private static boolean forceCopy(File src, File dst) {
         if (src == null || dst == null || !src.isFile()) return false;
         try {
@@ -105,7 +115,7 @@ public final class MpvSubtitleStylePolicy {
             }
             //noinspection ResultOfMethodCallIgnored
             dst.setLastModified(System.currentTimeMillis());
-            return targetOk(dst, src);
+            return contentMatches(src, dst);
         } catch (Throwable t) {
             return false;
         }
@@ -140,33 +150,26 @@ public final class MpvSubtitleStylePolicy {
             File subfont = new File(dir, "subfont.ttf");
             File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
             boolean need = !fp.equals(sLastFingerprint)
-                    || !targetOk(subfont, src)
-                    || (named != null && src != null && src.isFile() && !targetOk(named, src));
-
+                    || !contentMatches(subfont, src)
+                    || (named != null && src != null && src.isFile() && !contentMatches(named, src));
             if (!need) return dir;
 
-            // prepare upstream assets only when we actually need to refresh copies
             try {
                 SubtitleFontManager.prepareAllFonts();
             } catch (Throwable ignored) {
             }
-            // refresh src after prepare
             try {
                 src = SubtitleFontManager.getFontFile(idx);
                 fp = fingerprint(id, src);
             } catch (Throwable ignored) {
             }
-
             if (src == null || !src.isFile()) return dir;
 
             boolean ok = forceCopy(src, subfont);
-            if (named != null) {
-                ok = ok && forceCopy(src, named);
-            }
+            if (named != null) ok = ok && forceCopy(src, named);
             if (ok) {
                 sLastFingerprint = fp;
             }
-            // failure: leave sLastFingerprint unchanged so next call retries
             return dir;
         }
     }
@@ -198,7 +201,8 @@ public final class MpvSubtitleStylePolicy {
 
     public static String readFontFamilyName(File fontFile) {
         if (fontFile == null || !fontFile.isFile()) return null;
-        String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified();
+        String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified()
+                + ":" + contentHashSample(fontFile);
         String cached = FAMILY_CACHE.get(key);
         if (cached != null) return cached.isEmpty() ? null : cached;
         String family = null;
@@ -318,7 +322,6 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static boolean applyRuntimeToActive() {
-        // ensure once here; instance method must NOT call ensure again when already ready
         ensureFontsReady();
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
