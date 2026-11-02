@@ -5,30 +5,7 @@ on:
     # 每天6小时检查是否需要打包
     - cron: "30 */6 * * *"
   workflow_dispatch:
-    inputs:
-      release_channel:
-        description: Release channel
-        type: choice
-        options:
-          - auto
-          - stable
-          - beta
-        default: auto
-      release_tag:
-        description: Manually specify tag (leave empty for auto)
-        required: false
-      release_notes:
-        description: Custom release notes
-        required: false
-      prerelease:
-        description: Mark as prerelease
-        type: boolean
-        default: false
-      force_build:
-        description: Force build even no new commit
-        type: boolean
-        default: false
-
+  
 permissions:
   contents: write
 
