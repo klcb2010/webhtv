@@ -422,4 +422,21 @@ public class SettingPersonalActivity extends BaseActivity {
         }
     }
 
+
+    private void setMpvScreenshotBtn(View view) {
+        try {
+            Setting.cycleMpvScreenshotMode();
+            mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void setMpvScreenshotBrightnessBoost(View view) {
+        try {
+            Setting.cycleMpvScreenshotBrightnessBoost();
+            mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel());
+        } catch (Throwable ignored) {
+        }
+    }
+
 }

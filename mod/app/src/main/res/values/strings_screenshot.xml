@@ -6,4 +6,5 @@
     <string name="setting_mpv_screenshot_brightness">MPV screenshot brightness</string>
     <string name="screenshot_ok">Screenshot saved</string>
     <string name="screenshot_fail">Screenshot failed</string>
+<string name="screenshot_unavailable">Screenshot unavailable</string>
 </resources>
