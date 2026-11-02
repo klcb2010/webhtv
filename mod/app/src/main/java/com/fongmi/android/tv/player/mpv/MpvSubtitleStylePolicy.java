@@ -19,47 +19,58 @@ public final class MpvSubtitleStylePolicy {
 
     public static final String ASS_OVERRIDE = "force";
     private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
-    /** 同一次切字体/应用内短时去重，避免 UI 线程反复 copy */
-    private static volatile long sLastEnsureMs = 0L;
-    private static final long ENSURE_DEDUP_MS = 400L;
+    private static final Object ENSURE_LOCK = new Object();
+    private static volatile String sLastFingerprint = "";
 
     private MpvSubtitleStylePolicy() {
     }
 
+    private static String fingerprint(String id, File src) {
+        if (src == null || !src.isFile()) return id + "|missing";
+        return id + "|" + src.length() + "|" + src.lastModified();
+    }
+
+    private static boolean targetOk(File dst, File src) {
+        if (dst == null || !dst.isFile() || src == null || !src.isFile()) return false;
+        return dst.length() == src.length() && dst.length() > 0;
+    }
+
     public static File ensureFontsReady() {
-        long now = android.os.SystemClock.uptimeMillis();
-        if (now - sLastEnsureMs < ENSURE_DEDUP_MS) {
-            File dir = tryFontsDir();
-            if (dir != null) return dir;
-        }
-        sLastEnsureMs = now;
-        try {
-            SubtitleFontManager.prepareAllFonts();
-        } catch (Throwable ignored) {
-        }
-        File dir = tryFontsDir();
-        if (dir == null) {
+        synchronized (ENSURE_LOCK) {
             try {
-                dir = new File(App.get().getFilesDir(), "subtitle_fonts");
-                //noinspection ResultOfMethodCallIgnored
-                dir.mkdirs();
+                SubtitleFontManager.prepareAllFonts();
             } catch (Throwable ignored) {
             }
-        }
-        if (dir == null) return null;
-        try {
-            int idx = Setting.getSubtitleFontIndex();
-            String id = SubtitleFontManager.idOf(idx);
-            File src = SubtitleFontManager.getFontFile(idx);
-            if (src != null && src.isFile()) {
-                forceCopy(src, new File(dir, "subfont.ttf"));
-                if (id != null && !id.isEmpty() && !"system".equals(id)) {
-                    forceCopy(src, new File(dir, id + ".ttf"));
+            File dir = tryFontsDir();
+            if (dir == null) {
+                try {
+                    dir = new File(App.get().getFilesDir(), "subtitle_fonts");
+                    //noinspection ResultOfMethodCallIgnored
+                    dir.mkdirs();
+                } catch (Throwable ignored) {
                 }
             }
-        } catch (Throwable ignored) {
+            if (dir == null) return null;
+            try {
+                int idx = Setting.getSubtitleFontIndex();
+                String id = SubtitleFontManager.idOf(idx);
+                if (id == null) id = "";
+                File src = SubtitleFontManager.getFontFile(idx);
+                String fp = fingerprint(id, src);
+                File subfont = new File(dir, "subfont.ttf");
+                File named = (id.isEmpty() || "system".equals(id)) ? null : new File(dir, id + ".ttf");
+                boolean need = !fp.equals(sLastFingerprint)
+                        || !targetOk(subfont, src)
+                        || (named != null && src != null && src.isFile() && !targetOk(named, src));
+                if (need && src != null && src.isFile()) {
+                    forceCopy(src, subfont);
+                    if (named != null) forceCopy(src, named);
+                    sLastFingerprint = fp;
+                }
+            } catch (Throwable ignored) {
+            }
+            return dir;
         }
-        return dir;
     }
 
     private static File tryFontsDir() {
@@ -119,7 +130,7 @@ public final class MpvSubtitleStylePolicy {
             }
             if (all[0] == 't' && all[1] == 't' && all[2] == 'c' && all[3] == 'f') {
                 FAMILY_CACHE.put(key, "");
-                return null; // TTC: 不解析，回退文件 ID
+                return null;
             }
             ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.BIG_ENDIAN);
             int numTables = bb.getShort(4) & 0xFFFF;
@@ -184,7 +195,6 @@ public final class MpvSubtitleStylePolicy {
     }
 
     public static String getAssForceStyle() {
-        // getter 不强制 prepare（由 ensureFontsReady/apply 入口负责）
         int argb = Setting.getSubtitleColorArgb();
         String primary = toAssColour(argb);
         String font = getSubFontProperty();
@@ -233,7 +243,6 @@ public final class MpvSubtitleStylePolicy {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
             Object active = cl.getMethod("modGetActivePlayer").invoke(null);
             if (active == null) return false;
-            // 避免二次 ensure：直接调实例方法
             java.lang.reflect.Method m = active.getClass().getMethod("modApplyUserSubtitleStyleFromPolicy");
             Object r = m.invoke(active);
             return (r instanceof Boolean) && (Boolean) r;
