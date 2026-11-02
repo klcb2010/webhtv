@@ -263,7 +263,7 @@ public final class MpvSubtitleStylePolicy {
                 } else {
                     continue;
                 }
-                if (value.isEmpty() || value.indexOf('\u0000') >= 0) continue;
+                if (value.isEmpty() || value.indexOf(0) >= 0) continue; continue;
                 int rank;
                 if (platformID == 3 && languageID == 0x0409) rank = 0;
                 else if (platformID == 0 && languageID == 0) rank = 1;
