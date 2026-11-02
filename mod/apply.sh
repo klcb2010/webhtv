@@ -56,30 +56,10 @@ if [[ ! -f "$ROOT/app/src/main/java/com/fongmi/android/tv/utils/MpvScreenshot.ja
   echo "[mod] WARN missing main MpvScreenshot"
 fi
 
-# EventIndex 由 APT 生成；若生成失败会导致 Startup 编译挂掉。改为不依赖 index（反射订阅，功能等价）。
-if [[ -f "$ROOT/app/src/main/java/com/fongmi/android/tv/Startup.java" ]]; then
-  python3 - "$ROOT/app/src/main/java/com/fongmi/android/tv/Startup.java" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-t = p.read_text(encoding="utf-8")
-orig = t
-t = t.replace("import com.fongmi.android.tv.event.EventIndex;
-", "")
-t = t.replace(
-    "EventBus.builder().addIndex(new EventIndex()).installDefaultEventBus();",
-    "EventBus.builder().installDefaultEventBus(); // MOD: no EventIndex (APT optional)",
-)
-if t != orig:
-    p.write_text(t, encoding="utf-8")
-    print("[mod] Startup: EventBus without EventIndex")
-else:
-    print("[mod] Startup: EventIndex already absent or pattern mismatch")
-PY
+# EventIndex：用独立 hook，避免 apply.sh heredoc 引号问题
+if [[ -f "$MOD/hooks/inject_startup_no_eventindex.py" ]]; then
+  python3 "$MOD/hooks/inject_startup_no_eventindex.py" "$ROOT" || exit 1
 fi
-
-
-
 
 # 清除误加的 vod_home 独立资源，避免与 strings.xml 重复
 rm -f "$ROOT/app/src/mobile/res/values/strings_vod_home.xml" \
