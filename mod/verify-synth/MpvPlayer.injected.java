@@ -107,7 +107,7 @@ mpvInit();
             ok &= modSetRuntimeProperty("sub-font", font);
         }
         if (forceStyle != null && !forceStyle.isEmpty()) {
-            ok &= modSetRuntimeProperty("sub-ass-force-style", forceStyle);
+            ok &= modSetRuntimeProperty("sub-ass-style-overrides", forceStyle);
         }
         if (color != null && !color.isEmpty()) {
             ok &= modSetRuntimeProperty("sub-color", color);
