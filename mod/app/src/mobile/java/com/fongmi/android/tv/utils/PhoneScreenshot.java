@@ -77,7 +77,9 @@ public final class PhoneScreenshot {
                         + " posMs=" + (snap == null ? -1 : snap.posMs)
                         + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
             } catch (Throwable ignored) {}
-            // 质量优先：始终独立解码（含 GO/127.0.0.1）；串行 Retriever→Codec，高优先级；Codec 优先软解避免与播放硬解冲突
+            // 质量优先：始终独立解码冲片源分辨率（含 GO/127.0.0.1）。
+            // 串行 Retriever→Codec（不做双线程并行，避免与播放硬解冲突 CRASH_NATIVE）。
+            // Codec 优先软解。失败才 Surface（分辨率可能低于片源，但保证有图）。
             Task.execute(() -> {
                 try {
                     android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
