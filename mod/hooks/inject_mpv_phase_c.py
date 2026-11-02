@@ -730,9 +730,9 @@ def inject_init_slang(text: str) -> str:
     """Inject slang in the real ensureInitialized() body before mpvInit()."""
     slang = "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"
     body = extract_method_body(text, "ensureInitialized")
-    if body and MARKER_OPT in body and 'com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages()' in body:
-        if body.find(MARKER_OPT) < body.find("mpvInit"):
-            OK.append("init slang already in ensureInitialized")
+    if body and MARKER_OPT in body and "MPV_PHASE_C_FONT_OPTIONS_V14" in body and 'com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguages()' in body:
+        if body.find(MARKER_OPT) < body.find("mpvInit") and body.find("MPV_PHASE_C_FONT_OPTIONS_V14") < body.find("mpvInit"):
+            OK.append("init slang and selected font options already in ensureInitialized")
             return text
 
     # Remove previous phase-C slang lines only; do not guess from unrelated options.
