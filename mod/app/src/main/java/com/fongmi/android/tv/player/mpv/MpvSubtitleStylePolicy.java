@@ -9,14 +9,19 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * MPV 字幕样式：准备字体文件 + 通过 MpvPlayer 公开桥接方法写入运行时属性。
- * 不反射 private setOption / mpvSetPropertyString。
+ * MPV 字幕：TTF Family Name + 经 MpvPlayer 公开桥写入运行时属性（init 后）。
  */
 public final class MpvSubtitleStylePolicy {
 
     public static final String ASS_OVERRIDE = "force";
+    private static final ConcurrentHashMap<String, String> FAMILY_CACHE = new ConcurrentHashMap<>();
 
     private MpvSubtitleStylePolicy() {
     }
@@ -73,6 +78,79 @@ public final class MpvSubtitleStylePolicy {
         }
     }
 
+    /** 读取 TTF/OTF name 表 Font Family (nameID=1)。失败返回 null。 */
+    public static String readFontFamilyName(File fontFile) {
+        if (fontFile == null || !fontFile.isFile()) return null;
+        String key = fontFile.getAbsolutePath() + ":" + fontFile.length() + ":" + fontFile.lastModified();
+        String cached = FAMILY_CACHE.get(key);
+        if (cached != null) return cached.isEmpty() ? null : cached;
+        String family = null;
+        try (FileInputStream in = new FileInputStream(fontFile)) {
+            byte[] all = in.readAllBytes();
+            if (all.length < 12) {
+                FAMILY_CACHE.put(key, "");
+                return null;
+            }
+            ByteBuffer bb = ByteBuffer.wrap(all).order(ByteOrder.BIG_ENDIAN);
+            int sfnt = bb.getInt(0);
+            // 0x00010000 TrueType, 'OTTO' CFF, 'true', 'typ1'
+            int numTables = bb.getShort(4) & 0xFFFF;
+            int nameOffset = -1;
+            int nameLength = 0;
+            for (int i = 0; i < numTables; i++) {
+                int off = 12 + i * 16;
+                if (off + 16 > all.length) break;
+                int tag = bb.getInt(off);
+                // 'name' = 0x6E616D65
+                if (tag == 0x6E616D65) {
+                    nameOffset = bb.getInt(off + 8);
+                    nameLength = bb.getInt(off + 12);
+                    break;
+                }
+            }
+            if (nameOffset < 0 || nameOffset + 6 > all.length) {
+                FAMILY_CACHE.put(key, "");
+                return null;
+            }
+            int count = bb.getShort(nameOffset + 2) & 0xFFFF;
+            int stringOffset = bb.getShort(nameOffset + 4) & 0xFFFF;
+            String best = null;
+            for (int i = 0; i < count; i++) {
+                int rec = nameOffset + 6 + i * 12;
+                if (rec + 12 > all.length) break;
+                int platformID = bb.getShort(rec) & 0xFFFF;
+                int encodingID = bb.getShort(rec + 2) & 0xFFFF;
+                int languageID = bb.getShort(rec + 4) & 0xFFFF;
+                int nameID = bb.getShort(rec + 6) & 0xFFFF;
+                int length = bb.getShort(rec + 8) & 0xFFFF;
+                int offset = bb.getShort(rec + 10) & 0xFFFF;
+                if (nameID != 1) continue; // Font Family
+                int abs = nameOffset + stringOffset + offset;
+                if (abs + length > all.length || length <= 0) continue;
+                String s;
+                if (platformID == 3) { // Windows
+                    s = new String(all, abs, length, StandardCharsets.UTF_16BE).trim();
+                } else if (platformID == 1) { // Mac Roman
+                    s = new String(all, abs, length, Charset.forName("MacRoman")).trim();
+                } else {
+                    s = new String(all, abs, length, StandardCharsets.UTF_8).trim();
+                }
+                if (s.isEmpty()) continue;
+                // prefer en-US windows
+                if (platformID == 3 && languageID == 0x0409) {
+                    best = s;
+                    break;
+                }
+                if (best == null) best = s;
+            }
+            family = best;
+        } catch (Throwable ignored) {
+            family = null;
+        }
+        FAMILY_CACHE.put(key, family == null ? "" : family);
+        return family;
+    }
+
     public static String getAssForceStyle() {
         ensureFontsReady();
         int argb = Setting.getSubtitleColorArgb();
@@ -97,13 +175,18 @@ public final class MpvSubtitleStylePolicy {
         return "0.0/0.0/0.0";
     }
 
-    /** 文件主名与目录内 id.ttf 对齐；系统默认 sans-serif */
+    /**
+     * sub-font：优先 TTF 内部 Family Name；失败回退文件主名；系统默认 sans-serif。
+     */
     public static String getSubFontProperty() {
         ensureFontsReady();
         try {
             int idx = Setting.getSubtitleFontIndex();
             String id = SubtitleFontManager.idOf(idx);
             if (id != null && "system".equals(id)) return "sans-serif";
+            File src = SubtitleFontManager.getFontFile(idx);
+            String family = readFontFamilyName(src);
+            if (family != null && !family.isEmpty()) return family;
             if (id != null && !id.isEmpty()) return id;
         } catch (Throwable ignored) {
         }
@@ -115,33 +198,20 @@ public final class MpvSubtitleStylePolicy {
         return (dir != null && dir.isDirectory()) ? dir.getAbsolutePath() : "";
     }
 
-    /**
-     * 对「当前活跃」MPV 实例应用样式。优先 sModActivePlayer 公开 API。
-     * @return true 表示已调用到公开桥接；false 表示当前无活跃 MPV（例如正在用 EXO）
-     */
+    /** @return 是否成功应用到当前活跃且 native ready 的 MPV */
     public static boolean applyRuntimeToActive() {
         ensureFontsReady();
         Object active = null;
         try {
             Class<?> cl = Class.forName("androidx.media3.mpvplayer.MpvPlayer");
-            active = cl.getField("sModActivePlayer").get(null);
+            java.lang.reflect.Method g = cl.getMethod("modGetActivePlayer");
+            active = g.invoke(null);
         } catch (Throwable ignored) {
-        }
-        if (active == null) {
-            try {
-                Class<?> cl = Class.forName("com.fongmi.android.tv.player.mpv.MpvPlayer");
-                active = cl.getField("sModActivePlayer").get(null);
-            } catch (Throwable ignored) {
-            }
         }
         if (active == null) return false;
         return applyRuntime(active);
     }
 
-    /**
-     * @param player 必须是 MpvPlayer 实例（含 modApplySubtitleStyleRuntime）
-     * @return 是否成功调用公开方法
-     */
     public static boolean applyRuntime(Object player) {
         if (player == null) return false;
         ensureFontsReady();
@@ -152,10 +222,9 @@ public final class MpvSubtitleStylePolicy {
         try {
             java.lang.reflect.Method m = player.getClass().getMethod(
                     "modApplySubtitleStyleRuntime", String.class, String.class, String.class, String.class);
-            m.invoke(player, dir, font, style, color);
-            return true;
+            Object r = m.invoke(player, dir, font, style, color);
+            return (r instanceof Boolean) && (Boolean) r;
         } catch (Throwable t) {
-            // 公开方法不存在则失败，不再假装成功
             return false;
         }
     }
