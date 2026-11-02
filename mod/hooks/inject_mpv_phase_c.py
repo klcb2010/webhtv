@@ -7,17 +7,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V10_BEGIN"
-MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V10_END"
-MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V10"
-MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V10"
-MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V10"
-MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V10"
+MARKER_BRIDGE_BEGIN = "MPV_MOD_PUBLIC_BRIDGE_V11_BEGIN"
+MARKER_BRIDGE_END = "MPV_MOD_PUBLIC_BRIDGE_V11_END"
+MARKER_OPT = "MPV_PHASE_C_INIT_OPTIONS_V11"
+MARKER_POST = "MPV_PHASE_C_POST_INIT_STYLE_V11"
+MARKER_RELEASE = "MPV_MOD_HANDLE_RELEASE_V11"
+MARKER_OWNER = "MPV_MOD_OWNER_CLEAR_V11"
 OK: list[str] = []
 ERR: list[str] = []
 
 BRIDGE = r"""
-    // MPV_MOD_PUBLIC_BRIDGE_V10_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V11_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -112,7 +112,7 @@ BRIDGE = r"""
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V10_END
+    // MPV_MOD_PUBLIC_BRIDGE_V11_END
 """
 
 POLICY_JAVA = r"""package com.fongmi.android.tv.player.mpv;
@@ -541,6 +541,44 @@ def find_matching_brace(text: str, open_idx: int) -> int:
     return -1
 
 
+
+def remove_marked_try_blocks(text: str, marker_substr: str) -> str:
+    """Remove // marker ... try { ... } catch (...) {} blocks using brace depth."""
+    while True:
+        idx = text.find(marker_substr)
+        if idx < 0:
+            break
+        # find start of line for marker
+        line_start = text.rfind("\n", 0, idx) + 1
+        # find try after marker
+        try_idx = text.find("try", idx)
+        if try_idx < 0 or try_idx - idx > 200:
+            # remove just the marker line
+            line_end = text.find("\n", idx)
+            if line_end < 0:
+                text = text[:line_start]
+                break
+            text = text[:line_start] + text[line_end + 1 :]
+            continue
+        brace = text.find("{", try_idx)
+        if brace < 0:
+            break
+        end_try = find_matching_brace(text, brace)
+        if end_try < 0:
+            break
+        # optional catch
+        rest = text[end_try + 1 : end_try + 80]
+        m_catch = re.match(r"\s*catch\s*\([^)]*\)\s*\{", rest)
+        end = end_try
+        if m_catch:
+            cbrace = text.find("{", end_try + 1)
+            end_catch = find_matching_brace(text, cbrace)
+            if end_catch >= 0:
+                end = end_catch
+        text = text[:line_start] + text[end + 1 :]
+    return text
+
+
 def remove_method_defs(text: str, method_name: str) -> str:
     """Remove all method definitions named method_name using brace depth."""
     pattern = re.compile(
@@ -562,7 +600,7 @@ def remove_method_defs(text: str, method_name: str) -> str:
 def strip_old(text: str) -> str:
     # V8–V10 full bridge blocks by markers
     text = re.sub(
-        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10)_END\n",
+        r"\n\s*// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11)_BEGIN[\s\S]*?// MPV_MOD_PUBLIC_BRIDGE_V(?:8|9|10|11)_END\n",
         "\n",
         text,
         count=5,
@@ -587,20 +625,28 @@ def strip_old(text: str) -> str:
         text,
         count=5,
     )
+    text = remove_marked_try_blocks(text, "MPV_PHASE_C_AFTER_INIT_V5")
+    text = remove_marked_try_blocks(text, "MPV_PHASE_C_AFTER_INIT_V6")
+    # also post-init style blocks by marker + try
+    for mk in (
+        "MPV_PHASE_C_POST_INIT_STYLE_V5",
+        "MPV_PHASE_C_POST_INIT_STYLE_V6",
+        "MPV_PHASE_C_POST_INIT_STYLE_V7",
+        "MPV_PHASE_C_POST_INIT_STYLE_V8",
+        "MPV_PHASE_C_POST_INIT_STYLE_V9",
+        "MPV_PHASE_C_POST_INIT_STYLE_V10",
+        "MPV_PHASE_C_POST_INIT_STYLE_V11",
+    ):
+        text = remove_marked_try_blocks(text, mk)
+
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_AFTER_INIT_V5[\s\S]{0,2000}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11)\n[^\n]*modSetInitOption[^\n]*\n",
         "\n",
         text,
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10)\n[^\n]*modSetInitOption[^\n]*\n",
-        "\n",
-        text,
-        count=5,
-    )
-    text = re.sub(
-        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V(?:5|6|7|8|9|10)[\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_PHASE_C_POST_INIT_STYLE_V(?:5|6|7|8|9|10|11)[\s\S]{0,1000}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         text,
         count=5,
@@ -612,13 +658,13 @@ def strip_old(text: str) -> str:
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V(?:5|6|7|8|9|10)[^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
+        r"[^\n]*// MPV_MOD_HANDLE_RELEASE_V(?:5|6|7|8|9|10|11)[^\n]*\n(?:\s*try \{ modUnregisterActive\(this\); \} catch \(Throwable ignored\) \{\}\n)?",
         "\n",
         text,
         count=5,
     )
     text = re.sub(
-        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V(?:5|6|7|8|9|10)[\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
+        r"[^\n]*// MPV_MOD_OWNER_CLEAR_V(?:5|6|7|8|9|10|11)[\s\S]{0,250}?catch \(Throwable ignored\) \{\}\n",
         "\n",
         text,
         count=5,
@@ -630,51 +676,55 @@ def strip_old(text: str) -> str:
 
 def inject_bridge(text: str) -> str:
     if MARKER_BRIDGE_BEGIN in text and MARKER_BRIDGE_END in text:
-        OK.append("bridge V10 already")
+        OK.append("bridge V11 already")
         return text
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("class end not found")
         return text
     text = text[:idx] + "\n" + BRIDGE + text[idx:]
-    OK.append("bridge V10 inserted")
+    OK.append("bridge V11 inserted")
     return text
 
 
 def inject_init_slang(text: str) -> str:
-    if MARKER_OPT in text:
-        OK.append("init slang already")
-        return text
-    lines = text.splitlines(keepends=True)
-    idx = -1
-    for i, ln in enumerate(lines):
-        if "MPV_PHASE_A_OPTIONS" in ln:
-            idx = i
-        if idx < 0 and re.search(r'\(\s*"hwdec"\s*,', ln):
-            idx = i
-    if idx < 0:
-        for i, ln in enumerate(lines):
-            if re.search(r'(?:setOption|mpvSetOptionString)\s*\(\s*"vo"', ln):
-                idx = i
-                break
-    if idx < 0:
-        ERR.append("no init option site for slang")
-        return text
-    j = idx + 1
-    while j < len(lines) and (
-        any(x in lines[j] for x in ("setOption", "mpvSetOption", "MPV_PHASE_A", "try {", "catch (Throwable"))
-        or lines[j].strip().startswith("//")
-        or lines[j].strip() == ""
-    ):
-        j += 1
-    ind = re.match(r"^(\s*)", lines[idx]).group(1) if re.match(r"^(\s*)", lines[idx]) else "        "
-    block = (
-        f"{ind}// {MARKER_OPT}\n"
-        f'{ind}try {{ modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"); }} catch (Throwable ignored) {{}}\n'
+    """Inject slang only inside ensureInitialized(), strictly before mpvInit()."""
+    SLANG = "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"
+    body = extract_method_body(text, "ensureInitialized")
+    if body and MARKER_OPT in body and 'modSetInitOption("slang"' in body:
+        if body.find("mpvInit") >= 0 and body.find(MARKER_OPT) < body.find("mpvInit"):
+            OK.append("init slang already")
+            return text
+    text = re.sub(
+        r"[^\n]*// MPV_PHASE_C_INIT_OPTIONS_V(?:5|6|7|8|9|10|11)\n[^\n]*modSetInitOption[^\n]*\n",
+        "\n",
+        text,
+        count=5,
     )
-    lines.insert(j, block)
-    OK.append("init slang")
-    return "".join(lines)
+    m = re.search(r"\bensureInitialized\s*\([^)]*\)\s*\{", text)
+    if not m:
+        ERR.append("ensureInitialized() not found for slang inject")
+        return text
+    brace = text.find("{", m.end() - 1)
+    endb = find_matching_brace(text, brace)
+    if endb < 0:
+        ERR.append("ensureInitialized brace match failed")
+        return text
+    body = text[brace + 1 : endb]
+    mi = re.search(r"mpvInit\s*\(\s*\)\s*;", body)
+    if not mi:
+        ERR.append("mpvInit(); not found inside ensureInitialized")
+        return text
+    line_start = body.rfind("\n", 0, mi.start()) + 1
+    ind = re.match(r"[ \t]*", body[line_start:]).group(0) or "        "
+    insert = (
+        f"{ind}// {MARKER_OPT}\n"
+        f'{ind}try {{ modSetInitOption("slang", "{SLANG}"); }} catch (Throwable ignored) {{}}\n'
+    )
+    new_body = body[: mi.start()] + insert + body[mi.start() :]
+    text = text[: brace + 1] + new_body + text[endb:]
+    OK.append("init slang before mpvInit in ensureInitialized")
+    return text
 
 
 def inject_post_init(text: str) -> str:
@@ -820,14 +870,21 @@ def verify_injected(text: str) -> None:
         m = re.search(pat, body)
         return m.start() if m else -1
 
+    p_slang = pos(re.escape(MARKER_OPT))
     p_init = pos(r"mpvInit\s*\(\s*\)\s*;")
     p_true = pos(r"initialized\s*=\s*true\s*;")
     p_post = pos(r"applyPostInitOptions\s*\(\s*\)\s*;")
     p_style = pos(re.escape(MARKER_POST))
+    if p_slang < 0:
+        ERR.append("VERIFY: slang marker not inside ensureInitialized")
+    elif 'modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht")' not in body:
+        ERR.append("VERIFY: slang priority string incorrect or missing")
     if min(p_init, p_true, p_post, p_style) < 0:
         ERR.append("VERIFY: missing step in ensureInitialized")
-    elif not (p_init < p_true < p_post < p_style):
-        ERR.append("VERIFY: bad order in ensureInitialized")
+    elif not (p_slang < p_init < p_true < p_post < p_style):
+        ERR.append(
+            f"VERIFY: bad order slang={p_slang} init={p_init} true={p_true} post={p_post} style={p_style}"
+        )
 
     reg = len(re.findall(r"modRegisterActive\s*\(\s*this\s*\)", text))
     if reg != 1:
@@ -857,14 +914,14 @@ def write_policy() -> None:
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(POLICY_JAVA, encoding="utf-8")
-    OK.append("policy V10 written")
+    OK.append("policy V11 written")
 
 
 def patch_setting() -> None:
-    marker = "MPV_FONT_APPLY_AFTER_PUT_V10"
+    marker = "MPV_FONT_APPLY_AFTER_PUT_V11"
     path = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     if not path.is_file():
-        OK.append("Setting.java not in tree (skip)")
+        ERR.append("Setting.java not found — cannot SUCCESS without real Setting")
         return
     t = path.read_text(encoding="utf-8")
     t2, n = re.subn(
@@ -901,7 +958,7 @@ def patch_setting() -> None:
 
 
 def main() -> int:
-    print(f"[mod] inject_mpv_phase_c V10 ROOT={ROOT}")
+    print(f"[mod] inject_mpv_phase_c V11 ROOT={ROOT}")
     path = find_mpv_player()
     if path is None:
         ERR.append("MpvPlayer.java not found")
@@ -929,6 +986,14 @@ def main() -> int:
         if not ERR:
             write_policy()
             patch_setting()
+            if ERR:
+                print("---- results ----")
+                for x in OK:
+                    print(" OK", x)
+                for x in ERR:
+                    print(" FAIL", x)
+                print("[mod] inject_mpv_phase_c FAILED")
+                return 1
             OK.append("idempotent skip: already fully injected")
             print("---- results ----")
             for x in OK:

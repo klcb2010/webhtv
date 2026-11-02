@@ -9,41 +9,40 @@ public class MpvPlayer {
         // MPV_PHASE_A_OPTIONS
         try { setOption("vo", "gpu"); } catch (Throwable ignored) {}
 
-        // MPV_PHASE_C_INIT_OPTIONS_V10
+                // MPV_PHASE_C_INIT_OPTIONS_V11
         try { modSetInitOption("slang", "zh-Hans,zh-CN,chs,sc,zh,zh-Hant,zh-TW,cht"); } catch (Throwable ignored) {}
-        mpvInit();
-
+mpvInit();
         initialized = true;
         applyPostInitOptions();
-        // MPV_PHASE_C_POST_INIT_STYLE_V10
+        // MPV_PHASE_C_POST_INIT_STYLE_V11
         try {
             modRegisterActive(this);
             modApplyUserSubtitleStyleFromPolicy();
         } catch (Throwable ignored) {}
 
     }
+    private void doSomethingImportant() { /* must survive strip */ }
     private void mpvInit() {}
     private void applyPostInitOptions() {}
     private void setOption(String a, String b) {}
     private int mpvSetOptionString(String a, String b) { return 0; }
     private int mpvSetPropertyString(String a, String b) { return 0; }
     protected Object handleRelease() {
-        // MPV_MOD_HANDLE_RELEASE_V10: unregister at handleRelease entry (compareAndSet)
+        // MPV_MOD_HANDLE_RELEASE_V11: unregister at handleRelease entry (compareAndSet)
         try { modUnregisterActive(this); } catch (Throwable ignored) {}
 
         released = true;
         nativeContextOwner = null;
-                try { // MPV_MOD_OWNER_CLEAR_V10
+                try { // MPV_MOD_OWNER_CLEAR_V11
                     modUnregisterActive(this);
                 } catch (Throwable ignored) {}
         return null;
     }
-    // fake non-release path should NOT get owner clear from old bugs
     private void otherMethod() {
         nativeContextOwner = null;
     }
 
-    // MPV_MOD_PUBLIC_BRIDGE_V10_BEGIN
+    // MPV_MOD_PUBLIC_BRIDGE_V11_BEGIN
     private static final java.util.concurrent.atomic.AtomicReference<MpvPlayer> sModActive =
             new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -138,6 +137,6 @@ public class MpvPlayer {
             return false;
         }
     }
-    // MPV_MOD_PUBLIC_BRIDGE_V10_END
+    // MPV_MOD_PUBLIC_BRIDGE_V11_END
 
 }

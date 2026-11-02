@@ -1,7 +1,7 @@
 package com.fongmi.android.tv.setting;
 public class Setting {
     public static void putSubtitleFontIndex(int index) {
-        // MPV_FONT_APPLY_AFTER_PUT_V10
+        // MPV_FONT_APPLY_AFTER_PUT_V11
         Prefers.put("subtitle_font_index", SubtitleFontManager.normalizeIndex(index));
         try {
             com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.ensureFontsReady();
