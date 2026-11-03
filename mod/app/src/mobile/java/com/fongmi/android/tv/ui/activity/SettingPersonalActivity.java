@@ -236,14 +236,23 @@ public class SettingPersonalActivity extends BaseActivity {
 
     /** MPV-BRANCH-ONLY: 字体下拉选项，优先 arrays.xml，缺失时回退 SubtitleFontManager。 */
     private String[] subtitleFontNames(boolean zh) {
+        String[] names = null;
         try {
-            String[] names = getResources().getStringArray(zh ? R.array.subtitle_font_names : R.array.subtitle_font_names_en);
-            if (names != null && names.length > 0) return names;
+            names = getResources().getStringArray(zh ? R.array.subtitle_font_names : R.array.subtitle_font_names_en);
         } catch (Throwable ignored) {
         }
-        String[] fallback = new String[SubtitleFontManager.count()];
-        for (int i = 0; i < fallback.length; i++) fallback[i] = SubtitleFontManager.labelOf(i, zh);
-        return fallback;
+        if (names == null || names.length == 0) {
+            names = new String[SubtitleFontManager.count()];
+            for (int i = 0; i < names.length; i++) names[i] = SubtitleFontManager.labelOf(i, zh);
+        }
+        // MPV-BRANCH-ONLY: 下拉只提供内置字体（0~3）；自定义外部字体仅作旧配置回显，不再出现在列表里
+        int keep = Math.min(names.length, SubtitleFontManager.CUSTOM_INDEX);
+        if (keep > 0 && keep < names.length) {
+            String[] out = new String[keep];
+            System.arraycopy(names, 0, out, 0, keep);
+            return out;
+        }
+        return names;
     }
 
     private void showSubtitleFontPicker() {

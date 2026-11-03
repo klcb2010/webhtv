@@ -61,3 +61,40 @@ MpvSubtitleStyle: fontProbe idx=0 id=yiqicukai file=... family=FZYaSong
 MpvSubtitleStyle: runtime font=... mpvNativeReady=true / runtime result=true
 MpvSubtitleStyle: forceCnTrack select id=2 note=chi|简体中文 score=400
 ```
+
+## v4 变更（本轮）
+
+1. **日志默认开启**：`ModDebugLog.isEnabled()` 默认返回 true，日志直接写在
+   `/data/data/com.fongmi.android.tv/cache/mod_debug/mod.log`（2MB 滚动）。关闭请调用 `setEnabled(false)`。
+2. **字幕字体下拉只保留内置 4 项**（义启粗楷/毁片和圆/方正细圆/系统默认）；
+   「自定义外部字体」不再出现在列表里，旧配置仍可正常回显与生效。
+3. **sub-reload 改为条件触发**：仅当字体/颜色/样式参数真正变化且当前有字幕轨时才 `sub-reload`，
+   修掉"拉进度条后暂停、不走进度"的副作用。
+4. **sub-reload 后 400ms 重新校正中文轨**，避免重载把中文轨重置回 default 轨。
+5. **每个播放器实例首次应用样式时校正一次轨道**（`sModLangApplied`），修 EXO↔MPV 切换回 MPV 后中文优先失效。
+
+> 若"拉进度条暂停"仍复现，可临时把 `MpvPlayer` 里 `mpvCommand(new String[]{"sub-reload"})` 整段注释掉验证是否为本补丁引起。
+
+## v5 根因修复（内置字体全部无效）
+
+**根因**：`MpvSubtitleStylePolicy.getSubFontsDirProperty()` 写成了
+```java
+File dir = tryFontsDir();
+if (dir == null) dir = ensureFontsReady();   // ← 目录永远存在（getFontsDir 会 mkdir），所以这句永不执行
+```
+于是 `ensureFontsReady()` 的"把选中字体复制成 `subfont.ttf`"从未生效，
+`sub-fonts-dir` 里始终是**上一次**的字体（也就是旧的 `heiyuan.ttf`），
+所以切义启粗楷/毁片和圆/方正细圆都没反应，看起来"只有外部字体有效"。
+
+**修法**：
+1. `getSubFontsDirProperty()` 改为**始终** `ensureFontsReady()`；
+2. `ensureFontsReady()` 在 `src == null` 时增加 assets 兜底复制（`AssetManager.open("fonts/<id>.ttf")`）；
+3. 复制结果打日志：`ensureFontsReady copy id=... src=... ok=true`。
+
+**验证**：切任意内置字体后重进播放，日志应出现
+```
+MpvSubtitleStyle: ensureFontsReady copy id=fangzhengzhunyuan src=/data/.../files/subtitle_fonts/fangzhengzhunyuan.ttf ok=true
+MpvSubtitleStyle: fontProbe idx=2 id=fangzhengzhunyuan file=... family=FZZhunYuan-M02S
+MpvSubtitleStyle: sub-reload font=FZZhunYuan-M02S ...
+```
+（三个内置字体的真实 family 名：`iekie-Cukaiti` / `KTXP_ComRound` / `FZZhunYuan-M02S`）

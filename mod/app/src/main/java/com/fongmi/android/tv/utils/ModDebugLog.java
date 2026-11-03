@@ -21,9 +21,11 @@ public final class ModDebugLog {
         try { Prefers.put(PREF, on); } catch (Throwable ignored) {}
     }
     public static boolean isEnabled() {
+        // MPV-BRANCH-ONLY: 字幕字体/颜色排障默认开启（只写关键点，2MB 滚动）
+        // 需要关闭时调用 setEnabled(false)；重启后会再次默认开启。
         if (enabled != null) return enabled;
-        try { enabled = Prefers.getBoolean(PREF); } catch (Throwable t) { enabled = false; }
-        return Boolean.TRUE.equals(enabled);
+        enabled = Boolean.TRUE;
+        return true;
     }
     public static void init(Context context) {
         if (context == null) return;

@@ -37,6 +37,13 @@ MARK_RELOAD = "MPV_SUB_RELOAD_V1"
 MARK_LANG = "MPV_SUB_LANG_V1"
 MARK_FONT_PROBE = "MPV_SUB_FONTPROBE_V1"
 
+RELOAD_STATE = """    // MPV_SUB_RELOAD_STATE_V1 (MPV-BRANCH-ONLY): 只在字体/颜色真正变化时重载字幕
+    private static volatile String sModLastFont = "";
+    private static volatile String sModLastColor = "";
+    private static volatile String sModLastStyle = "";
+    // 每个播放器实例首次应用样式时校正一次字幕轨（EXO<->MPV 切换后仍生效）
+    private volatile boolean sModLangApplied = false;"""
+
 FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
     public void modForcePreferredSubtitleTrack() {
         try {
@@ -68,13 +75,21 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 }
             }
             String current = propertyStringOrInt("sid");
-            if (bestId >= 0 && bestScore >= 200) {
+            int curId = -1;
+            try {
+                curId = Integer.parseInt(current == null ? "" : current.trim());
+            } catch (Throwable ignored) {
+            }
+            if (bestId < 0 || bestScore < 200) {
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current);
+            } else if (curId == bestId) {
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                        "forceCnTrack keep id=" + bestId + " note=" + bestNote);
+            } else {
                 mpvCommand(new String[]{"sid", String.valueOf(bestId)});
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
                         "forceCnTrack select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current);
-            } else {
-                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current);
             }
         } catch (Throwable e) {
             com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "forceCnTrack err=" + e);
@@ -359,8 +374,8 @@ def patch_mpv_player(path: Path) -> None:
     else:
         OK.append("policy log already injected")
 
-    # 3) sub-reload：mpv 改 sub-font / sub-color 后不会自动重载字幕，必须显式重载
-    if MARK_RELOAD in text:
+    # 3) sub-reload：mpv 改 sub-font / sub-color 后不会自动重载字幕（只在参数变化时执行，避免干扰 seek）
+    if 'mpvCommand(new String[]{"sub-reload"})' in text:
         OK.append("sub-reload already injected")
     else:
         span = find_method(
@@ -371,17 +386,58 @@ def patch_mpv_player(path: Path) -> None:
             ERR.append("modApplySubtitleStyleRuntime not found for sub-reload")
         else:
             _, b, e = span
-            text = _log_before_return(
-                text,
-                b,
-                e,
-                "return ok;",
-                'try { mpvCommand(new String[]{"sub-reload"}); } catch (Throwable ignored) {} // ' + MARK_RELOAD,
+            if "sModLastFont" not in text:
+                ci = text.rfind("\n}")
+                if ci < 0:
+                    ERR.append("class end not found for reload state")
+                    return
+                text = text[:ci] + "\n" + RELOAD_STATE + "\n" + text[ci:]
+            block = (
+                f"        // {MARK_RELOAD} (MPV-BRANCH-ONLY): 仅字体/颜色变化时重载字幕\n"
+                "        try {\n"
+                '            String modFont = font == null ? "" : font;\n'
+                '            String modColor = color == null ? "" : color;\n'
+                '            String modStyle = forceStyle == null ? "" : forceStyle;\n'
+                "            if (!modFont.equals(sModLastFont) || !modColor.equals(sModLastColor)\n"
+                "                    || !modStyle.equals(sModLastStyle)) {\n"
+                "                sModLastFont = modFont;\n"
+                "                sModLastColor = modColor;\n"
+                "                sModLastStyle = modStyle;\n"
+                '                String modSid = propertyStringOrInt("sid");\n'
+                '                if (modSid != null && !modSid.isEmpty() && !"no".equals(modSid)) {\n'
+                '                    mpvCommand(new String[]{"sub-reload"});\n'
+                f'                    {LOG}.i("{TAG}", "sub-reload font=" + modFont + " color=" + modColor + " sid=" + modSid);\n'
+                "                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {\n"
+                "                        @Override\n"
+                "                        public void run() {\n"
+                "                            modForcePreferredSubtitleTrack();\n"
+                "                        }\n"
+                "                    }, 400L);\n"
+                "                } else {\n"
+                f'                    {LOG}.i("{TAG}", "sub-reload skipped: no subtitle track");\n'
+                "                }\n"
+                "            }\n"
+                "        } catch (Throwable ignored) {\n"
+                "        }\n"
+                "        // MPV_SUB_TRACKFIRST_V1 (MPV-BRANCH-ONLY): 实例首次应用样式时校正一次轨道\n"
+                "        try {\n"
+                "            if (!sModLangApplied) {\n"
+                "                sModLangApplied = true;\n"
+                "                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {\n"
+                "                    @Override\n"
+                "                    public void run() {\n"
+                "                        modForcePreferredSubtitleTrack();\n"
+                "                    }\n"
+                "                }, 900L);\n"
+                "            }\n"
+                "        } catch (Throwable ignored) {\n"
+                "        }"
             )
-            OK.append("inject sub-reload after subtitle style apply")
+            text = _block_before_return(text, b, e, "return ok;", block)
+            OK.append("inject conditional sub-reload after subtitle style apply")
 
     # 4) file-loaded 后强制优先中文轨（mpv 的 default 轨会压过 slang）
-    if MARK_LANG in text:
+    if "public void modForcePreferredSubtitleTrack() {" in text:
         OK.append("force cn track already injected")
     else:
         anchor = "                addSubtitleConfigurations();"
@@ -411,6 +467,15 @@ def _log_before_return(text: str, brace: int, end: int, ret_stmt: str, log_stmt:
     line_start = text.rfind("\n", 0, idx) + 1
     indent = re.match(r"[ \t]*", text[line_start:]).group(0)
     return text[:line_start] + indent + log_stmt + "\n" + text[line_start:]
+
+
+def _block_before_return(text: str, brace: int, end: int, ret_stmt: str, block: str) -> str:
+    """在 (brace,end) 方法体内 ret_stmt 之前插入多行块（block 各行自带缩进）。"""
+    idx = text.find(ret_stmt, brace, end)
+    if idx < 0:
+        return text
+    line_start = text.rfind("\n", 0, idx) + 1
+    return text[:line_start] + block + "\n" + text[line_start:]
 
 
 def patch_policy(path: Path) -> None:
@@ -493,6 +558,73 @@ def patch_policy_font_probe(path: Path) -> None:
     OK.append("inject fontProbe into getSubFontProperty")
 
 
+def patch_policy_fonts_ready(path: Path) -> None:
+    """修 getSubFontsDirProperty 从不调用 ensureFontsReady 的缺陷，并给 assets 兜底复制。"""
+    if not path.is_file():
+        ERR.append(f"MpvSubtitleStylePolicy.java not found: {path}")
+        return
+    text = read(path)
+    m = "MPV_SUB_FONTDIR_V1"
+    if m in text:
+        OK.append("fonts-dir ensure already injected")
+        return
+
+    old_dir = """    public static String getSubFontsDirProperty() {
+        File dir = tryFontsDir();
+        if (dir == null) dir = ensureFontsReady();"""
+    new_dir = """    public static String getSubFontsDirProperty() {
+        // MPV_SUB_FONTDIR_V1 (MPV-BRANCH-ONLY): 目录存在时也必须 ensure，
+        // 否则 subfont.ttf 永远是上一次的字体（表现为"切内置字体没反应"）
+        File dir = ensureFontsReady();
+        if (dir == null) dir = tryFontsDir();"""
+    if old_dir not in text:
+        ERR.append("getSubFontsDirProperty anchor not found")
+        return
+    text = text.replace(old_dir, new_dir, 1)
+
+    old_null = "            if (src == null || !src.isFile()) return dir;"
+    new_null = """            if (src == null || !src.isFile()) {
+                // MPV_SUB_FONTASSET_V1 (MPV-BRANCH-ONLY): 兜底直接从 assets 复制选中字体
+                try {
+                    android.content.Context modCtx = App.get();
+                    String modAsset = SubtitleFontManager.assetFileOf(Setting.getSubtitleFontIndex());
+                    if (modCtx != null && modAsset != null && !modAsset.isEmpty()) {
+                        File modOut = new File(dir, modAsset);
+                        try (InputStream modIn = modCtx.getAssets().open("fonts/" + modAsset);
+                             OutputStream modOs = new FileOutputStream(modOut)) {
+                            byte[] modBuf = new byte[8192];
+                            int modN;
+                            while ((modN = modIn.read(modBuf)) > 0) modOs.write(modBuf, 0, modN);
+                        }
+                        if (modOut.isFile() && modOut.length() > 1000) src = modOut;
+                    }
+                } catch (Throwable modErr) {
+                    com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "assetFontFallback err=" + modErr);
+                }
+                if (src == null || !src.isFile()) {
+                    com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle",
+                            "ensureFontsReady: no font file idx=" + SubtitleFontManager.idOf(Setting.getSubtitleFontIndex()));
+                    return dir;
+                }
+            }"""
+    if old_null not in text:
+        ERR.append("ensureFontsReady src-null anchor not found")
+        return
+    text = text.replace(old_null, new_null, 1)
+
+    old_ok = """            if (ok) {
+                removeOtherFontVariants(dir, "subfont", subfont);"""
+    new_ok = """            com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                    "ensureFontsReady copy id=" + id + " src=" + (src == null ? "null" : src.getAbsolutePath()) + " ok=" + ok);
+            if (ok) {
+                removeOtherFontVariants(dir, "subfont", subfont);"""
+    if old_ok in text:
+        text = text.replace(old_ok, new_ok, 1)
+
+    write(path, text)
+    OK.append("inject fonts-dir ensure + asset fallback")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -512,6 +644,7 @@ def main() -> int:
     patch_setting_font(setting)
     patch_policy(policy)
     patch_policy_font_probe(policy)
+    patch_policy_fonts_ready(policy)
     patch_mpv_player(player)
 
     for x in OK:
