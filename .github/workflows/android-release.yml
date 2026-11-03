@@ -1,10 +1,15 @@
 name: Android Release
 
 on:
-  schedule:
-    # 每天6小时检查是否需要打包
-    - cron: "30 */6 * * *"
+  # GitHub 只在「默认分支」上运行 schedule（本仓库默认分支是 main），
+  # 因此 MPV 分支不再声明 cron：定时构建由 main 分支 workflow 的
+  # "Trigger MPV branch build" 步骤通过 workflow_dispatch(ref=MPV, auto=true) 触发。
   workflow_dispatch:
+    inputs:
+      auto:
+        description: "auto=true 表示由 main 分支定时任务触发；手动运行请留空"
+        required: false
+        default: ""
   
 permissions:
   contents: write
@@ -362,6 +367,7 @@ jobs:
           SYNCED="${{ steps.upstream_sync.outputs.synced }}"
           SYNC_REASON="${{ steps.upstream_sync.outputs.reason }}"
           FORCE="${{ inputs.force_build }}"
+          AUTO="${{ inputs.auto }}"
 
           echo "=========================================="
           echo "本仓库发布检测"
@@ -370,12 +376,13 @@ jobs:
           echo "HEAD : $HEAD_SHA ($HEAD_SHORT)"
           echo "日期 : $TODAY (Asia/Shanghai)"
           echo "触发 : $EVENT"
+          echo "自动触发 : auto=$AUTO（true=main 定时任务触发，空=手动）"
           echo "上游同步 : synced=$SYNCED reason=$SYNC_REASON"
           echo "=========================================="
 
           # 定时任务：仅当「本轮成功同步了已发版的上游」才打包
           # 避免：上游只推源码未发 Release 时误打包，或无同步却重复发版
-          if [ "$EVENT" = "schedule" ]; then
+          if [ "$EVENT" = "schedule" ] || { [ "$EVENT" = "workflow_dispatch" ] && [ "$AUTO" = "true" ]; }; then
             if [ "$SYNCED" != "true" ]; then
               echo "定时任务且本轮未同步上游 → 跳过打包"
               echo "build=false" >> "$GITHUB_OUTPUT"
