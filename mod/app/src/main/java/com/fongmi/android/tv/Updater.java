@@ -232,6 +232,11 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             }
         }
         com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "all routes failed lastError=" + lastError);
+        // MPV_SUB_UPD_FALLBACK_V1 (MPV-BRANCH-ONLY): main 与 MPV 两个分支都在发 release，
+        // /releases/latest 一旦指向 main 的包，<name>-mpv.json 就 404（加速镜像同样 404）。
+        // 这时退回 /releases 列表，按 tag 含 -mpv 找最近的可用 release。
+        Update fallback = modFallbackFromList();
+        if (fallback != null && fallback.hasManifest()) return fallback;
         Update empty = Update.empty(Update.CHANNEL_STABLE);
         empty.error = lastError;
         return empty;
@@ -328,6 +333,34 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private String getAssetName(String channel, String ext) {
         String suffix = Update.CHANNEL_BETA.equals(channel) ? "-beta" : "";
         return modMarkedName(getName()) + suffix + "." + ext;
+    }
+
+    /** MPV_SUB_UPD_FALLBACK_V1: latest 指向别的分支时，用 release 列表再找一次 */
+    private Update modFallbackFromList() {
+        try {
+            String json = UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
+            JSONArray releases = new JSONArray(json);
+            String manifest = modMarkedName(getName()) + ".json";
+            com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                    "fallback list releases=" + releases.length() + " manifest=" + manifest);
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null) continue;
+                String tag = release.optString("tag_name");
+                if (tag == null || !tag.contains(Github.RELEASE_TAG_MARK)) continue;
+                if (isBetaRelease(release)) continue;
+                JSONObject asset = findAsset(release.optJSONArray("assets"), manifest);
+                if (asset == null) continue;
+                String url = asset.optString("browser_download_url");
+                if (TextUtils.isEmpty(url)) continue;
+                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "fallback try tag=" + tag + " url=" + url);
+                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, release.optString("body"));
+                if (update.hasManifest()) return update;
+            }
+        } catch (Throwable e) {
+            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "fallback err=" + e);
+        }
+        return null;
     }
 
     /** MPV_SUB_UPD_ASSET_V1: 资产名统一带本分支标记，已带则不重复加 */
