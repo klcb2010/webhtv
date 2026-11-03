@@ -217,6 +217,27 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v18 变更（按真机日志定案）
+
+日志证据：`exoForceCn(v14) select index=0 score=80 label=Traditional`
+
+1. **打分顺序修正：label/title 优先，language 兜底**。
+   原来先按 `language` 打分，而字幕的 language 常常只是泛 `"zh"`（我们的表给 80 分），
+   于是标着 `Traditional` 的轨也拿 80 分，遍历时先命中谁就选谁（通常第一条是繁体）。
+   现在先看 label/title（`Simplified`=100 / `Traditional`=40），没有再回落到 language。
+2. **EXO 侧加防抖**：同一目标轨 1 秒内只设一次参数。日志里 1 分钟内反复
+   `select` 同一轨几十次，说明设置被回滚后又被新的 `onTracksChanged` 重新触发。
+3. **MPV 侧改用「实际生效」的轨判断**：原来读 `sid`（请求值），重新加载后可能和画面上
+   不一致 → 误判成 `keep`（日志 `keep id=3` 但画面是英文）。现在读
+   `current-tracks/sub/id`，空时再回落 `sid`。
+   并且 `keep` 分支也会 `setInitialSubtitleTrackId()`，避免下次重新加载丢预选。
+4. **检查更新失败的两个真实原因**：
+   - `/releases?per_page=20` 响应体远大于 `/releases/latest`，而超时只有
+     `GITHUB_REQUEST_TIMEOUT_MS=4s`、总限 `UPDATE_CHECK_TIMEOUT_MS=10s` → 超时 →
+     `hasErrorOnly()` → 提示「检查更新失败」。现改为 `per_page=3`，并把超时放宽到 8s / 16s。
+   - 「自动检测更新」开关关闭时 `Updater.start()` 直接 return，不会报错也不会检查——
+     需要菜单里的「检查更新」走 `force()`。
+
 ## v17 变更（修 MPV 侧简中完全不生效 + EXO 切解码回落）
 
 1. **MPV 侧不再把「自动」当成"不干预"**。原来门控是

@@ -89,8 +89,12 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 if (!"sub".equals(type)) continue;
                 String lang = stringProperty("track-list/" + i + "/lang", "");
                 String title = stringProperty("track-list/" + i + "/title", "");
-                int score = modSubtitleLangScore(lang);
-                if (score == 0) score = modSubtitleLangScore(title);
+                // MPV_SUB_SCORE_V2 (MPV-BRANCH-ONLY): title 优先。
+                // language 常常只是 "zh"（泛中文，打分给 80），于是标着 "Traditional" 的轨
+                // 也拿 80 分，先遍历到谁就选谁（通常第一条就是繁体）。
+                // title 里一般明确写着 Simplified / Traditional。
+                int score = modSubtitleLangScore(title);
+                if (score == 0) score = modSubtitleLangScore(lang);
                 int id = intProperty("track-list/" + i + "/id", -1);
                 if (score <= 0 || id < 0) continue;
                 if (score > bestScore) {
@@ -99,7 +103,11 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                     bestNote = lang + "|" + title;
                 }
             }
-            String current = propertyStringOrInt("sid");
+            // MPV_SUB_CURSID_V2 (MPV-BRANCH-ONLY): 用「实际生效」的轨判断——
+            // "sid" 只是请求值，重新加载/切解码后可能和画面上的轨不一致，
+            // 会导致误判成 keep（日志 keep id=3 但画面还是英文）。
+            String current = stringProperty("current-tracks/sub/id", "");
+            if (current == null || current.isEmpty()) current = propertyStringOrInt("sid");
             int curId = -1;
             try {
                 curId = Integer.parseInt(current == null ? "" : current.trim());
@@ -120,8 +128,11 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
                         "forceCnTrack(v11) skip: no zh track count=" + count + " best=" + bestScore + " prevSid=" + current + " subs=" + modDump);
             } else if (curId == bestId) {
+                // MPV_SUB_CURSID_V2: keep 时也要把预选记下来。切解码是新 MpvPlayer 实例，
+                // initialSubtitleTrackId 为空，若只 keep 不记录，下一次重新加载又会回到 mpv 默认轨。
+                setInitialSubtitleTrackId(String.valueOf(bestId));
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack(v11) keep id=" + bestId + " note=" + bestNote);
+                        "forceCnTrack(v14) keep id=" + bestId + " note=" + bestNote + " via=manual-equivalent");
             } else {
                 // MPV_SUB_SIMSELECT_V1 (MPV-BRANCH-ONLY): 走引擎内部「手动选轨」同一条链路。
                 // setInitialSubtitleTrackId = 下次 startPreparedMedia 前先预选 sid；
@@ -771,6 +782,11 @@ EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分�
         return 0;
     }
 
+    // MPV_SUB_EXO_CN_V5: 防抖状态（日志实锤 1 分钟内反复 select 同一轨几十次）
+    private static long modExoCnLastAt;
+    private static int modExoCnLastIndex = -1;
+    private static androidx.media3.common.TrackGroup modExoCnLastGroup;
+
     // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优先
     // Media3 对没有 language 的字幕轨一律当 und，会选第一条（常见就是繁体），
     // 所以这里按 language + label 重新打分，找到简体轨就显式 override。
@@ -785,8 +801,11 @@ EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分�
                 androidx.media3.common.TrackGroup tg = group.getMediaTrackGroup();
                 for (int i = 0; i < tg.length; i++) {
                     androidx.media3.common.Format f = tg.getFormat(i);
-                    int score = modSubtitleLangScore(f.language);
-                    if (score == 0) score = modSubtitleLangScore(f.label == null ? "" : f.label.toString());
+                    // MPV_SUB_SCORE_V2 (MPV-BRANCH-ONLY): label 优先。
+                    // 日志实锤：language 是泛 "zh" → 80 分，label 明明写着 Traditional，
+                    // 结果选中的是繁体（exoForceCn select ... score=80 label=Traditional）。
+                    int score = modSubtitleLangScore(f.label == null ? "" : f.label.toString());
+                    if (score == 0) score = modSubtitleLangScore(f.language);
                     if (score > bestScore) {
                         bestScore = score;
                         bestGroup = tg;
@@ -801,6 +820,15 @@ EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分�
                         return;
                     }
                 }
+                // 防抖：同一目标轨 1 秒内只设一次，避免 onTracksChanged → set → onTracksChanged 刷屏
+                long modNowAt = android.os.SystemClock.elapsedRealtime();
+                if (modExoCnLastGroup == bestGroup && modExoCnLastIndex == bestIndex
+                        && modNowAt - modExoCnLastAt < 1000L) {
+                    return;
+                }
+                modExoCnLastGroup = bestGroup;
+                modExoCnLastIndex = bestIndex;
+                modExoCnLastAt = modNowAt;
                 androidx.media3.common.TrackSelectionOverride ov =
                         new androidx.media3.common.TrackSelectionOverride(bestGroup, bestIndex);
                 androidx.media3.common.TrackSelectionParameters.Builder modBuilder =
@@ -958,6 +986,15 @@ def patch_updater_filter(path: Path) -> None:
         return
     start_i, _, end_i = span
     text = text[:start_i] + new_stable + text[end_i + 1:]
+
+    # /releases 列表响应体远大于 /releases/latest，4s/10s 的超时在大陆网络下会直接超时
+    # → awaitUpdate 抛 TimeoutException → hasErrorOnly() → 提示「检查更新失败」
+    t1 = "UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10)"
+    t2 = "GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4)"
+    if t1 in text:
+        text = text.replace(t1, "UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(16); // MPV_SUB_UPD_TIMEOUT_V1", 1)
+    if t2 in text:
+        text = text.replace(t2, "GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(8); // MPV_SUB_UPD_TIMEOUT_V1", 1)
 
     # asset 名模糊匹配（本分支 asset 带 -mpv 后缀，精确比对必然失败）
     span_asset = find_method(text, r"^[ \t]*private\s+JSONObject\s+findAsset\s*\(\s*JSONArray\s+\w+\s*,\s*String\s+\w+\s*\)\s*\{")

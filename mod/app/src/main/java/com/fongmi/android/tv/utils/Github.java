@@ -51,7 +51,7 @@ public class Github {
     }
 
     public static String getReleasesApi() {
-        return GITHUB_RELEASES_API + "?per_page=20";
+        return GITHUB_RELEASES_API + "?per_page=3"; // MPV-BRANCH-ONLY: 列表响应越小越快（太大容易 4s 超时→检查更新失败）
     }
 
     public static String getLatestReleaseApi() {
