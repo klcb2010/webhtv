@@ -7,14 +7,17 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.view.View;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.ActivitySettingPersonalBinding;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.subtitle.SubtitleFontManager;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingPersonalActivity extends BaseActivity {
 
@@ -213,10 +216,78 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setSubtitleFont(View view) {
-        Setting.cycleSubtitleFont();
-        try { mBinding.subtitleFontText.setText(subtitleFontLabel()); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged(); } catch (Throwable ignored) {}
-        try { com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle(); } catch (Throwable ignored) {}
+        // MPV-BRANCH-ONLY: 下拉单选替换循环点击；绝不弹系统文件选择器、不弹 toast
+        try {
+            showSubtitleFontPicker();
+        } catch (Throwable e) {
+            Setting.cycleSubtitleFont();
+            refreshTexts();
+        }
+    }
+
+    private boolean isZhLocale() {
+        try {
+            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
+            return lang != null && lang.startsWith("zh");
+        } catch (Throwable e) {
+            return true;
+        }
+    }
+
+    /** MPV-BRANCH-ONLY: 字体下拉选项，优先 arrays.xml，缺失时回退 SubtitleFontManager。 */
+    private String[] subtitleFontNames(boolean zh) {
+        try {
+            String[] names = getResources().getStringArray(zh ? R.array.subtitle_font_names : R.array.subtitle_font_names_en);
+            if (names != null && names.length > 0) return names;
+        } catch (Throwable ignored) {
+        }
+        String[] fallback = new String[SubtitleFontManager.count()];
+        for (int i = 0; i < fallback.length; i++) fallback[i] = SubtitleFontManager.labelOf(i, zh);
+        return fallback;
+    }
+
+    private void showSubtitleFontPicker() {
+        final boolean zh = isZhLocale();
+        final String[] names = subtitleFontNames(zh);
+        int current = Setting.getSubtitleFontIndex();
+        if (current < 0 || current >= names.length) current = 0;
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(zh ? "字幕字体" : "Subtitle font");
+        builder.setSingleChoiceItems(names, current, (dialog, which) -> {
+            applySubtitleFont(which);
+            try {
+                dialog.dismiss();
+            } catch (Throwable ignored) {
+            }
+        });
+        builder.setNegativeButton(zh ? "取消" : "Cancel", null);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        try {
+            com.fongmi.android.tv.ui.dialog.SettingStyleDialog.apply(dialog);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** MPV-BRANCH-ONLY: 应用字体（写配置 → 后台静默加载 → 通知运行时刷新）。 */
+    private void applySubtitleFont(int index) {
+        Setting.putSubtitleFontIndex(index);
+        try {
+            SubtitleFontManager.loadBuiltinFont(index);
+        } catch (Throwable ignored) {
+        }
+        try {
+            mBinding.subtitleFontText.setText(subtitleFontLabel());
+        } catch (Throwable ignored) {
+        }
+        try {
+            com.fongmi.android.tv.subtitle.AssrtSubtitleMatch.notifySubtitleStyleChanged();
+        } catch (Throwable ignored) {
+        }
+        try {
+            com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle();
+        } catch (Throwable ignored) {
+        }
         refreshTexts();
     }
 

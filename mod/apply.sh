@@ -283,3 +283,9 @@ if [[ -f "$MOD/hooks/inject_hdr_to_sdr.py" ]]; then
   echo "[mod] inject_hdr_to_sdr"
   python3 "$MOD/hooks/inject_hdr_to_sdr.py" "$ROOT" || exit 1
 fi
+
+# MPV-BRANCH-ONLY: 字幕字体/颜色运行时刷新（必须在 inject_mpv_phase_c 之后）
+if [[ -f "$MOD/hooks/fix_mpv_subtitle_runtime.py" ]]; then
+  echo "[mod] fix_mpv_subtitle_runtime"
+  python3 "$MOD/hooks/fix_mpv_subtitle_runtime.py" "$ROOT" || exit 1
+fi

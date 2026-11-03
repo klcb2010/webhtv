@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MPV-BRANCH-ONLY: 内置字幕字体资源表。
+  顺序必须与 com.fongmi.android.tv.subtitle.SubtitleFontManager.IDS 完全一致：
+  0 义启粗楷 / 1 毁片和圆 / 2 方正细圆 / 3 系统默认 / 4 自定义外部字体
+  subtitle_font_assets 对应 assets/fonts/ 下的文件名；system 无文件留空。
+-->
+<resources>
+
+    <string-array name="subtitle_font_names">
+        <item>义启粗楷</item>
+        <item>毁片和圆</item>
+        <item>方正细圆</item>
+        <item>系统默认</item>
+        <item>自定义外部字体</item>
+    </string-array>
+
+    <string-array name="subtitle_font_names_en">
+        <item>YiQiCuKai</item>
+        <item>HuiPianHeYuan</item>
+        <item>FangZhengZhunYuan</item>
+        <item>System</item>
+        <item>Custom font</item>
+    </string-array>
+
+    <string-array name="subtitle_font_assets">
+        <item>yiqicukai.ttf</item>
+        <item>huipianheyuan.ttf</item>
+        <item>fangzhengzhunyuan.ttf</item>
+        <item></item>
+        <item>custom.ttf</item>
+    </string-array>
+
+</resources>
