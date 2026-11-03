@@ -33,6 +33,65 @@ MARK_FONT = "MPV_SUB_FONT_RUNTIME_V1"
 MARK_RUNTIME_LOG = "MPV_SUB_RUNTIME_LOG_V1"
 MARK_POLICY_LOG = "MPV_SUB_POLICY_LOG_V1"
 MARK_APPLY_LOG = "MPV_SUB_APPLY_LOG_V1"
+MARK_RELOAD = "MPV_SUB_RELOAD_V1"
+MARK_LANG = "MPV_SUB_LANG_V1"
+MARK_FONT_PROBE = "MPV_SUB_FONTPROBE_V1"
+
+FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
+    public void modForcePreferredSubtitleTrack() {
+        try {
+            if (!modIsNativeReady()) return;
+            // 尊重「字幕偏好语言」：只有中文（或未设置）才强制中文轨，选英文/自动时不干预
+            String modPref = com.fongmi.android.tv.setting.Setting.getSubtitlePreferredLanguage();
+            if (modPref != null) {
+                String p = modPref.trim().toLowerCase(java.util.Locale.ROOT);
+                if (p.startsWith("en") || "auto".equals(p) || p.isEmpty()) return;
+            }
+            int count = Math.max(0, intProperty("track-list/count", 0));
+            if (count <= 0) return;
+            int bestId = -1;
+            int bestScore = 0;
+            String bestNote = "";
+            for (int i = 0; i < count; i++) {
+                String type = stringProperty("track-list/" + i + "/type", "");
+                if (!"sub".equals(type)) continue;
+                String lang = stringProperty("track-list/" + i + "/lang", "");
+                String title = stringProperty("track-list/" + i + "/title", "");
+                int score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(lang);
+                if (score == 0) score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(title);
+                int id = intProperty("track-list/" + i + "/id", -1);
+                if (score <= 0 || id < 0) continue;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestId = id;
+                    bestNote = lang + "|" + title;
+                }
+            }
+            String current = propertyStringOrInt("sid");
+            if (bestId >= 0 && bestScore >= 200) {
+                mpvCommand(new String[]{"sid", String.valueOf(bestId)});
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                        "forceCnTrack select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current);
+            } else {
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current);
+            }
+        } catch (Throwable e) {
+            com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "forceCnTrack err=" + e);
+        }
+    }
+    // MPV_SUB_LANG_V1_END"""
+
+FORCE_CN_HOOK = """                // MPV_SUB_LANG_V1_HOOK (MPV-BRANCH-ONLY): 等轨道表就绪后强制中文轨
+                try {
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            MpvPlayer.this.modForcePreferredSubtitleTrack();
+                        }
+                    }, 900L);
+                } catch (Throwable ignored) {
+                }"""
 
 TAG = "MpvSubtitleStyle"
 LOG = "com.fongmi.android.tv.utils.ModDebugLog"
@@ -300,10 +359,48 @@ def patch_mpv_player(path: Path) -> None:
     else:
         OK.append("policy log already injected")
 
+    # 3) sub-reload：mpv 改 sub-font / sub-color 后不会自动重载字幕，必须显式重载
+    if MARK_RELOAD in text:
+        OK.append("sub-reload already injected")
+    else:
+        span = find_method(
+            text,
+            r"^[ \t]*public\s+boolean\s+modApplySubtitleStyleRuntime\s*\(\s*String\s+\w+\s*,\s*String\s+\w+\s*,\s*String\s+\w+\s*,\s*String\s+\w+\s*\)\s*\{",
+        )
+        if span is None:
+            ERR.append("modApplySubtitleStyleRuntime not found for sub-reload")
+        else:
+            _, b, e = span
+            text = _log_before_return(
+                text,
+                b,
+                e,
+                "return ok;",
+                'try { mpvCommand(new String[]{"sub-reload"}); } catch (Throwable ignored) {} // ' + MARK_RELOAD,
+            )
+            OK.append("inject sub-reload after subtitle style apply")
+
+    # 4) file-loaded 后强制优先中文轨（mpv 的 default 轨会压过 slang）
+    if MARK_LANG in text:
+        OK.append("force cn track already injected")
+    else:
+        anchor = "                addSubtitleConfigurations();"
+        if text.count(anchor) != 1:
+            ERR.append(f"addSubtitleConfigurations anchor count={text.count(anchor)} (expect 1)")
+        else:
+            idx = text.rfind("\n}")
+            if idx < 0:
+                ERR.append("class end not found for force cn method")
+            else:
+                text = text[:idx] + "\n" + FORCE_CN_METHOD + "\n" + text[idx:]
+                text = text.replace(anchor, anchor + "\n" + FORCE_CN_HOOK, 1)
+                OK.append("inject force-cn-track (method + file-loaded hook)")
+
     if text != original:
         write(path, text)
-        if MARK_RUNTIME_LOG not in read(path):
-            ERR.append("runtime log marker missing after write")
+        for mk in (MARK_RUNTIME_LOG, MARK_RELOAD, MARK_LANG):
+            if mk not in read(path):
+                ERR.append(f"marker missing after write: {mk}")
 
 
 def _log_before_return(text: str, brace: int, end: int, ret_stmt: str, log_stmt: str) -> str:
@@ -351,16 +448,61 @@ def patch_policy(path: Path) -> None:
     OK.append("inject policy runtime log")
 
 
-def main() -> int:
-    branch = git_branch(ROOT)
-    allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
-    if branch != REQUIRED_BRANCH and not allow:
-        print(f"[mod] fix_mpv_subtitle_runtime: skip (branch='{branch}', required='{REQUIRED_BRANCH}')")
-        return 0
-    if branch != REQUIRED_BRANCH:
-        print(f"[mod] fix_mpv_subtitle_runtime: WARN branch='{branch}' forced by MOD_ALLOW_NON_MPV=1")
+def branch_allowed(root: Path) -> tuple[bool, str]:
+    """分支防护：MPV 直接放行；detached HEAD 用 CI 环境变量 / 仓库锚点兜底放行。
 
-    print(f"[mod] fix_mpv_subtitle_runtime ROOT={ROOT} branch={branch or 'unknown'}")
+    CI（actions/checkout）常见 detached HEAD，git 拿不到分支名。此时若
+    GITHUB_REF_NAME / GITHUB_REF 含 MPV，或本仓库同时具备 MPV 专属锚点
+    （inject_mpv_phase_c.py + androidx.media3.mpvplayer.MpvPlayer），视为 MPV 分支。
+    """
+    branch = git_branch(root)
+    if branch == REQUIRED_BRANCH:
+        return True, f"branch={branch}"
+    for key in ("GITHUB_REF_NAME", "GITHUB_REF", "GIT_BRANCH", "CI_COMMIT_REF_NAME"):
+        val = os.environ.get(key, "")
+        if REQUIRED_BRANCH in val:
+            return True, f"branch={branch or 'detached'} {key}={val}"
+    phase_c = root / "mod/hooks/inject_mpv_phase_c.py"
+    mpv_player = root / "app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java"
+    if phase_c.is_file() and mpv_player.is_file():
+        return True, f"branch={branch or 'detached'} anchors-ok"
+    return False, f"branch={branch or 'unknown'}"
+
+
+def patch_policy_font_probe(path: Path) -> None:
+    """在 getSubFontProperty 里打一行探针：idx / id / 字体文件 / 读到的族名。"""
+    if not path.is_file():
+        ERR.append(f"MpvSubtitleStylePolicy.java not found: {path}")
+        return
+    text = read(path)
+    if MARK_FONT_PROBE in text:
+        OK.append("font probe already injected")
+        return
+    anchor = "            String family = readFontFamilyName(src);"
+    if text.count(anchor) != 1:
+        ERR.append(f"readFontFamilyName anchor count={text.count(anchor)} (expect 1)")
+        return
+    probe = (
+        anchor
+        + f'\n            com.fongmi.android.tv.utils.ModDebugLog.i("{TAG}", "fontProbe idx=" + idx'
+        + ' + " id=" + id + " file=" + (src == null ? "null" : src.getAbsolutePath() + "(" + src.length() + "B)")'
+        + ' + " family=" + family + " // ' + MARK_FONT_PROBE + '");'
+    )
+    text = text.replace(anchor, probe, 1)
+    write(path, text)
+    OK.append("inject fontProbe into getSubFontProperty")
+
+
+def main() -> int:
+    allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
+    ok_branch, why = branch_allowed(ROOT)
+    if not ok_branch and not allow:
+        print(f"[mod] fix_mpv_subtitle_runtime: skip ({why}, required='{REQUIRED_BRANCH}')")
+        return 0
+    if allow and not ok_branch:
+        print(f"[mod] fix_mpv_subtitle_runtime: WARN forced by MOD_ALLOW_NON_MPV=1 ({why})")
+
+    print(f"[mod] fix_mpv_subtitle_runtime ROOT={ROOT} {why}")
 
     setting = ROOT / "app/src/main/java/com/fongmi/android/tv/setting/Setting.java"
     policy = ROOT / "app/src/main/java/com/fongmi/android/tv/player/mpv/MpvSubtitleStylePolicy.java"
@@ -369,6 +511,7 @@ def main() -> int:
     patch_setting_color(setting)
     patch_setting_font(setting)
     patch_policy(policy)
+    patch_policy_font_probe(policy)
     patch_mpv_player(player)
 
     for x in OK:

@@ -19,17 +19,22 @@ FONT_MGR="$MOD/app/src/main/java/com/fongmi/android/tv/subtitle/SubtitleFontMana
 
 echo "[mod] install_mpv_subtitle_runtime ROOT=$ROOT"
 
-# 1) 分支防护：只允许 MPV 分支
+# 1) 分支防护：只允许 MPV 分支（detached HEAD 用 CI 变量 / 仓库锚点兜底）
 if ! command -v git >/dev/null 2>&1; then
   echo "[mod] ERROR git not found, cannot verify MPV branch" >&2
   exit 1
 fi
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-if [[ "$BRANCH" != "MPV" ]]; then
-  echo "[mod] skip: current branch '$BRANCH' != 'MPV' (this patch only applies to the MPV branch)"
+if [[ "$BRANCH" == "MPV" ]]; then
+  echo "[mod] branch check ok: MPV"
+elif [[ "${GITHUB_REF_NAME:-}${GITHUB_REF:-}${GIT_BRANCH:-}${CI_COMMIT_REF_NAME:-}" == *MPV* ]]; then
+  echo "[mod] branch check relaxed: detached HEAD, CI ref contains MPV"
+elif [[ -f "$PHASE_C" && -f "$ROOT/app/src/main/java/androidx/media3/mpvplayer/MpvPlayer.java" ]]; then
+  echo "[mod] branch check relaxed: detached HEAD '$BRANCH', MPV anchors present"
+else
+  echo "[mod] skip: current branch '$BRANCH' is not 'MPV' (this patch only applies to the MPV branch)"
   exit 0
 fi
-echo "[mod] branch check ok: MPV"
 
 # 2) 锚点校验
 missing=0

@@ -34,3 +34,30 @@ bash mod/apply.sh
 - 若想回退：`git checkout -- mod/apply.sh mod/app/src/main/java/com/fongmi/android/tv/subtitle/SubtitleFontManager.java mod/app/src/mobile/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java mod/app/src/main/assets/fonts/README.txt`
   然后 `rm -f mod/hooks/fix_mpv_subtitle_runtime.py mod/install_mpv_subtitle_runtime.sh mod/app/src/main/res/values/arrays.xml mod/README_MPV_SUB_FONT_RUNTIME.md`
 - 日志：`MpvSubtitleStyle` / `MpvSubtitleBuiltin` → `应用cache/mod_debug/mod.log`（开关 `mod_debug_log`）。
+
+## v3 新增（本轮）
+
+1. **切换后强制重载字幕**：`modApplySubtitleStyleRuntime()` 末尾追加 `mpvCommand({"sub-reload"})`。
+   mpv 改 `sub-font` / `sub-color` 后**不会自动重载当前字幕**，这是"播放中切字体没反应"的直接原因。
+2. **file-loaded 后强制优先中文轨**：新增 `modForcePreferredSubtitleTrack()`，在 `file-loaded` 后 900ms
+   按 `LangUtil` 打分选第一条简体中文字幕轨（`sid`），绕开 mpv "default 轨压过 slang" 的行为。
+   尊重设置：`字幕偏好语言` 为英文 / 自动 时不干预，只在中文时执行。
+3. **字体探针日志**：`MpvSubtitleStylePolicy.getSubFontProperty()` 输出
+   `fontProbe idx= id= file= family=`，一眼看出内置字体文件是否取到、族名读成了什么。
+
+## 排障：日志怎么开
+
+`mod/app/src/main/java/com/fongmi/android/tv/utils/ModDebugLog.java`：
+```java
+public static boolean isEnabled() {
+    if (true) return true;   // 临时诊断，测完删掉这行
+```
+日志：`/data/data/com.fongmi.android.tv/cache/mod_debug/mod.log`（算法助手可导出）。
+
+关键行：
+```
+MpvSubtitleBuiltin: ok index=0 id=yiqicukai file=/data/.../files/subtitle_fonts/yiqicukai.ttf
+MpvSubtitleStyle: fontProbe idx=0 id=yiqicukai file=... family=FZYaSong
+MpvSubtitleStyle: runtime font=... mpvNativeReady=true / runtime result=true
+MpvSubtitleStyle: forceCnTrack select id=2 note=chi|简体中文 score=400
+```
