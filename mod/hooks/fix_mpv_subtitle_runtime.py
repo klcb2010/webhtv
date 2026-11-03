@@ -672,6 +672,48 @@ def patch_policy_font_lock(path: Path) -> None:
     OK.append("inject shared font lock + 32MB name-table read cap")
 
 
+def patch_policy_selfcopy(path: Path) -> None:
+    """forceCopy(src,named) 里 src 与 dst 是同一文件时会把字体截成 0B（fontProbe 0B / ok=false 的根因）。"""
+    if not path.is_file():
+        ERR.append(f"MpvSubtitleStylePolicy.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_SELFCOPY_V1" in text:
+        OK.append("forceCopy self-copy guard already injected")
+        return
+
+    anchor = """    private static boolean forceCopy(File src, File dst) {
+        if (src == null || dst == null || !src.isFile()) return false;"""
+    guard = anchor + """
+        // MPV_SUB_SELFCOPY_V1 (MPV-BRANCH-ONLY): src 与 dst 是同一文件时绝不能走 FileOutputStream，
+        // 否则会先把自身截断成 0B，再读到空内容（导致 fontProbe 0B / ok=false / 字体反复失效）
+        try {
+            if (dst.getCanonicalPath().equals(src.getCanonicalPath())) return true;
+        } catch (Throwable ignored) {
+        }"""
+    if anchor not in text:
+        ERR.append("forceCopy anchor not found")
+        return
+    text = text.replace(anchor, guard, 1)
+
+    read_anchor = "            File src = SubtitleFontManager.getFontFile(idx);"
+    read_patch = read_anchor + """
+            // MPV_SUB_FONTREADY_V1 (MPV-BRANCH-ONLY): 首轮从 assets 复制时可能读到半成品，短暂重试
+            for (int modTry = 0; modTry < 3 && src != null && src.length() <= 1000; modTry++) {
+                try {
+                    Thread.sleep(40L);
+                } catch (Throwable ignored) {
+                }
+            }"""
+    if text.count(read_anchor) == 1:
+        text = text.replace(read_anchor, read_patch, 1)
+    else:
+        ERR.append(f"getSubFontProperty src anchor count={text.count(read_anchor)}")
+
+    write(path, text)
+    OK.append("inject forceCopy self-copy guard + font read retry")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -693,6 +735,7 @@ def main() -> int:
     patch_policy_font_probe(policy)
     patch_policy_fonts_ready(policy)
     patch_policy_font_lock(policy)
+    patch_policy_selfcopy(policy)
     patch_mpv_player(player)
 
     for x in OK:

@@ -127,3 +127,22 @@ fontProbe idx=0 id=yiqicukai file=.../yiqicukai.ttf(4387988B) family=null
 4. **seek 期间不 reload**：读取 mpv `seeking` 属性，为 `yes` 时跳过（拖进度不再受影响）。
 5. **内封轨没 lang 时选不到中文**：语言/标题里出现 `chi/zho/简/中文` 也按中文计分（不再只认标准语言码）。
 6. **字体选择改回"点一下换一个"**：去掉弹窗，循环 义启粗楷→毁片和圆→方正细圆→系统默认。
+
+## v7 根因修复（字体永远 0B 的真凶）
+
+v6 日志：
+```
+ensureFontsReady copy id=huipianheyuan src=.../huipianheyuan.ttf ok=false
+fontProbe ... file=...huipianheyuan.ttf(0B)     family=null
+fontProbe ... file=...huipianheyuan.ttf(5122272B) family=KTXP_ComRound
+```
+
+**根因：`forceCopy(src, named)` 里 src 与 named 是同一个文件**
+- `named = new File(dir, id + ".ttf")`，而 `src = SubtitleFontManager.getFontFile(idx)` 返回的正是 `dir/id.ttf` → 同一个文件；
+- `forceCopy` 内部先 `new FileInputStream(src)` 再 `new FileOutputStream(dst, false)`，后者**把文件截断成 0B**，
+  于是读到空内容、写出 0B、`contentMatches` 返回 false（`ok=false`）；
+- 下一轮 `ensureFontFile` 发现文件 <1000B，又从 assets 重新复制 5MB → 再被截断 → 永远在 0B ↔ 5MB 之间跳变，
+  所以字体**永远不生效**（`family` 时有时无）。
+
+**修法**：`forceCopy` 开头判断 `dst.getCanonicalPath().equals(src.getCanonicalPath())` → 直接 `return true`，绝不自我截断。
+另加：`getSubFontProperty()` 读到文件 <1000B 时最多重试 3×40ms（首轮 assets 复制期间的半成品）。
