@@ -978,3 +978,16 @@ jobs:
           echo "✅ GitHub Release 创建成功"
           echo "=========================================="
 
+
+      - name: Trigger MPV branch build
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "=========================================="
+          echo "触发 MPV 分支构建（main / MPV 各自发版，互不覆盖）"
+          echo "=========================================="
+          gh workflow run android-release.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref MPV
+          echo "✅ 已向 MPV 分支提交 workflow_dispatch"
