@@ -115,9 +115,16 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
                         "forceCnTrack(v11) keep id=" + bestId + " note=" + bestNote);
             } else {
-                mpvCommand(new String[]{"sid", String.valueOf(bestId)});
+                // MPV_SUB_SIMSELECT_V1 (MPV-BRANCH-ONLY): 走引擎内部「手动选轨」同一条链路。
+                // setInitialSubtitleTrackId = 下次 startPreparedMedia 前先预选 sid；
+                // setTrackSelection        = 立即下发 sid 并刷新轨道表/状态。
+                // 只发 mpvCommand({"sid",..}) 会被之后重新加载时的 mpv 默认轨覆盖，
+                // 这是「切回 MPV 变英文」的根因。
+                String modSid = String.valueOf(bestId);
+                setInitialSubtitleTrackId(modSid);
+                setTrackSelection(androidx.media3.common.C.TRACK_TYPE_TEXT, modSid);
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack(v11) select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current);
+                        "forceCnTrack(v14) select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current + " via=manual-equivalent");
             }
         } catch (Throwable e) {
             com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "forceCnTrack err=" + e);
@@ -127,12 +134,16 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
 
 FORCE_CN_HOOK = """                // MPV_SUB_LANG_V1_HOOK (MPV-BRANCH-ONLY): 等轨道表就绪后强制中文轨
                 try {
-                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                    android.os.Handler modLangHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                    Runnable modLangRunnable = new Runnable() {
                         @Override
                         public void run() {
                             MpvPlayer.this.modForcePreferredSubtitleTrack();
                         }
-                    }, 900L);
+                    };
+                    modLangHandler.postDelayed(modLangRunnable, 900L);
+                    // MPV_SUB_SIMSELECT_RETRY: 外挂字幕可能晚于 file-loaded 才挂上，再补一次
+                    modLangHandler.postDelayed(modLangRunnable, 2600L);
                 } catch (Throwable ignored) {
                 }"""
 
@@ -778,12 +789,19 @@ EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分�
             if (bestGroup != null && bestScore >= 80) {   // LangUtil 是 0~100 分制（简体100/zh80/繁40）
                 androidx.media3.common.TrackSelectionOverride ov =
                         new androidx.media3.common.TrackSelectionOverride(bestGroup, bestIndex);
-                player.setTrackSelectionParameters(
-                        player.getTrackSelectionParameters().buildUpon().setOverrideForType(ov).build());
+                androidx.media3.common.TrackSelectionParameters.Builder modBuilder =
+                        player.getTrackSelectionParameters().buildUpon().setOverrideForType(ov);
+                // MPV_SUB_EXO_CN_V3: 与 TrackUtil.setTrackSelection 对齐，放宽 renderer 能力约束，
+                // 避免低分辨率/不常见编码的字幕轨被能力过滤掉
+                if (modBuilder instanceof androidx.media3.exoplayer.trackselection.DefaultTrackSelector.Parameters.Builder) {
+                    ((androidx.media3.exoplayer.trackselection.DefaultTrackSelector.Parameters.Builder) modBuilder)
+                            .setExceedRendererCapabilitiesIfNecessary(true);
+                }
+                player.setTrackSelectionParameters(modBuilder.build());
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "exoForceCn(v11) select index=" + bestIndex + " score=" + bestScore + " label=" + bestGroup.getFormat(bestIndex).label);
+                        "exoForceCn(v14) select index=" + bestIndex + " score=" + bestScore + " label=" + bestGroup.getFormat(bestIndex).label);
             } else {
-                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle", "exoForceCn(v11) skip: no zh subtitle best=" + bestScore);
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle", "exoForceCn(v14) skip: no zh subtitle best=" + bestScore);
             }
         } catch (Throwable e) {
             com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "exoForceCn err=" + e);
@@ -806,7 +824,21 @@ def patch_exo_prefer_cn(path: Path) -> None:
     if text.count(anchor) != 1:
         ERR.append(f"restoreTrackSelection anchor count={text.count(anchor)}")
         return
-    text = text.replace(anchor, anchor + "\n                if (isExo()) modPreferSimplifiedChineseSubtitle(tracks); // MPV_SUB_EXO_CN_V2", 1)
+    text = text.replace(anchor, anchor + """
+                // MPV_SUB_EXO_CN_RETRY_V3 (MPV-BRANCH-ONLY): 静默模拟「手动选简体轨」，
+                // 外挂字幕/多轨常在首次回调后才就绪，故延迟补两次（取最新 tracks）
+                if (isExo()) {
+                    modPreferSimplifiedChineseSubtitle(tracks);
+                    android.os.Handler modExoCnHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                    Runnable modExoCnRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            modPreferSimplifiedChineseSubtitle(getCurrentTracks());
+                        }
+                    };
+                    modExoCnHandler.postDelayed(modExoCnRunnable, 1500L);
+                    modExoCnHandler.postDelayed(modExoCnRunnable, 4000L);
+                } // MPV_SUB_EXO_CN_V2""", 1)
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("PlayerManager class end not found")

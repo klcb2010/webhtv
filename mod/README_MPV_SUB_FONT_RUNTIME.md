@@ -217,6 +217,26 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v14 变更（字幕轨改走「手动选轨」链路）
+
+1. **MPV 侧不再只发裸命令**：`forceCnTrack` 选中后改为
+   `setInitialSubtitleTrackId(sid)` + `setTrackSelection(C.TRACK_TYPE_TEXT, sid)`，
+   与用户手动点选字幕等价（`MpvPlayerEngine.setTrack` 走的就是这两步）。
+   区别在于会记住 `initialSubtitleTrackId`，下次 `startPreparedMedia()` 前自动预选 sid，
+   不会被 mpv 的默认轨覆盖 —— 这是「切回 MPV 变英文」的根因。
+2. **EXO 侧与 `TrackUtil.setTrackSelection` 对齐**：补
+   `setExceedRendererCapabilitiesIfNecessary(true)`，防止字幕轨被 renderer 能力过滤掉。
+3. **两侧各加延迟重试**：MPV 在 `file-loaded` 后 900ms / 2600ms 各校正一次；
+   EXO 在 `onTracksChanged` 后立即 + 1500ms + 4000ms 各校正一次（取最新 tracks）。
+   覆盖「外挂字幕晚于首个回调才挂上」的情况。
+4. 日志版本号升到 `(v14)`：
+   `forceCnTrack(v14) select ... via=manual-equivalent` / `exoForceCn(v14) select ...`
+
+## v13 变更
+
+`Updater` 注入改为按方法边界整体替换（不依赖方法内部文本，前面的 hook 改过也不影响），
+并且该注入失败只打 WARN、不再让 `apply.sh` 退出。
+
 ## v12 变更
 
 1. **检查更新只看本分支的 release**：`mod/.../utils/Github.java` 新增 `RELEASE_TAG_MARK = "-mpv"`，
