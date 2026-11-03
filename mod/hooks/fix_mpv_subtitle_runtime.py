@@ -42,7 +42,24 @@ RELOAD_STATE = """    // MPV_SUB_RELOAD_STATE_V1 (MPV-BRANCH-ONLY): 只在字体
     private static volatile String sModLastColor = "";
     private static volatile String sModLastStyle = "";
     // 每个播放器实例首次应用样式时校正一次字幕轨（EXO<->MPV 切换后仍生效）
-    private volatile boolean sModLangApplied = false;"""
+    private volatile boolean sModLangApplied = false;
+
+    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现 0~100 打分，不依赖 LangUtil（它可能被别的 mod 改成别的分制）
+    private static int modSubtitleLangScore(String tag) {
+        if (tag == null) return 0;
+        String l = tag.trim().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+        if (l.isEmpty()) return 0;
+        if (l.contains("zh-hans") || l.equals("zh-cn") || l.equals("zh-sg") || l.equals("chs")
+                || l.contains("hans") || l.contains("simplified") || l.contains("简")) return 100;
+        if (l.startsWith("zh") || l.contains("chi") || l.contains("zho")
+                || l.contains("中文") || l.contains("chinese")) {
+            if (l.contains("hant") || l.equals("zh-tw") || l.equals("zh-hk") || l.equals("zh-mo")
+                    || l.equals("cht") || l.contains("traditional") || l.contains("繁")) return 40;
+            return 80;
+        }
+        if (l.contains("traditional")) return 40;
+        return 0;
+    }"""
 
 FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
     public void modForcePreferredSubtitleTrack() {
@@ -64,15 +81,8 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 if (!"sub".equals(type)) continue;
                 String lang = stringProperty("track-list/" + i + "/lang", "");
                 String title = stringProperty("track-list/" + i + "/title", "");
-                int score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(lang);
-                if (score == 0) score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(title);
-                if (score == 0) {
-                    // 宽松兜底：很多内封轨没有 lang，只在 title/名字里写 Chinese / 简体 / 繁體
-                    String probe = ((lang == null ? "" : lang) + "|" + (title == null ? "" : title)).toLowerCase(java.util.Locale.ROOT);
-                    if (probe.contains("chi") || probe.contains("zho")
-                            || probe.contains("简") || probe.contains("中文")) score = 300;
-                    else if (probe.contains("cht") || probe.contains("繁")) score = 100;
-                }
+                int score = modSubtitleLangScore(lang);
+                if (score == 0) score = modSubtitleLangScore(title);
                 int id = intProperty("track-list/" + i + "/id", -1);
                 if (score <= 0 || id < 0) continue;
                 if (score > bestScore) {
@@ -87,7 +97,7 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 curId = Integer.parseInt(current == null ? "" : current.trim());
             } catch (Throwable ignored) {
             }
-            if (bestId < 0 || bestScore < 200) {
+            if (bestId < 0 || bestScore < 80) {   // LangUtil 是 0~100 分制（简体100/zh80/繁40）
                 StringBuilder modDump = new StringBuilder();
                 int modShown = 0;
                 for (int i = 0; i < count && modShown < 10; i++) {
@@ -100,14 +110,14 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                             .append("]");
                 }
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current + " subs=" + modDump);
+                        "forceCnTrack(v11) skip: no zh track count=" + count + " best=" + bestScore + " prevSid=" + current + " subs=" + modDump);
             } else if (curId == bestId) {
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack keep id=" + bestId + " note=" + bestNote);
+                        "forceCnTrack(v11) keep id=" + bestId + " note=" + bestNote);
             } else {
                 mpvCommand(new String[]{"sid", String.valueOf(bestId)});
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current);
+                        "forceCnTrack(v11) select id=" + bestId + " note=" + bestNote + " score=" + bestScore + " prevSid=" + current);
             }
         } catch (Throwable e) {
             com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "forceCnTrack err=" + e);
@@ -725,7 +735,24 @@ def patch_policy_selfcopy(path: Path) -> None:
     OK.append("inject forceCopy self-copy guard + font read retry")
 
 
-EXO_CN_METHOD = """    // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优先
+EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分，不依赖 LangUtil 的分制
+    private static int modSubtitleLangScore(String tag) {
+        if (tag == null) return 0;
+        String l = tag.trim().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+        if (l.isEmpty()) return 0;
+        if (l.contains("zh-hans") || l.equals("zh-cn") || l.equals("zh-sg") || l.equals("chs")
+                || l.contains("hans") || l.contains("simplified") || l.contains("简")) return 100;
+        if (l.startsWith("zh") || l.contains("chi") || l.contains("zho")
+                || l.contains("中文") || l.contains("chinese")) {
+            if (l.contains("hant") || l.equals("zh-tw") || l.equals("zh-hk") || l.equals("zh-mo")
+                    || l.equals("cht") || l.contains("traditional") || l.contains("繁")) return 40;
+            return 80;
+        }
+        if (l.contains("traditional")) return 40;
+        return 0;
+    }
+
+    // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优先
     // Media3 对没有 language 的字幕轨一律当 und，会选第一条（常见就是繁体），
     // 所以这里按 language + label 重新打分，找到简体轨就显式 override。
     private void modPreferSimplifiedChineseSubtitle(androidx.media3.common.Tracks tracks) {
@@ -739,15 +766,8 @@ EXO_CN_METHOD = """    // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优�
                 androidx.media3.common.TrackGroup tg = group.getMediaTrackGroup();
                 for (int i = 0; i < tg.length; i++) {
                     androidx.media3.common.Format f = tg.getFormat(i);
-                    int score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(f.language);
-                    if (score == 0) {
-                        String probe = ((f.label == null ? "" : f.label.toString())
-                                + "|" + (f.language == null ? "" : f.language)).toLowerCase(java.util.Locale.ROOT);
-                        if (probe.contains("简") || probe.contains("中文") || probe.contains("chi")
-                                || probe.contains("chs") || probe.contains("hans") || probe.contains("gb")) score = 300;
-                        else if (probe.contains("繁") || probe.contains("hant")
-                                || probe.contains("cht") || probe.contains("big5")) score = 100;
-                    }
+                    int score = modSubtitleLangScore(f.language);
+                    if (score == 0) score = modSubtitleLangScore(f.label == null ? "" : f.label.toString());
                     if (score > bestScore) {
                         bestScore = score;
                         bestGroup = tg;
@@ -755,15 +775,15 @@ EXO_CN_METHOD = """    // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优�
                     }
                 }
             }
-            if (bestGroup != null && bestScore >= 300) {
+            if (bestGroup != null && bestScore >= 80) {   // LangUtil 是 0~100 分制（简体100/zh80/繁40）
                 androidx.media3.common.TrackSelectionOverride ov =
                         new androidx.media3.common.TrackSelectionOverride(bestGroup, bestIndex);
                 player.setTrackSelectionParameters(
                         player.getTrackSelectionParameters().buildUpon().setOverrideForType(ov).build());
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "exoForceCn select index=" + bestIndex + " score=" + bestScore + " label=" + bestGroup.getFormat(bestIndex).label);
+                        "exoForceCn(v11) select index=" + bestIndex + " score=" + bestScore + " label=" + bestGroup.getFormat(bestIndex).label);
             } else {
-                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle", "exoForceCn skip: no zh subtitle");
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle", "exoForceCn(v11) skip: no zh subtitle best=" + bestScore);
             }
         } catch (Throwable e) {
             com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "exoForceCn err=" + e);

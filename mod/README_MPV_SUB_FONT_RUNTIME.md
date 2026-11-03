@@ -179,3 +179,40 @@ mpvCommand(new String[]{"sub-add", playableUri(uri), "auto", modSubLabel, modSub
 ```
 之后 mpv 的 track-list 就有 `lang=zh-Hans` / `title=中文，Simplified`，
 `slang` 与 `forceCnTrack` 都能正常工作，`forceCnTrack` 的 dump 也能看到真实标签。
+
+## v10 根因修复（明明有 zh-Hans 却 skip）
+
+v9 日志已经证明 sub-add 透传生效了：
+```
+subs= [id=2 lang=zh-Hant title=Traditional] [id=3 lang=zh-Hans title=Simplified] ...
+forceCnTrack skip: no zh track
+```
+
+**根因：分数域不匹配**。`mod/hooks/inject_prefer_text_lang.py` 把 `LangUtil.getPreferredTextLanguageScore`
+改写成了 **0~100 分制**（PREFER_HANS_SCORE：简体=100 / zh=80 / 繁体=40），
+而 v8/v9 的判断写的是 `>= 200`（MPV）与 `>= 300`（EXO）——**永远不成立**，所以两个播放器都走 skip。
+
+**修法**：阈值统一改成 **80**（≥80 视为中文，简体 100 仍优先），宽松兜底分数改成 95 / 40。
+兼容原版 400/200/100 分制（400 ≥ 80 同样成立）。
+
+## v11 变更（不再依赖 LangUtil 的分制）
+
+上一版把阈值改成 80，日志仍 `skip: no zh track`。v11 直接**自实现打分**（`modSubtitleLangScore`，0~100），
+完全绕开 `LangUtil.getPreferredTextLanguageScore`（它被 inject_prefer_text_lang.py 改成 100/80/40 分制）：
+
+| 输入 | 分数 |
+|---|---|
+| `zh-Hans` / `zh-CN` / `chs` / `Simplified` / 含「简」 | 100 |
+| `zh` 或其它 `zh-*` / `chi` / `zho` / `Chinese` | 80 |
+| `zh-Hant` / `zh-TW` / `zh-HK` / `cht` / `Traditional` / 含「繁」 | 40 |
+| 其它 | 0 |
+
+阈值 = 80（简体 100 优先于 zh 80 与繁体 40）。
+
+日志带版本号，可直接确认装的是哪一版：
+```
+forceCnTrack(v11) select id=3 note=zh-Hans|Simplified score=100 prevSid=1
+forceCnTrack(v11) skip: no zh track count=35 best=0 prevSid=1 subs=[...]
+exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
+```
+看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
