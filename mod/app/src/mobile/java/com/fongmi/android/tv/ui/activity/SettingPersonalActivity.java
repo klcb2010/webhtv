@@ -214,12 +214,8 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setSubtitleFont(View view) {
-        // MPV-BRANCH-ONLY: 点一下切下一个内置字体（义启粗楷 → 毁片和圆 → 方正细圆 → 系统默认 循环）
-        int count = Math.min(SubtitleFontManager.count(), SubtitleFontManager.CUSTOM_INDEX);
-        if (count <= 0) count = 1;
-        int cur = Setting.getSubtitleFontIndex();
-        if (cur < 0 || cur >= count) cur = -1;
-        applySubtitleFont((cur + 1) % count);
+        // MPV-BRANCH-ONLY: 点一下切下一个字体（义启粗楷 → 毁片和圆 → 方正细圆 → 系统默认 → 筑紫A圆D 循环）
+        applySubtitleFont(SubtitleFontManager.nextSelectableIndex(Setting.getSubtitleFontIndex()));
     }
 
     /** MPV-BRANCH-ONLY: 应用字体（写配置 → 后台静默加载 → 通知运行时刷新）。 */

@@ -88,8 +88,19 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
             } catch (Throwable ignored) {
             }
             if (bestId < 0 || bestScore < 200) {
+                StringBuilder modDump = new StringBuilder();
+                int modShown = 0;
+                for (int i = 0; i < count && modShown < 10; i++) {
+                    if (!"sub".equals(stringProperty("track-list/" + i + "/type", ""))) continue;
+                    modShown++;
+                    modDump.append(" [id=").append(intProperty("track-list/" + i + "/id", -1))
+                            .append(" lang=").append(stringProperty("track-list/" + i + "/lang", ""))
+                            .append(" title=").append(stringProperty("track-list/" + i + "/title", ""))
+                            .append(" ext=").append(stringProperty("track-list/" + i + "/external", ""))
+                            .append("]");
+                }
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
-                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current);
+                        "forceCnTrack skip: no zh track count=" + count + " prevSid=" + current + " subs=" + modDump);
             } else if (curId == bestId) {
                 com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
                         "forceCnTrack keep id=" + bestId + " note=" + bestNote);
@@ -714,6 +725,105 @@ def patch_policy_selfcopy(path: Path) -> None:
     OK.append("inject forceCopy self-copy guard + font read retry")
 
 
+EXO_CN_METHOD = """    // MPV_SUB_EXO_CN_V2 (MPV-BRANCH-ONLY): EXO 也简体优先
+    // Media3 对没有 language 的字幕轨一律当 und，会选第一条（常见就是繁体），
+    // 所以这里按 language + label 重新打分，找到简体轨就显式 override。
+    private void modPreferSimplifiedChineseSubtitle(androidx.media3.common.Tracks tracks) {
+        try {
+            if (tracks == null || player == null) return;
+            androidx.media3.common.TrackGroup bestGroup = null;
+            int bestIndex = -1;
+            int bestScore = 0;
+            for (androidx.media3.common.Tracks.Group group : tracks.getGroups()) {
+                if (group.getType() != androidx.media3.common.C.TRACK_TYPE_TEXT) continue;
+                androidx.media3.common.TrackGroup tg = group.getMediaTrackGroup();
+                for (int i = 0; i < tg.length; i++) {
+                    androidx.media3.common.Format f = tg.getFormat(i);
+                    int score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(f.language);
+                    if (score == 0) {
+                        String probe = ((f.label == null ? "" : f.label.toString())
+                                + "|" + (f.language == null ? "" : f.language)).toLowerCase(java.util.Locale.ROOT);
+                        if (probe.contains("简") || probe.contains("中文") || probe.contains("chi")
+                                || probe.contains("chs") || probe.contains("hans") || probe.contains("gb")) score = 300;
+                        else if (probe.contains("繁") || probe.contains("hant")
+                                || probe.contains("cht") || probe.contains("big5")) score = 100;
+                    }
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestGroup = tg;
+                        bestIndex = i;
+                    }
+                }
+            }
+            if (bestGroup != null && bestScore >= 300) {
+                androidx.media3.common.TrackSelectionOverride ov =
+                        new androidx.media3.common.TrackSelectionOverride(bestGroup, bestIndex);
+                player.setTrackSelectionParameters(
+                        player.getTrackSelectionParameters().buildUpon().setOverrideForType(ov).build());
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle",
+                        "exoForceCn select index=" + bestIndex + " score=" + bestScore + " label=" + bestGroup.getFormat(bestIndex).label);
+            } else {
+                com.fongmi.android.tv.utils.ModDebugLog.i("MpvSubtitleStyle", "exoForceCn skip: no zh subtitle");
+            }
+        } catch (Throwable e) {
+            com.fongmi.android.tv.utils.ModDebugLog.w("MpvSubtitleStyle", "exoForceCn err=" + e);
+        }
+    }
+    // MPV_SUB_EXO_CN_V2_END"""
+
+
+def patch_exo_prefer_cn(path: Path) -> None:
+    if not path.is_file():
+        ERR.append(f"PlayerManager.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_EXO_CN_V2" in text:
+        OK.append("exo cn preference already injected")
+        return
+    if 'if (engine instanceof MpvPlayerEngine mpv) {' in text and 'restoreTrackSelection(Track.find(getKey()));' in text:
+        pass
+    anchor = "                restoreTrackSelection(Track.find(getKey()));"
+    if text.count(anchor) != 1:
+        ERR.append(f"restoreTrackSelection anchor count={text.count(anchor)}")
+        return
+    text = text.replace(anchor, anchor + "\n                if (isExo()) modPreferSimplifiedChineseSubtitle(tracks); // MPV_SUB_EXO_CN_V2", 1)
+    idx = text.rfind("\n}")
+    if idx < 0:
+        ERR.append("PlayerManager class end not found")
+        return
+    text = text[:idx] + "\n" + EXO_CN_METHOD + "\n" + text[idx:]
+    write(path, text)
+    OK.append("inject exo simplified-chinese subtitle preference")
+
+
+def patch_mpv_sub_add_lang(path: Path) -> None:
+    """外挂字幕 sub-add 时把 language/label 传给 mpv，否则 track-list 的 lang 为空，语言优先全失效。"""
+    if not path.is_file():
+        ERR.append(f"MpvPlayer.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_ADDLANG_V1" in text:
+        OK.append("sub-add lang already injected")
+        return
+    old = '                mpvCommand(new String[]{"sub-add", playableUri(uri), "auto"});'
+    new = (
+        '                // MPV_SUB_ADDLANG_V1 (MPV-BRANCH-ONLY): 把语言/名称传给 mpv，否则 track-list 的 lang 为空\n'
+        '                String modSubLang = sub.language == null ? "" : sub.language;\n'
+        '                String modSubLabel = sub.label == null ? "" : sub.label.toString();\n'
+        '                if (modSubLang.isEmpty() && modSubLabel.isEmpty()) {\n'
+        '                    mpvCommand(new String[]{"sub-add", playableUri(uri), "auto"});\n'
+        '                } else {\n'
+        '                    mpvCommand(new String[]{"sub-add", playableUri(uri), "auto", modSubLabel, modSubLang});\n'
+        '                }'
+    )
+    if text.count(old) != 1:
+        ERR.append(f"sub-add anchor count={text.count(old)} (expect 1)")
+        return
+    text = text.replace(old, new, 1)
+    write(path, text)
+    OK.append("inject sub-add language/label passthrough")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -737,6 +847,8 @@ def main() -> int:
     patch_policy_font_lock(policy)
     patch_policy_selfcopy(policy)
     patch_mpv_player(player)
+    patch_exo_prefer_cn(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
+    patch_mpv_sub_add_lang(player)
 
     for x in OK:
         print(" OK", x)

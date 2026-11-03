@@ -17,7 +17,8 @@ sync_subtitle_fonts() {
   local dst_dir="$MOD/app/src/main/assets/fonts"
   mkdir -p "$dst_dir"
   if [[ -d "$src_dir" ]]; then
-    for id in yiqicukai huipianheyuan fangzhengzhunyuan; do
+    # MPV-BRANCH-ONLY: 增加 筑紫A圆D
+    for id in yiqicukai huipianheyuan fangzhengzhunyuan zhuziAyuanD; do
       for ext in ttf otf TTF OTF ttc TTC ""; do
         local f
         if [[ -n "$ext" ]]; then f="$src_dir/${id}.${ext}"; else f="$src_dir/${id}"; fi

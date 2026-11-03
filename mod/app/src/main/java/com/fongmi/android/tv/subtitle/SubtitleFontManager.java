@@ -30,13 +30,17 @@ public final class SubtitleFontManager {
     public static final String ID_SYSTEM = "system";
     // MPV-BRANCH-ONLY: 自定义外部字体（不弹文件选择器，只识别既有字体文件）
     public static final String ID_CUSTOM = "custom";
+    // MPV-BRANCH-ONLY: 筑紫A圆D（index 5；放在 custom 之后，保持 index 0~4 语义不变）
+    public static final String ID_ZHUZI = "zhuziAyuanD";
 
     // 0 义启粗楷(默认), 1 毁片和圆, 2 方正细圆, 3 系统默认, 4 自定义外部字体
-    private static final String[] IDS = {ID_YIQICUKAI, ID_HUIPIANHEYUAN, ID_FANGZHENGZHUNYUAN, ID_SYSTEM, ID_CUSTOM};
-    private static final String[] LABELS_ZH = {"义启粗楷", "毁片和圆", "方正细圆", "系统默认", "自定义外部字体"};
-    private static final String[] LABELS_EN = {"YiQiCuKai", "HuiPianHeYuan", "FangZhengZhunYuan", "System", "Custom font"};
+    private static final String[] IDS = {ID_YIQICUKAI, ID_HUIPIANHEYUAN, ID_FANGZHENGZHUNYUAN, ID_SYSTEM, ID_CUSTOM, ID_ZHUZI};
+    private static final String[] LABELS_ZH = {"义启粗楷", "毁片和圆", "方正细圆", "系统默认", "自定义外部字体", "筑紫A圆D"};
+    private static final String[] LABELS_EN = {"YiQiCuKai", "HuiPianHeYuan", "FangZhengZhunYuan", "System", "Custom font", "Zhuzi A Yuan D"};
     // MPV-BRANCH-ONLY: 内置字体在 assets/fonts/ 下的文件名（与 IDS 顺序一致，system 无文件）
-    private static final String[] ASSET_FILES = {"yiqicukai.ttf", "huipianheyuan.ttf", "fangzhengzhunyuan.ttf", "", "custom.ttf"};
+    private static final String[] ASSET_FILES = {"yiqicukai.ttf", "huipianheyuan.ttf", "fangzhengzhunyuan.ttf", "", "custom.ttf", "zhuziAyuanD.ttf"};
+    // MPV-BRANCH-ONLY: 个性设置可循环选择的索引（跳过 4=custom，保留旧配置兼容）
+    private static final int[] SELECTABLE = {0, 1, 2, 3, 5};
     public static final int CUSTOM_INDEX = 4;
     private static final String TAG_BUILTIN = "MpvSubtitleBuiltin";
     private static final String CUSTOM_FILE_BASE = "custom";
@@ -51,6 +55,23 @@ public final class SubtitleFontManager {
 
     public static int count() {
         return IDS.length;
+    }
+
+    /** MPV-BRANCH-ONLY: 个性设置里可点的字体顺序（跳过「自定义外部字体」）。 */
+    public static int[] selectableIndexes() {
+        return SELECTABLE.clone();
+    }
+
+    /** MPV-BRANCH-ONLY: 按可点顺序取下一个索引。 */
+    public static int nextSelectableIndex(int current) {
+        int idx = 0;
+        for (int i = 0; i < SELECTABLE.length; i++) {
+            if (SELECTABLE[i] == current) {
+                idx = i;
+                break;
+            }
+        }
+        return SELECTABLE[(idx + 1) % SELECTABLE.length];
     }
 
     public static String idOf(int index) {

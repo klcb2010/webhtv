@@ -146,3 +146,36 @@ fontProbe ... file=...huipianheyuan.ttf(5122272B) family=KTXP_ComRound
 
 **修法**：`forceCopy` 开头判断 `dst.getCanonicalPath().equals(src.getCanonicalPath())` → 直接 `return true`，绝不自我截断。
 另加：`getSubFontProperty()` 读到文件 <1000B 时最多重试 3×40ms（首轮 assets 复制期间的半成品）。
+
+## v8 新增
+
+1. **新内置字体「筑紫A圆D」**（`zhuziAyuanD.ttf`，index=5，排在 custom 之后，index 0~4 语义不变）
+   - `mod/apply.sh` 的 `sync_subtitle_fonts` 已加入 `zhuziAyuanD`
+   - 个性设置点击顺序：义启粗楷 → 毁片和圆 → 方正细圆 → 系统默认 → 筑紫A圆D（跳过「自定义」）
+   - `arrays.xml` 三个数组同步增加第 6 项
+2. **EXO 也简体优先**：`PlayerManager` 在 `onTracksChanged` 首次恢复轨后调用
+   `modPreferSimplifiedChineseSubtitle(tracks)`，按 `language` + `label`（简/繁/CHS/CHT/Hans/Hant/GB/Big5）
+   重新打分并 `setTrackSelectionParameters` 覆盖。原因：Media3 对没有 language 的字幕轨一律当 `und`，
+   会直接选第一条（很多片源第一条是繁体）。
+3. **MPV 选轨诊断**：`forceCnTrack` 找不到中文轨时，日志会 dump 前 10 条字幕轨的
+   `id / lang / title / external`，用于判断片源到底有没有语言标签。
+
+## v9 根因修复（MPV 选不到简体/切回变英文）
+
+**根因**：外挂字幕走的是 `MpvPlayer.addSubtitleConfigurations()`：
+```java
+mpvCommand(new String[]{"sub-add", playableUri(uri), "auto"});   // 只传了 url + auto
+```
+mpv 的 `sub-add` 语法是 `sub-add <url> [<flags> [<title> [<lang>]]]` ——
+**language / label 从来没传给 mpv**，所以 `track-list/N/lang` 全是空，
+`slang` 与 `forceCnTrack` 怎么匹配都命中不了（日志 `count=35 ... no zh track` 就是这个原因）。
+
+而 app 自己的字幕列表能显示"中文，Simplified"，是因为那是 Media3 `SubtitleConfiguration.label/language`，
+不是 mpv 的轨道属性。
+
+**修法**：`sub-add` 时把 `sub.label` / `sub.language` 作为 title / lang 传入：
+```java
+mpvCommand(new String[]{"sub-add", playableUri(uri), "auto", modSubLabel, modSubLang});
+```
+之后 mpv 的 track-list 就有 `lang=zh-Hans` / `title=中文，Simplified`，
+`slang` 与 `forceCnTrack` 都能正常工作，`forceCnTrack` 的 dump 也能看到真实标签。
