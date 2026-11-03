@@ -65,11 +65,19 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
     public void modForcePreferredSubtitleTrack() {
         try {
             if (!modIsNativeReady()) return;
-            // 尊重「字幕偏好语言」：只有中文（或未设置）才强制中文轨，选英文/自动时不干预
+            // MPV_SUB_PREFGATE_V2 (MPV-BRANCH-ONLY): 只有「明确指定了非中文语言」才不干预。
+            // auto / 空 / 中文一律继续强制简中 —— 原来把 auto 也当"不干预"，
+            // 而字幕偏好默认就是 auto，导致 MPV 侧整条规则从不执行（起播就是英文轨）。
             String modPref = com.fongmi.android.tv.setting.Setting.getSubtitlePreferredLanguage();
             if (modPref != null) {
-                String p = modPref.trim().toLowerCase(java.util.Locale.ROOT);
-                if (p.startsWith("en") || "auto".equals(p) || p.isEmpty()) return;
+                String p = modPref.trim().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+                boolean modExplicitNonZh = !p.isEmpty()
+                        && !"auto".equals(p)
+                        && !p.startsWith("zh")
+                        && !p.contains("chinese")
+                        && !p.contains("chi")
+                        && !p.contains("中文");
+                if (modExplicitNonZh) return;
             }
             int count = Math.max(0, intProperty("track-list/count", 0));
             if (count <= 0) return;
@@ -787,6 +795,12 @@ EXO_CN_METHOD = """    // MPV_SUB_SCORE_V11 (MPV-BRANCH-ONLY): 自实现打分�
                 }
             }
             if (bestGroup != null && bestScore >= 80) {   // LangUtil 是 0~100 分制（简体100/zh80/繁40）
+                // MPV_SUB_EXO_CN_V4: 已经是这条轨就不再设参数，避免每次 tracks 回调重复触发
+                for (androidx.media3.common.Tracks.Group modG : tracks.getGroups()) {
+                    if (modG.getMediaTrackGroup() == bestGroup && modG.isTrackSelected(bestIndex)) {
+                        return;
+                    }
+                }
                 androidx.media3.common.TrackSelectionOverride ov =
                         new androidx.media3.common.TrackSelectionOverride(bestGroup, bestIndex);
                 androidx.media3.common.TrackSelectionParameters.Builder modBuilder =
@@ -815,37 +829,30 @@ def patch_exo_prefer_cn(path: Path) -> None:
         ERR.append(f"PlayerManager.java not found: {path}")
         return
     text = read(path)
-    if "MPV_SUB_EXO_CN_V2" in text:
+    if "MPV_SUB_EXO_CN_V4" in text:
         OK.append("exo cn preference already injected")
         return
     if 'if (engine instanceof MpvPlayerEngine mpv) {' in text and 'restoreTrackSelection(Track.find(getKey()));' in text:
         pass
-    anchor = "                restoreTrackSelection(Track.find(getKey()));"
+    # 注入在首次块「之外」：每次 onTracksChanged 都校核。
+    # 原来只在 if (!tracks.isEmpty() && !initTrack) 块内，切解码那次如果 initTrack 已为 true
+    # 就不再执行 → EXO 回落到默认轨（表现为 MPV→EXO 变繁体）。
+    anchor = "            markStartupCompletion(player != null && player.getPlaybackState() == Player.STATE_READY, tracks);"
     if text.count(anchor) != 1:
-        ERR.append(f"restoreTrackSelection anchor count={text.count(anchor)}")
+        ERR.append(f"markStartupCompletion anchor count={text.count(anchor)}")
         return
-    text = text.replace(anchor, anchor + """
-                // MPV_SUB_EXO_CN_RETRY_V3 (MPV-BRANCH-ONLY): 静默模拟「手动选简体轨」，
-                // 外挂字幕/多轨常在首次回调后才就绪，故延迟补两次（取最新 tracks）
-                if (isExo()) {
-                    modPreferSimplifiedChineseSubtitle(tracks);
-                    android.os.Handler modExoCnHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                    Runnable modExoCnRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            modPreferSimplifiedChineseSubtitle(getCurrentTracks());
-                        }
-                    };
-                    modExoCnHandler.postDelayed(modExoCnRunnable, 1500L);
-                    modExoCnHandler.postDelayed(modExoCnRunnable, 4000L);
-                } // MPV_SUB_EXO_CN_V2""", 1)
+    text = text.replace(anchor, """            // MPV_SUB_EXO_CN_V4 (MPV-BRANCH-ONLY): 每次轨道表变化都校核，静默选简体轨
+            if (isExo() && tracks != null && !tracks.isEmpty()) {
+                modPreferSimplifiedChineseSubtitle(tracks);
+            } // MPV_SUB_EXO_CN_V2
+""" + anchor, 1)
     idx = text.rfind("\n}")
     if idx < 0:
         ERR.append("PlayerManager class end not found")
         return
     text = text[:idx] + "\n" + EXO_CN_METHOD + "\n" + text[idx:]
     write(path, text)
-    OK.append("inject exo simplified-chinese subtitle preference")
+    OK.append("inject exo simplified-chinese subtitle preference (every tracks change)")
 
 
 def patch_mpv_sub_add_lang(path: Path) -> None:
@@ -886,7 +893,7 @@ def patch_updater_filter(path: Path) -> None:
         print("[mod] WARN Updater.java missing, skip updater filter")
         return
     text = read(path)
-    if "MPV_SUB_UPDATE_FILTER_V1" in text:
+    if "MPV_SUB_UPDATE_FILTER_V1" in text and "MPV_SUB_ASSET_MATCH_V1" in text:
         OK.append("updater branch filter already injected")
         return
 
@@ -896,19 +903,53 @@ def patch_updater_filter(path: Path) -> None:
         try {
             JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
             String manifestName = getManifestName(channel);
+            com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                    "stable start channel=" + channel + " releases=" + releases.length()
+                            + " manifest=" + manifestName + " mark=" + Github.RELEASE_TAG_MARK);
             for (int i = 0; i < releases.length(); i++) {
                 JSONObject release = releases.optJSONObject(i);
                 if (release == null) continue;
                 String tag = release.optString("tag_name");
-                if (tag == null || !tag.contains(Github.RELEASE_TAG_MARK)) continue;
-                if (isBetaRelease(release)) continue;
-                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
+                boolean markOk = tag != null && tag.contains(Github.RELEASE_TAG_MARK);
+                boolean beta = isBetaRelease(release);
+                boolean hasAsset = markOk && !beta && findAsset(release.optJSONArray("assets"), manifestName) != null;
+                com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                        "release[" + i + "] tag=" + tag + " mark=" + markOk + " beta=" + beta + " asset=" + hasAsset);
+                if (!markOk || beta || !hasAsset) continue;
                 return readGithubReleaseUpdate(channel, release);
             }
+            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "stable miss: no matching -mpv release");
         } catch (Exception e) {
+            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "stable err=" + e);
             e.printStackTrace();
         }
         return Update.empty(channel);
+    }"""
+
+    new_find_asset = """    private JSONObject findAsset(JSONArray assets, String name) {
+        // MPV_SUB_ASSET_MATCH_V1 (MPV-BRANCH-ONLY): 先精确匹配；再允许「前缀相同 + 扩展名相同」的
+        // 变体。本分支的 asset 带 -mpv 后缀（leanback-arm64_v8a-mpv.json），而 getManifestName()
+        // 拼出来的是 leanback-arm64_v8a.json，精确比对永远 null → 检查更新必然失败。
+        if (assets == null || name == null || name.isEmpty()) return null;
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.optJSONObject(i);
+            if (asset != null && name.equals(asset.optString("name"))) return asset;
+        }
+        int dot = name.lastIndexOf('.');
+        if (dot <= 0) return null;
+        boolean wantBeta = name.contains("-beta");
+        String base = wantBeta ? name.substring(0, dot).replace("-beta", "") : name.substring(0, dot);
+        String ext = name.substring(dot);
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.optJSONObject(i);
+            if (asset == null) continue;
+            String assetName = asset.optString("name");
+            if (assetName == null || assetName.isEmpty()) continue;
+            if (!assetName.startsWith(base) || !assetName.endsWith(ext)) continue;
+            if (wantBeta != assetName.contains("-beta")) continue;
+            return asset;
+        }
+        return null;
     }"""
 
     span = find_method(text, r"^[ \t]*private\s+Update\s+getGithubStableUpdate\s*\(\s*String\s+\w+\s*\)\s*\{")
@@ -917,6 +958,14 @@ def patch_updater_filter(path: Path) -> None:
         return
     start_i, _, end_i = span
     text = text[:start_i] + new_stable + text[end_i + 1:]
+
+    # asset 名模糊匹配（本分支 asset 带 -mpv 后缀，精确比对必然失败）
+    span_asset = find_method(text, r"^[ \t]*private\s+JSONObject\s+findAsset\s*\(\s*JSONArray\s+\w+\s*,\s*String\s+\w+\s*\)\s*\{")
+    if span_asset is None:
+        print("[mod] WARN findAsset not found (检查更新可能仍失败)")
+    else:
+        s3, _, e3 = span_asset
+        text = text[:s3] + new_find_asset + text[e3 + 1:]
 
     span2 = find_method(text, r"^[ \t]*private\s+Update\s+getGithubBetaUpdate\s*\(\s*String\s+\w+\s*\)\s*\{")
     if span2 is None:
@@ -934,8 +983,8 @@ def patch_updater_filter(path: Path) -> None:
                 print("[mod] WARN beta loop not found (beta 通道不做过)")
 
     write(path, text)
-    if "MPV_SUB_UPDATE_FILTER_V1" in read(path):
-        OK.append("inject updater branch filter (-mpv)")
+    if "MPV_SUB_UPDATE_FILTER_V1" in read(path) and "MPV_SUB_ASSET_MATCH_V1" in read(path):
+        OK.append("inject updater branch filter (-mpv) + asset match")
     else:
         print("[mod] WARN updater filter not applied")
 

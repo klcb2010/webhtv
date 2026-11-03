@@ -217,6 +217,33 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v17 变更（修 MPV 侧简中完全不生效 + EXO 切解码回落）
+
+1. **MPV 侧不再把「自动」当成"不干预"**。原来门控是
+   `if (p.startsWith("en") || "auto".equals(p) || p.isEmpty()) return;`，
+   而字幕偏好默认就是 auto → 整条规则**从未执行**，MPV 起播直接是 mpv 自选的英文轨。
+   现在只有「明确选了非中文语言」才跳过，auto / 空 / 中文都继续强制简中。
+2. **EXO 侧的简体校核移到每次 `onTracksChanged`**（原来只在
+   `if (!tracks.isEmpty() && !initTrack)` 首次块内）。切解码时 `initTrack` 可能已为 true，
+   整块不执行 → EXO 回落到默认轨（表现为 MPV→EXO 变繁体）。同时加了
+   「已经是这条轨就不再设参数」的幂等判断，避免重复触发回调。
+3. **更新检查加诊断日志**：每次检查会输出
+   `Updater: stable start channel=.. releases=.. manifest=.. mark=-mpv`
+   和每个 release 的 `tag=.. mark=.. beta=.. asset=..`，
+   失败时区分是「接口异常 / 没有 -mpv 的 release / asset 名没命中」。
+
+## v15 变更（修复「检查更新失败」）
+
+**根因**：本分支 release 的 asset 名是 `leanback-arm64_v8a-mpv.json`，而 `Updater.getManifestName()`
+拼出来的是 `leanback-arm64_v8a.json`（`getName()` = `FLAVOR_mode + "-" + FLAVOR_abi`，不含后缀），
+原 `findAsset()` 用 `equals` 精确比对 → 永远返回 null → `Update.empty()` → UI 提示「检查更新失败」。
+
+**修复**：`findAsset()` 改为两级匹配
+1. 先按原名精确匹配（main 分支行为不变）；
+2. 再按「前缀相同 + 扩展名相同」兜底，并排除 `-beta`（除非本次就是要 beta 通道）。
+
+配合 v13 的 tag 过滤，stable/beta 两条通道都能正确命中 `*-mpv` 的 release。
+
 ## v14 变更（字幕轨改走「手动选轨」链路）
 
 1. **MPV 侧不再只发裸命令**：`forceCnTrack` 选中后改为
