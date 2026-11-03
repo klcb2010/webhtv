@@ -61,7 +61,11 @@ RELOAD_STATE = """    // MPV_SUB_RELOAD_STATE_V1 (MPV-BRANCH-ONLY): 只在字体
         return 0;
     }"""
 
-FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
+FORCE_CN_METHOD = """    // MPV_SUB_TRACKREADY_V1: 轨道表就绪后的自动校正状态（纯起播时固定延时可能早于字幕轨出现）
+    private boolean modCorrectScheduled;
+    private long modLastCorrectAt;
+
+    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
     public void modForcePreferredSubtitleTrack() {
         try {
             if (!modIsNativeReady()) return;
@@ -616,11 +620,21 @@ def patch_policy_font_probe(path: Path) -> None:
         return
     probe = (
         anchor
-        + f'\n            com.fongmi.android.tv.utils.ModDebugLog.i("{TAG}", "fontProbe idx=" + idx'
+        + '\n            String modProbeKey = id + "|" + family + "|"'
+        + ' + (src == null ? "null" : String.valueOf(src.length()));'
+        + '\n            if (!modProbeKey.equals(sModLastProbeKey)) {'
+        + '\n                sModLastProbeKey = modProbeKey;'
+        + f'\n                com.fongmi.android.tv.utils.ModDebugLog.i("{TAG}", "fontProbe idx=" + idx'
         + ' + " id=" + id + " file=" + (src == null ? "null" : src.getAbsolutePath() + "(" + src.length() + "B)")'
         + ' + " family=" + family + " // ' + MARK_FONT_PROBE + '");'
+        + '\n            }'
     )
     text = text.replace(anchor, probe, 1)
+    # fontProbe 去重用的静态字段
+    if "private static String sModLastProbeKey" not in text:
+        idx = text.rfind("\n}")
+        if idx > 0:
+            text = text[:idx] + "\n    private static String sModLastProbeKey;\n" + text[idx:]
     write(path, text)
     OK.append("inject fontProbe into getSubFontProperty")
 
@@ -901,7 +915,17 @@ def patch_mpv_sub_add_lang(path: Path) -> None:
         '                    mpvCommand(new String[]{"sub-add", playableUri(uri), "auto"});\n'
         '                } else {\n'
         '                    mpvCommand(new String[]{"sub-add", playableUri(uri), "auto", modSubLabel, modSubLang});\n'
-        '                }'
+        '                }\n'
+        '                // MPV_SUB_TRACKREADY_V1: 外挂字幕挂上后再校正一次（此时才可能出现简体轨）\n'
+        '                mainHandler.postDelayed(new Runnable() {\n'
+        '                    @Override\n'
+        '                    public void run() {\n'
+        '                        try {\n'
+        '                            modForcePreferredSubtitleTrack();\n'
+        '                        } catch (Throwable ignored) {\n'
+        '                        }\n'
+        '                    }\n'
+        '                }, 700L);'
     )
     if text.count(old) != 1:
         ERR.append(f"sub-add anchor count={text.count(old)} (expect 1)")
@@ -921,18 +945,35 @@ def patch_updater_filter(path: Path) -> None:
         print("[mod] WARN Updater.java missing, skip updater filter")
         return
     text = read(path)
-    if "MPV_SUB_UPDATE_FILTER_V1" in text and "MPV_SUB_ASSET_MATCH_V1" in text:
+    if "MPV_SUB_UPDATE_FILTER_V2" in text and "MPV_SUB_ASSET_MATCH_V1" in text:
         OK.append("updater branch filter already injected")
         return
 
     new_stable = """    private Update getGithubStableUpdate(String channel) {
-        // MPV_SUB_UPDATE_FILTER_V1 (MPV-BRANCH-ONLY): 只认本分支的 release（tag 含 -mpv），
-        // 否则 /releases/latest 会返回 main 分支的包，MPV 版会误报更新
+        // MPV_SUB_UPDATE_FILTER_V2 (MPV-BRANCH-ONLY):
+        // 1) 先走 /releases/latest —— 和主分支同一条路径，响应只有几十 KB，秒回；
+        //    若它正好是本分支的 release（tag 含 -mpv）就直接用。
+        // 2) 只有当 latest 被 main 分支抢走时，才退回 /releases 列表按 tag 过滤。
+        // 原实现一律拉列表（20 个 release + 全部 assets，几百 KB），在大陆网络下
+        // 4s 单请求超时 / 10s 总超时必然失败 → 提示「检查更新失败」。
+        try {
+            JSONObject latest = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            String latestTag = latest.optString("tag_name");
+            boolean latestMark = latestTag != null && latestTag.contains(Github.RELEASE_TAG_MARK);
+            boolean latestBeta = isBetaRelease(latest);
+            boolean latestAsset = latestMark && !latestBeta
+                    && findAsset(latest.optJSONArray("assets"), getManifestName(channel)) != null;
+            com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                    "latest tag=" + latestTag + " mark=" + latestMark + " beta=" + latestBeta + " asset=" + latestAsset);
+            if (latestMark && !latestBeta && latestAsset) return readGithubReleaseUpdate(channel, latest);
+        } catch (Exception e) {
+            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "latest err=" + e);
+        }
         try {
             JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
             String manifestName = getManifestName(channel);
             com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
-                    "stable start channel=" + channel + " releases=" + releases.length()
+                    "stable list channel=" + channel + " releases=" + releases.length()
                             + " manifest=" + manifestName + " mark=" + Github.RELEASE_TAG_MARK);
             for (int i = 0; i < releases.length(); i++) {
                 JSONObject release = releases.optJSONObject(i);
@@ -948,8 +989,7 @@ def patch_updater_filter(path: Path) -> None:
             }
             com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "stable miss: no matching -mpv release");
         } catch (Exception e) {
-            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "stable err=" + e);
-            e.printStackTrace();
+            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "stable list err=" + e);
         }
         return Update.empty(channel);
     }"""
@@ -1020,10 +1060,60 @@ def patch_updater_filter(path: Path) -> None:
                 print("[mod] WARN beta loop not found (beta 通道不做过)")
 
     write(path, text)
-    if "MPV_SUB_UPDATE_FILTER_V1" in read(path) and "MPV_SUB_ASSET_MATCH_V1" in read(path):
-        OK.append("inject updater branch filter (-mpv) + asset match")
+    if "MPV_SUB_UPDATE_FILTER_V2" in read(path) and "MPV_SUB_ASSET_MATCH_V1" in read(path):
+        OK.append("inject updater (latest first, list fallback, asset match)")
     else:
         print("[mod] WARN updater filter not applied")
+
+
+def patch_mpv_track_ready(path: Path) -> None:
+    """轨道表就绪后自动校正字幕轨。
+
+    纯起播时 file-loaded 的 900ms/2600ms 可能都早于字幕轨出现（内封/外挂较晚），
+    只靠固定延时就会漏掉，于是停在 mpv 默认的英文轨。
+    这里挂在 refreshTracks() 确认 count>0 之后，节流 3 秒、延迟 600ms 校正一次。
+    """
+    if not path.is_file():
+        ERR.append(f"MpvPlayer.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_TRACKREADY_V1_HOOK" in text:
+        OK.append("track-ready correction already injected")
+        return
+    if "modCorrectScheduled" not in text:
+        idx = text.rfind("\n}")
+        if idx > 0:
+            text = text[:idx] + "\n    private boolean modCorrectScheduled;\n    private long modLastCorrectAt;\n" + text[idx:]
+    anchor = "        List<TrackInfo> infos = new ArrayList<>();"
+    if text.count(anchor) != 1:
+        ERR.append(f"refreshTracks anchor count={text.count(anchor)} (expect 1)")
+        return
+    block = """        // MPV_SUB_TRACKREADY_V1_HOOK (MPV-BRANCH-ONLY): 轨道表真有内容了才校正一次
+        try {
+            long modNowAt = android.os.SystemClock.elapsedRealtime();
+            if (!modCorrectScheduled && modNowAt - modLastCorrectAt > 3000L) {
+                modCorrectScheduled = true;
+                mainHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        modCorrectScheduled = false;
+                        modLastCorrectAt = android.os.SystemClock.elapsedRealtime();
+                        try {
+                            modForcePreferredSubtitleTrack();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }, 600L);
+            }
+        } catch (Throwable ignored) {
+        }
+"""
+    text = text.replace(anchor, block + anchor, 1)
+    write(path, text)
+    if "MPV_SUB_TRACKREADY_V1_HOOK" in read(path):
+        OK.append("inject track-ready auto correction")
+    else:
+        ERR.append("track-ready hook not applied")
 
 
 def main() -> int:
@@ -1051,6 +1141,7 @@ def main() -> int:
     patch_mpv_player(player)
     patch_exo_prefer_cn(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
     patch_mpv_sub_add_lang(player)
+    patch_mpv_track_ready(player)
     patch_updater_filter(ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java")
 
     for x in OK:

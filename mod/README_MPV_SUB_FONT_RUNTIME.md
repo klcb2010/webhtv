@@ -217,6 +217,26 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v20 变更（日志体验：实时可见 + 降噪）
+
+1. **`ModDebugLog` 同步投一份到 logcat**：`Log.i/Log.w` 与文件写入同时进行，
+   文件查看器不刷新时可以直接 `adb logcat -s MpvSubtitleStyle Updater`（或算法助手）实时抓。
+2. **每次写入后 `flush()` + `getFD().sync()`**：保证用文件管理器打开就能看到刚写的行，
+   不用等进程退出。
+3. **`fontProbe` 去重**：同一字体 key（id + family + 文件长度）只打印一次。
+   之前每次应用字幕样式都打一行，日志里一半是它。
+
+## v19 变更（修纯 MPV 起播仍是英文 + 检查更新改成主分支路径）
+
+1. **轨道表就绪后自动校正**。原来只靠 `file-loaded` 后固定 900ms / 2600ms 两次校正，
+   而纯起播时字幕轨（内封/外挂）常常在 2.6s 之后才进 `track-list` → 两次都 skip，
+   于是停在 mpv 默认的英文轨。现在挂在 `refreshTracks()` 确认 `track-list/count > 0`
+   之后，延迟 600ms 校正一次（节流 3 秒），起播/换集/切解码都能兜住。
+2. **外挂字幕 `sub-add` 之后再校正一次**（700ms），覆盖「字幕比视频晚挂上」的情况。
+3. **检查更新改回主分支的路径**：先请求 `/releases/latest`（响应几十 KB，秒回），
+   只有当 latest 被 main 分支抢走（tag 不含 `-mpv`）时才退回 `/releases` 列表过滤。
+   原实现一律拉列表（20 个 release + 全部 assets），在大陆网络下必然超时 → 提示「检查更新失败」。
+
 ## v18 变更（按真机日志定案）
 
 日志证据：`exoForceCn(v14) select index=0 score=80 label=Traditional`
