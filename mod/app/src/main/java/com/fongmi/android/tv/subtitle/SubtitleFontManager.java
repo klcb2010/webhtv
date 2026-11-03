@@ -13,9 +13,9 @@ import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 内置字幕字体：yiqicukai / huipianheyuan / fangzhengzhunyuan / system。
+ * 内置字幕字体：yiqicukai / huipianheyuan / fangzhengzhunyuan / zhuziAyuanD / system。
  * Mobile / Leanback / Exo 共用。
- * 默认 index 0 = 义启粗楷；index 3 = 系统默认。
+ * 默认 index 0 = 义启粗楷；index 4 = 系统默认。
  */
 public final class SubtitleFontManager {
 
@@ -23,12 +23,13 @@ public final class SubtitleFontManager {
     public static final String ID_YIQICUKAI = "yiqicukai";
     public static final String ID_HUIPIANHEYUAN = "huipianheyuan";
     public static final String ID_FANGZHENGZHUNYUAN = "fangzhengzhunyuan";
+    public static final String ID_ZHUZIAYUAND = "zhuziAyuanD";
     public static final String ID_SYSTEM = "system";
 
-    // 0 义启粗楷(默认), 1 毁片和圆, 2 方正细圆, 3 系统默认
-    private static final String[] IDS = {ID_YIQICUKAI, ID_HUIPIANHEYUAN, ID_FANGZHENGZHUNYUAN, ID_SYSTEM};
-    private static final String[] LABELS_ZH = {"义启粗楷", "毁片和圆", "方正细圆", "系统默认"};
-    private static final String[] LABELS_EN = {"YiQiCuKai", "HuiPianHeYuan", "FangZhengZhunYuan", "System"};
+    // 0 义启粗楷(默认), 1 毁片和圆, 2 方正细圆, 3 筑紫A圆D, 4 系统默认
+    private static final String[] IDS = {ID_YIQICUKAI, ID_HUIPIANHEYUAN, ID_FANGZHENGZHUNYUAN, ID_ZHUZIAYUAND, ID_SYSTEM};
+    private static final String[] LABELS_ZH = {"义启粗楷", "毁片和圆", "方正细圆", "筑紫A圆D", "系统默认"};
+    private static final String[] LABELS_EN = {"YiQiCuKai", "HuiPianHeYuan", "FangZhengZhunYuan", "ZhuziAYuanD", "System"};
 
     private static final ConcurrentHashMap<String, Typeface> TYPEFACE_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, File> FILE_CACHE = new ConcurrentHashMap<>();
@@ -54,8 +55,9 @@ public final class SubtitleFontManager {
         if (s.contains("huipian") || s.contains("毁片") || s.contains("heyuan")) return 1;
         if (s.contains("fangzheng") || s.contains("zhunyuan") || s.contains("细圆") || s.contains("方正")
                 || s.contains("xiyuan")) return 2;
+        if (s.contains("zhuzi") || s.contains("ayuan") || s.contains("筑紫") || s.contains("a圆")) return 3;
         if (s.contains("system") || s.contains("default") || s.contains("sans")
-                || "系统".equals(s) || s.contains("系统默认")) return 3;
+                || "系统".equals(s) || s.contains("系统默认")) return 4;
         return 0;
     }
 

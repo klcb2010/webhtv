@@ -1191,7 +1191,7 @@ public class Setting {
         putSubtitleFontIndex((getSubtitleFontIndex() + 1) % SubtitleFontManager.count());
     }
 
-    /** 稳定 ID：yiqicukai / huipianheyuan / fangzhengzhunyuan / system */
+    /** 稳定 ID：yiqicukai / huipianheyuan / fangzhengzhunyuan / zhuziAyuanD / system */
     public static String getSubtitleFontId() {
         return SubtitleFontManager.idOf(getSubtitleFontIndex());
     }
