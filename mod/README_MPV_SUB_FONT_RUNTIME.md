@@ -217,6 +217,31 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v22 变更（检查更新：真正的原因）
+
+**之前的方向全错了**：`app/.../Updater.java` 早就被 `mod/app/.../Updater.java`（仓库自带的定制版）
+覆盖，我对 `app/` 的所有注入都不会生效——这也是真机上一行 `Updater` 日志都没有的原因。
+
+仓库的 `mod` 版 Updater **不走 `api.github.com`**，而是直接下 release 资产：
+
+```java
+String direct = Github.getJson(getName());
+// → https://github.com/klcb2010/webhtv/releases/latest/download/leanback-arm64_v8a.json
+```
+
+而 MPV 分支的资产名带后缀：`leanback-arm64_v8a-mpv.json`。
+→ 按原名请求 **404**，加速镜像全部 404 → `lastError` → 提示「检查更新失败」。
+主分支能成功，正因为它的资产名不带后缀。
+
+**V22 改动**（直接改 `mod/app/.../Updater.java`）：
+1. `Github.getJson(modMarkedName(getName()))` —— 请求名补上 `-mpv` 后缀（已带则不重复加）
+2. `getAssetName()` 同样补后缀，保证默认 apk 名正确
+3. 加诊断日志：`check start name=.. direct=..` / `try <url>` / `ok name=..` / `fail url=.. err=..`
+4. 超时放宽：单请求 4s→8s，总限 10s→16s
+
+**注意**：这份 `Updater.java` 会覆盖仓库 `mod/` 里的同名文件。如果之后上游改了 `mod/.../Updater.java`，
+需要把新版本拿来重新打一遍这几个改动（改点都标了 `MPV_SUB_UPD_ASSET_V1`）。
+
 ## v20 变更（日志体验：实时可见 + 降噪）
 
 1. **`ModDebugLog` 同步投一份到 logcat**：`Log.i/Log.w` 与文件写入同时进行，

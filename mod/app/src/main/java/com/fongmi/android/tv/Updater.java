@@ -53,8 +53,8 @@ import java.util.concurrent.TimeoutException;
 public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
-    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(16);
+    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(8);
     private static final Map<String, String> GITHUB_DOWNLOAD_HEADERS = createGithubDownloadHeaders();
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
@@ -180,7 +180,10 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private Update getUpdate(String channel) {
         // 不走 api.github.com：用户选的加速镜像 → 直连 → 其它内置镜像
-        String direct = Github.getJson(getName());
+        // MPV_SUB_UPD_ASSET_V1 (MPV-BRANCH-ONLY): 本分支 release 的资产名带 -mpv 后缀
+        // （leanback-arm64_v8a-mpv.json）。按原名请求 leanback-arm64_v8a.json 会 404，
+        // 所有镜像都 404 → lastError → 提示「检查更新失败」。
+        String direct = Github.getJson(modMarkedName(getName()));
         java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         try {
             String selected = Setting.getUpdateGithubProxy();
@@ -208,17 +211,27 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             }
         } catch (Throwable ignored) {
         }
+        com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                "check start name=" + getName() + " urls=" + urls.size() + " direct=" + direct);
         String lastError = "";
         for (String url : urls) {
             try {
+                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "try " + url);
                 Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
-                if (update.hasManifest()) return update;
+                if (update.hasManifest()) {
+                    com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                            "ok name=" + update.name + " code=" + update.code + " url=" + url);
+                    return update;
+                }
                 if (!TextUtils.isEmpty(update.error)) lastError = update.error;
+                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "no-manifest url=" + url + " err=" + update.error);
             } catch (Exception e) {
                 e.printStackTrace();
                 lastError = e.getMessage();
+                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "fail url=" + url + " err=" + e);
             }
         }
+        com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "all routes failed lastError=" + lastError);
         Update empty = Update.empty(Update.CHANNEL_STABLE);
         empty.error = lastError;
         return empty;
@@ -314,7 +327,13 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private String getAssetName(String channel, String ext) {
         String suffix = Update.CHANNEL_BETA.equals(channel) ? "-beta" : "";
-        return getName() + suffix + "." + ext;
+        return modMarkedName(getName()) + suffix + "." + ext;
+    }
+
+    /** MPV_SUB_UPD_ASSET_V1: 资产名统一带本分支标记，已带则不重复加 */
+    private String modMarkedName(String base) {
+        if (base == null || base.isEmpty()) return base;
+        return base.contains(Github.RELEASE_TAG_MARK) ? base : base + Github.RELEASE_TAG_MARK;
     }
 
     private String getGithubApkUrl(Update update) {
