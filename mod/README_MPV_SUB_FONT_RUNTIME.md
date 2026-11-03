@@ -216,3 +216,17 @@ forceCnTrack(v11) skip: no zh track count=35 best=0 prevSid=1 subs=[...]
 exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
+
+## v12 变更
+
+1. **检查更新只看本分支的 release**：`mod/.../utils/Github.java` 新增 `RELEASE_TAG_MARK = "-mpv"`，
+   `Updater` 的 stable/beta 分支都改成遍历 `releases` 并过滤 `tag_name` 含 `-mpv`。
+   原因：`/releases/latest` 返回的是仓库里最新的 release（可能是 main 分支的包），MPV 版会误报更新。
+   main 分支的代码没有这个过滤（hook 只在 MPV 分支运行），两边各查各的。
+2. 字幕轨选择维持 v11 的静默打分（含「中文」/`Simplified` → 优先，含「繁」/`Traditional` → 降级）。
+
+## GitHub Actions 默认分支（"Use workflow from"）
+
+代码改不了这个下拉：它显示的是**仓库默认分支**。在 GitHub 网页设置一次即可：
+`Settings → General → Default branch → 切换到 MPV → Update`
+之后 Actions 的 "Use workflow from" 默认就是 MPV，schedule 也跑 MPV 分支的 workflow。

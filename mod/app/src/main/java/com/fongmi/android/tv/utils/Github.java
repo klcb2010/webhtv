@@ -9,6 +9,9 @@ public class Github {
     private static final String GITHUB_RELEASE_ASSETS_API = "https://api.github.com/repos/klcb2010/webhtv/releases/assets";
     private static final String CNB = GITHUB_LATEST; // 本 fork 资源只走 GitHub Releases
 
+    // MPV-BRANCH-ONLY: 本分支 release tag 后缀；检查更新时只认自己的 release，避免拿到 main 分支的包
+    public static final String RELEASE_TAG_MARK = "-mpv";
+
     public static String getCnbAsset(String name) {
         return getGithubLatestAsset(name);
     }

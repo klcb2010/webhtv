@@ -844,6 +844,62 @@ def patch_mpv_sub_add_lang(path: Path) -> None:
     OK.append("inject sub-add language/label passthrough")
 
 
+def patch_updater_filter(path: Path) -> None:
+    """检查更新只认本分支 release（tag 含 -mpv），避免拿到 main 分支的包。"""
+    if not path.is_file():
+        ERR.append(f"Updater.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_UPDATE_FILTER_V1" in text:
+        OK.append("updater branch filter already injected")
+        return
+
+    old_stable = """    private Update getGithubStableUpdate(String channel) {
+        try {
+            JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            return readGithubReleaseUpdate(channel, release);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Update.empty(channel);
+        }
+    }"""
+    new_stable = """    private Update getGithubStableUpdate(String channel) {
+        // MPV_SUB_UPDATE_FILTER_V1 (MPV-BRANCH-ONLY): 只认本分支的 release（tag 含 -mpv），
+        // 否则 /releases/latest 会返回 main 分支的包，MPV 版会误报更新
+        try {
+            JSONArray releases = new JSONArray(UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            String manifestName = getManifestName(channel);
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null) continue;
+                String tag = release.optString("tag_name");
+                if (tag == null || !tag.contains(Github.RELEASE_TAG_MARK)) continue;
+                if (isBetaRelease(release)) continue;
+                if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
+                return readGithubReleaseUpdate(channel, release);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return Update.empty(channel);
+    }"""
+    if old_stable not in text:
+        ERR.append("getGithubStableUpdate anchor not found")
+        return
+    text = text.replace(old_stable, new_stable, 1)
+
+    old_beta = "                if (release == null || !isBetaRelease(release)) continue;"
+    new_beta = (old_beta
+                + "\n                if (!release.optString(\"tag_name\").contains(Github.RELEASE_TAG_MARK)) continue;")
+    if old_beta not in text:
+        ERR.append("beta release filter anchor not found")
+    else:
+        text = text.replace(old_beta, new_beta, 1)
+
+    write(path, text)
+    OK.append("inject updater branch filter (-mpv)")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -869,6 +925,7 @@ def main() -> int:
     patch_mpv_player(player)
     patch_exo_prefer_cn(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
     patch_mpv_sub_add_lang(player)
+    patch_updater_filter(ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java")
 
     for x in OK:
         print(" OK", x)
