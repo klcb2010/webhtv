@@ -845,24 +845,19 @@ def patch_mpv_sub_add_lang(path: Path) -> None:
 
 
 def patch_updater_filter(path: Path) -> None:
-    """检查更新只认本分支 release（tag 含 -mpv），避免拿到 main 分支的包。"""
+    """检查更新只认本分支 release（tag 含 -mpv）。
+
+    注意：Updater.java 可能已被其它 hook 改过，所以不做精确文本匹配，
+    而是按方法边界整体替换，失败也只 WARN（不影响构建）。
+    """
     if not path.is_file():
-        ERR.append(f"Updater.java not found: {path}")
+        print("[mod] WARN Updater.java missing, skip updater filter")
         return
     text = read(path)
     if "MPV_SUB_UPDATE_FILTER_V1" in text:
         OK.append("updater branch filter already injected")
         return
 
-    old_stable = """    private Update getGithubStableUpdate(String channel) {
-        try {
-            JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
-            return readGithubReleaseUpdate(channel, release);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Update.empty(channel);
-        }
-    }"""
     new_stable = """    private Update getGithubStableUpdate(String channel) {
         // MPV_SUB_UPDATE_FILTER_V1 (MPV-BRANCH-ONLY): 只认本分支的 release（tag 含 -mpv），
         // 否则 /releases/latest 会返回 main 分支的包，MPV 版会误报更新
@@ -883,21 +878,34 @@ def patch_updater_filter(path: Path) -> None:
         }
         return Update.empty(channel);
     }"""
-    if old_stable not in text:
-        ERR.append("getGithubStableUpdate anchor not found")
-        return
-    text = text.replace(old_stable, new_stable, 1)
 
-    old_beta = "                if (release == null || !isBetaRelease(release)) continue;"
-    new_beta = (old_beta
-                + "\n                if (!release.optString(\"tag_name\").contains(Github.RELEASE_TAG_MARK)) continue;")
-    if old_beta not in text:
-        ERR.append("beta release filter anchor not found")
+    span = find_method(text, r"^[ \t]*private\s+Update\s+getGithubStableUpdate\s*\(\s*String\s+\w+\s*\)\s*\{")
+    if span is None:
+        print("[mod] WARN getGithubStableUpdate not found, skip updater filter")
+        return
+    start_i, _, end_i = span
+    text = text[:start_i] + new_stable + text[end_i + 1:]
+
+    span2 = find_method(text, r"^[ \t]*private\s+Update\s+getGithubBetaUpdate\s*\(\s*String\s+\w+\s*\)\s*\{")
+    if span2 is None:
+        print("[mod] WARN getGithubBetaUpdate not found (beta 通道不做过)")
     else:
-        text = text.replace(old_beta, new_beta, 1)
+        _, b2, e2 = span2
+        if "RELEASE_TAG_MARK" not in text[b2:e2]:
+            m = re.search(r"for \(int i = 0; i < releases\.length\(\); i\+\+\) \{", text[b2:e2])
+            if m:
+                pos = b2 + m.end()
+                text = (text[:pos]
+                        + '\n                if (!release.optString("tag_name").contains(Github.RELEASE_TAG_MARK)) continue;'
+                        + text[pos:])
+            else:
+                print("[mod] WARN beta loop not found (beta 通道不做过)")
 
     write(path, text)
-    OK.append("inject updater branch filter (-mpv)")
+    if "MPV_SUB_UPDATE_FILTER_V1" in read(path):
+        OK.append("inject updater branch filter (-mpv)")
+    else:
+        print("[mod] WARN updater filter not applied")
 
 
 def main() -> int:
