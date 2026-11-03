@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.view.View;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
@@ -17,7 +16,6 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.subtitle.SubtitleFontManager;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.ui.base.BaseActivity;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingPersonalActivity extends BaseActivity {
 
@@ -216,66 +214,12 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
     private void setSubtitleFont(View view) {
-        // MPV-BRANCH-ONLY: 下拉单选替换循环点击；绝不弹系统文件选择器、不弹 toast
-        try {
-            showSubtitleFontPicker();
-        } catch (Throwable e) {
-            Setting.cycleSubtitleFont();
-            refreshTexts();
-        }
-    }
-
-    private boolean isZhLocale() {
-        try {
-            String lang = getResources().getConfiguration().getLocales().get(0).getLanguage();
-            return lang != null && lang.startsWith("zh");
-        } catch (Throwable e) {
-            return true;
-        }
-    }
-
-    /** MPV-BRANCH-ONLY: 字体下拉选项，优先 arrays.xml，缺失时回退 SubtitleFontManager。 */
-    private String[] subtitleFontNames(boolean zh) {
-        String[] names = null;
-        try {
-            names = getResources().getStringArray(zh ? R.array.subtitle_font_names : R.array.subtitle_font_names_en);
-        } catch (Throwable ignored) {
-        }
-        if (names == null || names.length == 0) {
-            names = new String[SubtitleFontManager.count()];
-            for (int i = 0; i < names.length; i++) names[i] = SubtitleFontManager.labelOf(i, zh);
-        }
-        // MPV-BRANCH-ONLY: 下拉只提供内置字体（0~3）；自定义外部字体仅作旧配置回显，不再出现在列表里
-        int keep = Math.min(names.length, SubtitleFontManager.CUSTOM_INDEX);
-        if (keep > 0 && keep < names.length) {
-            String[] out = new String[keep];
-            System.arraycopy(names, 0, out, 0, keep);
-            return out;
-        }
-        return names;
-    }
-
-    private void showSubtitleFontPicker() {
-        final boolean zh = isZhLocale();
-        final String[] names = subtitleFontNames(zh);
-        int current = Setting.getSubtitleFontIndex();
-        if (current < 0 || current >= names.length) current = 0;
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle(zh ? "字幕字体" : "Subtitle font");
-        builder.setSingleChoiceItems(names, current, (dialog, which) -> {
-            applySubtitleFont(which);
-            try {
-                dialog.dismiss();
-            } catch (Throwable ignored) {
-            }
-        });
-        builder.setNegativeButton(zh ? "取消" : "Cancel", null);
-        AlertDialog dialog = builder.create();
-        dialog.show();
-        try {
-            com.fongmi.android.tv.ui.dialog.SettingStyleDialog.apply(dialog);
-        } catch (Throwable ignored) {
-        }
+        // MPV-BRANCH-ONLY: 点一下切下一个内置字体（义启粗楷 → 毁片和圆 → 方正细圆 → 系统默认 循环）
+        int count = Math.min(SubtitleFontManager.count(), SubtitleFontManager.CUSTOM_INDEX);
+        if (count <= 0) count = 1;
+        int cur = Setting.getSubtitleFontIndex();
+        if (cur < 0 || cur >= count) cur = -1;
+        applySubtitleFont((cur + 1) % count);
     }
 
     /** MPV-BRANCH-ONLY: 应用字体（写配置 → 后台静默加载 → 通知运行时刷新）。 */

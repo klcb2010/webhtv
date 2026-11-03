@@ -43,6 +43,8 @@ public final class SubtitleFontManager {
 
     private static final ConcurrentHashMap<String, Typeface> TYPEFACE_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, File> FILE_CACHE = new ConcurrentHashMap<>();
+    // MPV-BRANCH-ONLY: 字体文件读写共用锁（与 MpvSubtitleStylePolicy 共用），避免并发复制读到 0B 半成品
+    public static final Object FONT_IO_LOCK = new Object();
 
     private SubtitleFontManager() {
     }
@@ -235,6 +237,13 @@ public final class SubtitleFontManager {
         if (ID_SYSTEM.equals(id)) return null;
         // MPV-BRANCH-ONLY: 自定义外部字体只识别既有文件，绝不弹文件选择器
         if (ID_CUSTOM.equals(id)) return customFontFile();
+        // MPV-BRANCH-ONLY: 与 MpvSubtitleStylePolicy 共用锁，避免并发复制互相读到 0B 半成品
+        synchronized (FONT_IO_LOCK) {
+            return ensureFontFileLocked(id);
+        }
+    }
+
+    private static File ensureFontFileLocked(String id) {
         try {
             File dir = getFontsDir();
             if (dir == null) return null;

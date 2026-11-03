@@ -98,3 +98,32 @@ MpvSubtitleStyle: fontProbe idx=2 id=fangzhengzhunyuan file=... family=FZZhunYua
 MpvSubtitleStyle: sub-reload font=FZZhunYuan-M02S ...
 ```
 （三个内置字体的真实 family 名：`iekie-Cukaiti` / `KTXP_ComRound` / `FZZhunYuan-M02S`）
+
+## v6 根因修复（用你提供的日志定位）
+
+日志证据：
+```
+ensureFontsReady copy id=yiqicukai src=.../yiqicukai.ttf ok=false
+fontProbe idx=0 id=yiqicukai file=.../yiqicukai.ttf(0B)      family=null
+fontProbe idx=0 id=yiqicukai file=.../yiqicukai.ttf(4387988B) family=null
+```
+
+两个独立 bug：
+
+1. **`family=null`（文件 4.4MB 完整也读不到族名）**
+   `readFontFamilyName()` 里 `readFully(fontFile, 4 * 1024 * 1024)` 只读前 4MB，
+   而 `yiqicukai.ttf`=4.39MB、`huipianheyuan.ttf`=5.12MB 的 `name` 表在 4MB 之后
+   → 永远读不到 → `family=null` → 回退成 `sub-font=yiqicukai`（不存在的族名）→ 字体不生效。
+   **修**：上限提到 32MB。
+
+2. **`ok=false` 且文件大小在 0B / 完整之间跳变（并发写）**
+   `loadBuiltinFont`（后台线程池）与 `MpvSubtitleStylePolicy.ensureFontsReady` 同时复制同一个 ttf，
+   互相读到写了一半的 0B 文件 → `forceCopy` 校验失败（ok=false）、族名解析失败。
+   **修**：新增 `SubtitleFontManager.FONT_IO_LOCK`，`ensureFontFile` 与 `ensureFontsReady` 共用同一把锁串行化。
+
+顺带修：
+3. **切字体后字幕变英文**：`sub-reload` 会把 `sid` 重置为默认轨。现在 reload 前记录原 `sid`，
+   400ms 后**还原原 sid** 再做中文优先校正。
+4. **seek 期间不 reload**：读取 mpv `seeking` 属性，为 `yes` 时跳过（拖进度不再受影响）。
+5. **内封轨没 lang 时选不到中文**：语言/标题里出现 `chi/zho/简/中文` 也按中文计分（不再只认标准语言码）。
+6. **字体选择改回"点一下换一个"**：去掉弹窗，循环 义启粗楷→毁片和圆→方正细圆→系统默认。

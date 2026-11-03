@@ -66,6 +66,13 @@ FORCE_CN_METHOD = """    // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded
                 String title = stringProperty("track-list/" + i + "/title", "");
                 int score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(lang);
                 if (score == 0) score = com.fongmi.android.tv.player.track.LangUtil.getPreferredTextLanguageScore(title);
+                if (score == 0) {
+                    // 宽松兜底：很多内封轨没有 lang，只在 title/名字里写 Chinese / 简体 / 繁體
+                    String probe = ((lang == null ? "" : lang) + "|" + (title == null ? "" : title)).toLowerCase(java.util.Locale.ROOT);
+                    if (probe.contains("chi") || probe.contains("zho")
+                            || probe.contains("简") || probe.contains("中文")) score = 300;
+                    else if (probe.contains("cht") || probe.contains("繁")) score = 100;
+                }
                 int id = intProperty("track-list/" + i + "/id", -1);
                 if (score <= 0 || id < 0) continue;
                 if (score > bestScore) {
@@ -404,12 +411,21 @@ def patch_mpv_player(path: Path) -> None:
                 "                sModLastColor = modColor;\n"
                 "                sModLastStyle = modStyle;\n"
                 '                String modSid = propertyStringOrInt("sid");\n'
-                '                if (modSid != null && !modSid.isEmpty() && !"no".equals(modSid)) {\n'
+                '                String modSeeking = stringProperty("seeking", "no");\n'
+                '                if ("yes".equals(modSeeking)) {\n'
+                f'                    {LOG}.i("{TAG}", "sub-reload skipped: seeking");\n'
+                '                } else if (modSid != null && !modSid.isEmpty() && !"no".equals(modSid)) {\n'
+                '                    final String modRestoreSid = modSid;\n'
                 '                    mpvCommand(new String[]{"sub-reload"});\n'
                 f'                    {LOG}.i("{TAG}", "sub-reload font=" + modFont + " color=" + modColor + " sid=" + modSid);\n'
                 "                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {\n"
                 "                        @Override\n"
                 "                        public void run() {\n"
+                "                            try {\n"
+                "                                // sub-reload 会把 sid 重置为默认轨，必须还原成用户原来的轨\n"
+                '                                mpvCommand(new String[]{"sid", modRestoreSid});\n'
+                "                            } catch (Throwable ignored) {\n"
+                "                            }\n"
                 "                            modForcePreferredSubtitleTrack();\n"
                 "                        }\n"
                 "                    }, 400L);\n"
@@ -625,6 +641,37 @@ def patch_policy_fonts_ready(path: Path) -> None:
     OK.append("inject fonts-dir ensure + asset fallback")
 
 
+def patch_policy_font_lock(path: Path) -> None:
+    """两个硬 bug：①name 表只读 4MB，4MB+ 字体必然 family=null；②与 SubtitleFontManager 不共用锁，读到 0B 半成品。"""
+    if not path.is_file():
+        ERR.append(f"MpvSubtitleStylePolicy.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_FONTLOCK_V1" in text:
+        OK.append("font lock/readcap already injected")
+        return
+
+    nl = chr(10)
+    old_lock = "        synchronized (ENSURE_LOCK) {"
+    new_lock = ("        // MPV_SUB_FONTLOCK_V1 (MPV-BRANCH-OnlY): 与 SubtitleFontManager 共用同一把锁" + nl
+                + "        // 否则并发复制时会读到 0B 半成品（表现为 family=null / ok=false）" + nl
+                + "        synchronized (com.fongmi.android.tv.subtitle.SubtitleFontManager.FONT_IO_LOCK) {")
+    if old_lock not in text:
+        ERR.append("ensureFontsReady lock anchor not found")
+        return
+    text = text.replace(old_lock, new_lock, 1)
+
+    old_read = "readFully(fontFile, 4 * 1024 * 1024)"
+    new_read = "readFully(fontFile, 32 * 1024 * 1024)"
+    if old_read not in text:
+        ERR.append("readFully 4MB anchor not found (family 可能仍为 null)")
+        return
+    text = text.replace(old_read, new_read, 1)
+
+    write(path, text)
+    OK.append("inject shared font lock + 32MB name-table read cap")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -645,6 +692,7 @@ def main() -> int:
     patch_policy(policy)
     patch_policy_font_probe(policy)
     patch_policy_fonts_ready(policy)
+    patch_policy_font_lock(policy)
     patch_mpv_player(player)
 
     for x in OK:
