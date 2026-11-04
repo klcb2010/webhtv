@@ -345,6 +345,36 @@ public final class PhoneScreenshot {
         }
     }
 
+    /** 按个性设置「MPV截图对比度」做对比度拉伸（围绕 128 中点），关=0 不处理。 */
+    private static Bitmap applyContrastBoost(Bitmap src) {
+        if (src == null || src.isRecycled()) return src;
+        int level = 0;
+        try {
+            level = com.fongmi.android.tv.setting.Setting.getMpvScreenshotContrast();
+        } catch (Throwable ignored) {
+        }
+        if (level <= 0) return src;
+        try {
+            float c = 1f + (level / 100f);          // +15 → 1.15
+            float t = (1f - c) * 128f;              // 保持 128 中点不变
+            android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
+                    c, 0, 0, 0, t,
+                    0, c, 0, 0, t,
+                    0, 0, c, 0, t,
+                    0, 0, 0, 1, 0
+            });
+            android.graphics.ColorMatrixColorFilter filter = new android.graphics.ColorMatrixColorFilter(cm);
+            Bitmap out = src.copy(src.getConfig() != null ? src.getConfig() : Bitmap.Config.ARGB_8888, true);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(out);
+            android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+            paint.setColorFilter(filter);
+            canvas.drawBitmap(src, 0, 0, paint);
+            return out;
+        } catch (Throwable ignored) {
+            return src;
+        }
+    }
+
     private static Bitmap mildSharpen(Bitmap src) {
         if (src == null || src.isRecycled()) return src;
         try {
@@ -513,6 +543,14 @@ public final class PhoneScreenshot {
                     } catch (Throwable ignored) {
                     }
                     toSave = bright;
+                }
+                Bitmap contrast = applyContrastBoost(toSave);
+                if (contrast != toSave) {
+                    try {
+                        toSave.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                    toSave = contrast;
                 }
                 if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "savePng bitmap=" + toSave.getWidth() + "x" + toSave.getHeight()); } catch (Throwable ignored) {}
                 uri = savePng(activity, toSave);

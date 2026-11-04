@@ -79,6 +79,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.screenshotBrightnessBoost.setOnClickListener(this::setScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBtn.setOnClickListener(this::setMpvScreenshotBtn); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBrightnessBoost.setOnClickListener(this::setMpvScreenshotBrightnessBoost); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotContrast.setOnClickListener(this::setMpvScreenshotContrast); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
         try { mBinding.mpvFontScale.setOnClickListener(this::setMpvFontScale); } catch (Throwable ignored) {}
         try { mBinding.debugLog.setOnClickListener(this::setDebugLog); } catch (Throwable ignored) {}
@@ -133,6 +134,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.screenshotBrightnessBoostText.setText(Setting.getScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
+        try { mBinding.mpvScreenshotContrastText.setText(Setting.getMpvScreenshotContrastLabel()); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
         try { mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel()); } catch (Throwable ignored) {}
         try { mBinding.debugLogText.setText(getSwitch(com.fongmi.android.tv.utils.ModDebugLog.isRuntimeOverrideOn())); } catch (Throwable ignored) {}
@@ -512,6 +514,15 @@ public class SettingPersonalActivity extends BaseActivity {
         try {
             Setting.cycleMpvScreenshotBrightnessBoost();
             mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** MPV截图对比度：点一下切下一个等级（+5 … +35 → 关），只影响之后生成的截图 */
+    private void setMpvScreenshotContrast(View view) {
+        try {
+            Setting.cycleMpvScreenshotContrast();
+            mBinding.mpvScreenshotContrastText.setText(Setting.getMpvScreenshotContrastLabel());
         } catch (Throwable ignored) {
         }
     }

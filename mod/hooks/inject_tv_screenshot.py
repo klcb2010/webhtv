@@ -115,6 +115,37 @@ PERSONAL_XML = """        <androidx.appcompat.widget.LinearLayoutCompat
 """
 
 
+PERSONAL_CONTRAST_XML = """        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/mpvScreenshotContrast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:visibility="visible">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MPV截图对比度"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/mpvScreenshotContrastText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+"""
+
 def insert_into_method(t: str, name: str, line: str) -> tuple[str, bool]:
     i = t.find("private void %s(" % name)
     if i < 0:
@@ -191,17 +222,17 @@ def patch_tv_personal_activity(path: Path) -> None:
         ERR.append("TV personal anchor (initEvent kaitiScale) not found")
 
     init = "        try { mBinding.kaitiScaleText.setText(Setting.getKaiTiScaleLabel(true)); } catch (Throwable ignored) {}"
-    if "TV_MPVFONT_INIT" in t:
-        OK.append("TV personal texts already initialized")
-    elif init in t:
+    BTN_LINE = "        try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}"
+    if "TV_MPVFONT_INIT" not in t and init in t:
         t = t.replace(
             init,
             init
             + "\n        // TV_MPVFONT_INIT: 新增项与「播放器MPV截图」的右侧值（原来只在点击时刷新）"
             + "\n        try { mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel()); } catch (Throwable ignored) {}"
-            + "\n        try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}",
+            + "\n" + BTN_LINE,
             1,
         )
+    if BTN_LINE in t:
         OK.append("TV personal texts initialized")
     else:
         ERR.append("TV personal anchor (initView kaitiScaleText) not found")
@@ -216,6 +247,55 @@ def patch_tv_personal_activity(path: Path) -> None:
         ERR.append("TV personal anchor (setPlaybackScreenshotBtn) not found")
 
     path.write_text(t, encoding="utf-8")
+
+
+def patch_tv_personal_contrast_layout(path: Path) -> None:
+    """TV 个性设置：「MPV截图亮度」下面加「MPV截图对比度」。"""
+    if not path.is_file():
+        ERR.append("missing " + str(path))
+        return
+    t = path.read_text(encoding="utf-8")
+    if 'android:id="@+id/mpvScreenshotContrast"' in t:
+        OK.append("TV personal contrast layout already added")
+        return
+    key = 'android:id="@+id/mpvScreenshotBrightnessBoost"'
+    if key not in t:
+        ERR.append("TV personal anchor (mpvScreenshotBrightnessBoost) not found")
+        return
+    i = t.index(key)
+    close = "        </androidx.appcompat.widget.LinearLayoutCompat>"
+    j = t.index(close, i) + len(close)
+    t = t[:j] + "\n\n" + PERSONAL_CONTRAST_XML.rstrip("\n") + t[j:]
+    path.write_text(t, encoding="utf-8")
+    OK.append("TV personal layout: mpvScreenshotContrast added")
+
+
+def hide_tv_mpv_screenshot_items(path: Path) -> None:
+    """TV 端彻底没有 MPV 截图：把三项设成 gone（保留节点，否则 ViewBinding 字段消失会编译不过）。"""
+    if not path.is_file():
+        ERR.append("missing " + str(path))
+        return
+    t = path.read_text(encoding="utf-8")
+    if "TV_SCREENSHOT_HIDDEN" in t:
+        OK.append("TV mpv screenshot items already hidden")
+        return
+    for item_id in ("playbackScreenshotBtn", "mpvScreenshotBtn", "mpvScreenshotBrightnessBoost"):
+        key = 'android:id="@+id/%s"' % item_id
+        if key not in t:
+            continue
+        i = t.index(key)
+        seg_end = t.index(">", i)
+        seg = t[i:seg_end]
+        if 'android:visibility="visible"' in seg:
+            seg = seg.replace('android:visibility="visible"', 'android:visibility="gone"', 1)
+        elif "android:visibility=" not in seg:
+            seg = seg.replace('\n            android:padding="8dp"',
+                              '\n            android:padding="8dp"\n            android:visibility="gone"', 1)
+        t = t[:i] + seg + t[seg_end:]
+    t = t.replace("</androidx.core.widget.NestedScrollView>",
+                  "<!-- TV_SCREENSHOT_HIDDEN: MPV 截图三项已隐藏 -->\n</androidx.core.widget.NestedScrollView>", 1)
+    path.write_text(t, encoding="utf-8")
+    OK.append("TV mpv screenshot items hidden")
 
 
 def patch_tv_personal_layout(path: Path) -> None:
@@ -245,6 +325,7 @@ def main() -> None:
     patch_mobile_video_activity(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java")
     patch_tv_personal_activity(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java")
     patch_tv_personal_layout(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
+    hide_tv_mpv_screenshot_items(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
     for line in OK:
         print("[mod] OK", line)
     for line in ERR:

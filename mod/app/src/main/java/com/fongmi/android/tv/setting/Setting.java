@@ -1018,6 +1018,41 @@ public class Setting {
         return v <= 0 ? "关" : ("+" + v);
     }
 
+    /** MPV 截图对比度：按 +5 → +10 → … → +35 → 关 循环，默认 +15（数值=对比度提升百分比） */
+    private static final int[] MPV_SCREENSHOT_CONTRAST_LEVELS = {5, 10, 15, 20, 25, 30, 35, 0};
+
+    public static int getMpvScreenshotContrast() {
+        try {
+            int v = Prefers.getInt("mpv_screenshot_contrast", 15);
+            for (int level : MPV_SCREENSHOT_CONTRAST_LEVELS) {
+                if (level == v) return v;
+            }
+        } catch (Throwable ignored) {}
+        return 15;
+    }
+
+    public static void putMpvScreenshotContrast(int value) {
+        int picked = 15;
+        for (int level : MPV_SCREENSHOT_CONTRAST_LEVELS) {
+            if (level == value) { picked = value; break; }
+        }
+        Prefers.put("mpv_screenshot_contrast", picked);
+    }
+
+    public static void cycleMpvScreenshotContrast() {
+        int cur = getMpvScreenshotContrast();
+        int idx = 0;
+        for (int i = 0; i < MPV_SCREENSHOT_CONTRAST_LEVELS.length; i++) {
+            if (MPV_SCREENSHOT_CONTRAST_LEVELS[i] == cur) { idx = i; break; }
+        }
+        putMpvScreenshotContrast(MPV_SCREENSHOT_CONTRAST_LEVELS[(idx + 1) % MPV_SCREENSHOT_CONTRAST_LEVELS.length]);
+    }
+
+    public static String getMpvScreenshotContrastLabel() {
+        int v = getMpvScreenshotContrast();
+        return v <= 0 ? "关" : ("+" + v);
+    }
+
 
 
     /** HDR 转 SDR（OpenGL tone mapping），默认关闭。 */

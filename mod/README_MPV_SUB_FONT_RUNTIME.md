@@ -217,6 +217,68 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v47 变更（TV 端彻底去掉 MPV 截图项）
+
+TV 端没有截图功能，所以截图相关的设置项也一并隐藏（保留节点，否则 ViewBinding 字段消失会编译不过）：
+
+```java
+playbackScreenshotBtn / mpvScreenshotBtn / mpvScreenshotBrightnessBoost → android:visibility="gone"
+```
+
+「MPV截图对比度」**只加在手机端**；TV 端不加这一项（也无任何 `mpvScreenshotContrast*` 引用）。
+
+TV 个性设置现在剩下的与 MPV 相关的只有「MPV字体默认放大」。
+
+| 项 | 手机 | TV |
+|---|---|---|
+| 播放器MPV截图 | ✅ | 隐藏 |
+| MPV截图亮度 | ✅ | 隐藏 |
+| MPV截图对比度 | ✅ | 无 |
+| MPV字体默认放大 | ✅ | ✅ |
+
+## v46 变更（新增「MPV截图对比度」，手机端）
+
+个性设置里「MPV截图亮度」下面新增一项「**MPV截图对比度**」，点一下切下一个等级：
+
+```
++5 → +10 → +15 → +20 → +25 → +30 → +35 → 关 → (回到 +5)
+```
+
+默认 **+15**。
+
+### 设置层（`Setting.java`，两端共用）
+
+```java
+private static final int[] MPV_SCREENSHOT_CONTRAST_LEVELS = {5, 10, 15, 20, 25, 30, 35, 0};
+getMpvScreenshotContrast()        // 默认 15
+cycleMpvScreenshotContrast()
+getMpvScreenshotContrastLabel()   // 0 → "关"，否则 "+15"
+```
+
+key：`mpv_screenshot_contrast`
+
+### 生效方式（`PhoneScreenshot.applyContrastBoost`）
+
+保存前对 Bitmap 做一次对比度拉伸（围绕 128 中点，避免整体变亮/变暗）：
+
+```java
+float c = 1f + (level / 100f);   // +15 → 1.15
+float t = (1f - c) * 128f;
+ColorMatrix{ c,0,0,0,t,  0,c,0,0,t,  0,0,c,0,t,  0,0,0,1,0 }
+```
+
+管线顺序：电平增强 → 轻度锐化 → **亮度** → **对比度** → 保存。
+`+0（关）` 直接返回原图，不做任何拷贝。
+
+### 入口
+
+| 端 | 位置 |
+|---|---|
+| 手机 | `mod/app/src/mobile/res/layout/activity_setting_personal.xml`（亮度项之后） |
+| TV | hook 注入 leanback 版 `activity_setting_personal.xml`（亮度项之后） |
+
+两端都在 `initView()` 里初始化右侧值，点击时即时更新（只影响之后生成的截图，不改已保存的图）。
+
 ## v45 变更（回退 TV 端截图）
 
 用户决定不在 TV 端做截图，本版把所有 TV 侧截图内容撤掉：
