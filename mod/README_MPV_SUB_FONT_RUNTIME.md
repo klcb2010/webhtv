@@ -217,6 +217,18 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v33 变更（字号放大只对楷体生效 / 日志开关即时生效）
+
+1. **回退 v30 的「EXO 也乘倍率」**：`Setting.getEffectiveSubtitleFontScale()` 恢复成
+   `楷体系 ? 楷体档位 : 1.0`。v30 里乘了「MPV字体默认放大」，结果非楷体字也被整体放大
+   1.15 倍、字号调到最小仍然偏大一档。
+2. **mpv 侧保持全局放大**：新增 `Setting.getMpvSubFontSizePx()` = `round(55 × 倍率)`，
+   不分字体，mpv 下所有字幕都放大（这是 MPV 分支新增的逻辑）。
+   同时**不再覆盖 `sub-scale`**：该属性由上游按用户字号设置，覆盖会让字号调节失灵。
+3. **调试日志项改名「播放器临时调试日志」**，点一下立即生效
+   （`ModDebugLog.setRuntimeOverride`，内存态，不落盘）。`PhoneScreenshot` 的 DIAG
+   也跟随这个开关，关掉后截图路径不再打日志。
+
 ## v30 变更（EXO 侧也用同一倍率）
 
 「MPV字体默认放大」原来只作用于 mpv。EXO 的字幕字号走 media3 `SubtitleView` 的

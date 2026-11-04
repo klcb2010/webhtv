@@ -413,7 +413,7 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
 
-    /** MPV-BRANCH-ONLY: 调试日志临时开关（只影响本次运行，重启恢复默认开启） */
+    /** MPV-BRANCH-ONLY: 播放器临时调试日志开关，点一下立即生效 */
     private void setDebugLog(View view) {
         boolean next = !com.fongmi.android.tv.utils.ModDebugLog.isRuntimeOverrideOn();
         com.fongmi.android.tv.utils.ModDebugLog.setRuntimeOverride(next);

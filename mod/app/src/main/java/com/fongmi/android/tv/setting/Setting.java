@@ -1390,13 +1390,31 @@ public class Setting {
 
     /**
      * 最终应用到 SubtitleView 的倍率（EXO 侧）。
-     * = （楷体系 ? 楷体档位 : 1.0） × 「MPV字体默认放大」倍率
-     * 后者是 MPV 分支的全局字号开关，EXO 播放同样要吃这个倍率，否则两个解码器字号不一致。
+     * = 楷体系 ? 楷体档位 : 1.0
+     *
+     * 只按楷体系档位缩放，**不乘**「MPV字体默认放大」倍率。
+     * 那个倍率是 mpv 侧的全局字号开关；乘进 EXO 会把所有字体一起放大（连调到最小也偏大一档）。
      */
     public static float getEffectiveSubtitleFontScale() {
-        float kai = isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
-        return kai * getMpvFontScaleFactor();
+        return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
     }
+
+    /**
+     * mpv 侧的 sub-font-size（phase_c 强制 sub-ass-override=force，ASS 字号只认这个属性）。
+     *
+     * mpv 侧是**全局放大**：不分字体，所有字幕都按「MPV字体默认放大」倍率换算。
+     * （EXO 侧才是只对楷体系生效，见 getEffectiveSubtitleFontScale。）
+     * 这里不覆盖 sub-scale —— 那属性由上游按用户字号设置，覆盖会让字号调节失灵。
+     */
+    public static int getMpvSubFontSizePx() {
+        try {
+            return Math.round(MPV_SUB_FONT_SIZE_DEFAULT * getMpvFontScaleFactor());
+        } catch (Throwable t) {
+            return MPV_SUB_FONT_SIZE_DEFAULT;
+        }
+    }
+
+    private static final int MPV_SUB_FONT_SIZE_DEFAULT = 55;
 
     /**
      * 与播放页 SubtitleDialog（large/small）同一套字号体系：

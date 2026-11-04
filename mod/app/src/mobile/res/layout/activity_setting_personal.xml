@@ -908,7 +908,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="调试日志（临时，重启恢复）"
+                android:text="播放器临时调试日志"
                 android:textColor="@color/white"
                 android:textSize="16sp" />
 

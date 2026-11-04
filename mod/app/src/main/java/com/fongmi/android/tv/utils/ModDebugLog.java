@@ -17,11 +17,11 @@ public final class ModDebugLog {
 
     // ============================================================
     // 日志总开关（编译期）：V30 起默认 true；想彻底不打日志就改成 false
-    // 运行期可在「个性设置 → 调试日志（临时）」里临时关闭，重启恢复默认
+    // 运行期可在「个性设置 → 播放器临时调试日志」里随时开关，点一下立即生效
     // ============================================================
     private static final boolean LOG_ACTIVE = true;
 
-    /** 运行期临时覆盖（不落盘，重启失效） */
+    /** 运行期开关（内存态，点一下立即生效） */
     private static volatile Boolean runtimeOverride;
 
     private static final String PREF = "mod_debug_log";

@@ -70,16 +70,13 @@ FORCE_CN_METHOD = """    // MPV_SUB_TRACKREADY_V1: 轨道表就绪后的自动�
     public void modForcePreferredSubtitleTrack() {
         try {
             if (!modIsNativeReady()) return;
-            // MPV_SUB_SCALE_V1: 轨道就绪时补一次倍率。
-            // 用户在「还没 file-loaded」时点倍率会命中 modApplySubtitleStyleRuntime 的
-            // native-ready 提前返回，这里保证就绪后一定会按最新设置生效。
+            // MPV_SUB_FONT_KAI_ONLY_V3: 轨道就绪时补一次字号。
+            // 只有楷体系字体才吃「MPV字体默认放大」，其它字体保持 mpv 默认 55，不放大。
             try {
-                float modScaleNowF = com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor();
-                String modScaleNow = String.valueOf(modScaleNowF);
-                modSetRuntimeProperty("sub-scale", modScaleNow);
-                modSetRuntimeProperty("sub-font-size", String.valueOf(Math.round(55f * modScaleNowF)));
-                if (!sModLastScale.isEmpty() && !sModLastScale.equals(modScaleNow)) {
-                    sModLastScale = modScaleNow;
+                String modSizeNow = String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvSubFontSizePx());
+                modSetRuntimeProperty("sub-font-size", modSizeNow);
+                if (!sModLastScale.isEmpty() && !sModLastScale.equals(modSizeNow)) {
+                    sModLastScale = modSizeNow;
                     mpvCommand(new String[]{"sub-reload"});
                 }
             } catch (Throwable ignored) {
@@ -475,7 +472,7 @@ def patch_mpv_player(path: Path) -> None:
                 '            String modFont = font == null ? "" : font;\n'
                 '            String modColor = color == null ? "" : color;\n'
                 '            String modStyle = forceStyle == null ? "" : forceStyle;\n'
-                "            String modScale = String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor());\n"
+                "            String modScale = String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvSubFontSizePx());\n"
                 "            if (!modFont.equals(sModLastFont) || !modColor.equals(sModLastColor)\n"
                 "                    || !modStyle.equals(sModLastStyle) || !modScale.equals(sModLastScale)) {\n"
                 "                sModLastFont = modFont;\n"
@@ -1134,17 +1131,18 @@ def patch_mpv_track_ready(path: Path) -> None:
 
 
 def patch_mpv_sub_scale(path: Path) -> None:
-    """MPV_SUB_SCALE_V1：把所有 mpv 字幕按用户选的倍率整体放大。
+    """MPV_SUB_FONT_KAI_ONLY_V3：按倍率换算 mpv 字号（mpv 侧全局生效）。
 
-    mpv 的 sub-scale 是渲染层全局缩放，对 ASS / 内封 / 外挂都生效，
-    且与 sub-ass-style-overrides 不冲突，属于「只加一个属性」的最小改动。
+    phase_c 会强制 sub-ass-override=force，此时 ASS 字号取 --sub-font-size（默认 55）。
+    mpv 侧是全局放大（不分字体），EXO 侧才只对楷体系生效。
+    同时不覆盖上游按用户字号设置的 sub-scale。
     """
     if not path.is_file():
         ERR.append(f"MpvPlayer.java not found: {path}")
         return
     text = read(path)
-    if "MPV_SUB_SCALE_V1 (MPV-BRANCH-ONLY): 字体默认放大" in text:
-        OK.append("mpv sub-scale already injected")
+    if "MPV_SUB_FONT_KAI_ONLY_V3 (MPV-BRANCH-ONLY): 楷体系字体字号" in text:
+        OK.append("mpv sub-font-size already injected")
         return
     span = find_method(
         text,
@@ -1161,13 +1159,10 @@ def patch_mpv_sub_scale(path: Path) -> None:
         return
     indent = m.group(1)
     ins = (
-        indent + "// MPV_SUB_SCALE_V1 (MPV-BRANCH-ONLY): 字体默认放大，mpv 下所有字幕都吃这个倍率\n"
+        indent + "// MPV_SUB_FONT_KAI_ONLY_V3 (MPV-BRANCH-ONLY): 楷体系字体字号（非楷体保持默认 55）\n"
         + indent + "try {\n"
-        + indent + "    float modScaleFactor = com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor();\n"
-        + indent + "    ok &= modSetRuntimeProperty(\"sub-scale\", String.valueOf(modScaleFactor));\n"
-        + indent + "    // MPV_SUB_SCALE_V2: sub-ass-override=force 下 ASS 字号取 --sub-font-size（默认 55），\n"
-        + indent + "    // sub-scale 对 ASS 不生效，必须按倍率换算字号才看得到变化\n"
-        + indent + "    ok &= modSetRuntimeProperty(\"sub-font-size\", String.valueOf(Math.round(55f * modScaleFactor)));\n"
+        + indent + "    ok &= modSetRuntimeProperty(\"sub-font-size\",\n"
+        + indent + "            String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvSubFontSizePx()));\n"
         + indent + "} catch (Throwable ignored) {\n"
         + indent + "}\n"
     )
@@ -1179,9 +1174,8 @@ def patch_mpv_sub_scale(path: Path) -> None:
     if text.count(init_anchor) == 1:
         init_block = (init_anchor
                       + '\n                try {\n'
-                      + '                    float modScaleFactor = com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor();\n'
-                      + '                    modSetInitOption("sub-scale", String.valueOf(modScaleFactor));\n'
-                      + '                    modSetInitOption("sub-font-size", String.valueOf(Math.round(55f * modScaleFactor)));\n'
+                      + '                    modSetInitOption("sub-font-size",\n'
+                      + '                            String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvSubFontSizePx()));\n'
                       + '                } catch (Throwable ignored) {\n'
                       + '                }')
         text = text.replace(init_anchor, init_block, 1)
@@ -1189,10 +1183,10 @@ def patch_mpv_sub_scale(path: Path) -> None:
         print("[mod] WARN init option anchor count=%d (sub-scale 仅运行时生效)" % text.count(init_anchor))
 
     write(path, text)
-    if "MPV_SUB_SCALE_V1" in read(path):
-        OK.append("inject mpv sub-scale (default 1.15)")
+    if "MPV_SUB_FONT_KAI_ONLY_V3" in read(path):
+        OK.append("inject mpv sub-font-size (kai-only)")
     else:
-        ERR.append("sub-scale patch not applied")
+        ERR.append("sub-font-size patch not applied")
 
 
 def patch_player_tracks_guard(path: Path) -> None:
