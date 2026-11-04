@@ -892,6 +892,7 @@
                 android:gravity="end"
                 android:textColor="@color/white"
                 android:textSize="16sp" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
 
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/debugLog"
