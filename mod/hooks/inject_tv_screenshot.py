@@ -321,18 +321,15 @@ def fix_tv_menu_order(path: Path) -> None:
     except SystemExit as ex:
         ERR.append("TV menu move failed: " + str(ex))
         return
-    # 间距：kaitiScale 变成末项补 bottom margin，hdrToSdr 不再是末项去掉 bottom margin
+    # 间距统一：所有 item 去掉 marginBottom，只给末项（kaitiScale）留 24dp
+    t = t.replace('\n            android:layout_marginBottom="24dp"', "")
     i = t.index('android:id="@+id/kaitiScale"')
     seg_end = t.index(">", i)
     seg = t[i:seg_end]
     if "layout_marginBottom" not in seg:
-        seg = seg.replace('\n            android:layout_marginTop="16dp"',
-                          '\n            android:layout_marginTop="16dp"\n            android:layout_marginBottom="24dp"', 1)
+        seg = seg.replace('\n            android:padding="8dp"',
+                          '\n            android:padding="8dp"\n            android:layout_marginBottom="24dp"', 1)
         t = t[:i] + seg + t[seg_end:]
-    i = t.index('android:id="@+id/hdrToSdr"')
-    seg_end = t.index(">", i)
-    seg = t[i:seg_end].replace('\n            android:layout_marginBottom="24dp"', "", 1)
-    t = t[:i] + seg + t[seg_end:]
     path.write_text(t, encoding="utf-8")
     OK.append("TV menu reordered (kaiti -> below mpvFontScale)")
 

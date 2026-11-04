@@ -217,6 +217,36 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v50 变更（菜单间距 / 位置修正）
+
+1. **手机端「字幕字体」被搬到了末尾** —— V49 搬节点时按缩进配对，
+   而 `subtitleFont` 的开标签是顶格的，导致 `kaitiScale` 的块把它一起吞了。
+   现在已移回原位（`subtitleColor` 之后）。
+2. **间距统一**：所有 item 去掉 `layout_marginBottom`，只给列表最后一项留 `24dp`。
+   之前 `hideHomeTypeMore`、`webHomeFullscreenBtn` 这类"曾经的末项"残留 24dp，
+   隐藏掉中间的截图项后就露出了大空档。
+3. 手机端最终尾部：
+
+```
+隐藏首页更多按钮
+播放器MPV截图        (gone)
+MPV截图亮度值
+MPV截图对比度
+HDR转码SDR
+MPV字体默认放大
+EXO楷体默认放大
+…（其它项）
+播放器临时调试日志   ← 末项，24dp
+```
+
+TV 端尾部：
+
+```
+HDR转码SDR
+MPV字体默认放大
+EXO楷体默认放大   ← 末项，24dp
+```
+
 ## v47 变更（TV 端彻底去掉 MPV 截图项）
 
 TV 端没有截图功能，所以截图相关的设置项也一并隐藏（保留节点，否则 ViewBinding 字段消失会编译不过）：
