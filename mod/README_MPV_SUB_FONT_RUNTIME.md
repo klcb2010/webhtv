@@ -217,6 +217,24 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v39 变更（TV 端移植截图）
+
+TV 端（leanback）原来没有截图入口。本版把手机端整套截图能力移植过去：
+
+1. 新增 `mod/app/src/leanback/java/com/fongmi/android/tv/utils/PhoneScreenshot.java`
+   —— 与 mobile 那份同名同实现（不同 source set，互不冲突）；
+   `MpvScreenshot` 用 `app/src/main/.../utils/` 的共用版本，不重复放。
+2. 新增 `mod/hooks/inject_tv_screenshot.py`，注入三处：
+   - `app/src/leanback/res/layout/dialog_control.xml`
+     → 控制面板按钮组（`panDiagnostic` 之后）加 `@+id/screenshotBtn`「截图」
+   - `.../ui/dialog/ControlDialog.java`
+     → `initEvent()` 加 `binding.screenshotBtn.setOnClickListener(v -> onScreenshot())`，
+       新增 `onScreenshot()` 方法转调 VideoActivity
+   - `.../ui/activity/VideoActivity.java`
+     → `getExoView()` 之后新增 `public void capturePlaybackScreenshot()`，
+       调 `PhoneScreenshot.capture(this, getExoView(), callback)`，Toast 提示结果
+3. hook 幂等（重复跑不会重复插入），已用真实上游文件跑通并通过 XML 校验。
+
 ## v37 变更（黑帧判废 + 回退）
 
 EXO 原画截图在 **HDR / 10bit 源**上会拿到「尺寸正确、内容全黑」的帧：

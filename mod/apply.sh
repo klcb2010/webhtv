@@ -285,6 +285,12 @@ if [[ -f "$MOD/hooks/inject_hdr_to_sdr.py" ]]; then
   python3 "$MOD/hooks/inject_hdr_to_sdr.py" "$ROOT" || exit 1
 fi
 
+# TV 端截图入口（leanback）：把手机端的截图能力（MPV 原画 / EXO 解码）移植过去
+if [[ -f "$MOD/hooks/inject_tv_screenshot.py" ]]; then
+  echo "[mod] inject_tv_screenshot"
+  python3 "$MOD/hooks/inject_tv_screenshot.py" "$ROOT" || exit 1
+fi
+
 # MPV-BRANCH-ONLY: 字幕字体/颜色运行时刷新（必须在 inject_mpv_phase_c 之后）
 if [[ -f "$MOD/hooks/fix_mpv_subtitle_runtime.py" ]]; then
   echo "[mod] fix_mpv_subtitle_runtime"
