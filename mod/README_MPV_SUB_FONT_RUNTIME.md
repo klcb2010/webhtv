@@ -217,6 +217,129 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v43 变更（截图按钮只在「MPV + 截图未关」时出现）
+
+V42 只做到「EXO 点截图报不支持」，按钮仍然一直显示。V43 把显隐规则做成统一的一处：
+
+```java
+/** 截图按钮只在「MPV 播放 + MPV截图未关闭」时出现（EXO 不显示） */
+private void updateScreenshotAction() {
+    boolean show = player() != null && player().isMpv()
+            && Setting.getMpvScreenshotMode() != Setting.SCREENSHOT_OFF;
+    mBinding.control.action.screenshot.setVisibility(show ? View.VISIBLE : View.GONE);
+}
+```
+
+挂载点：两端 `updateCustomButtonVisibility()` 的第一行（`updateCustomButtonStates();`）之后
+—— 这个方法在控制栏 show/hide、切内核、切全屏时都会跑，所以状态永远同步。
+
+| 端 | 文件 |
+|---|---|
+| TV | `app/src/leanback/java/.../ui/activity/VideoActivity.java` |
+| 手机 | `app/src/mobile/java/.../ui/activity/VideoActivity.java` |
+
+另外补了两端**原来完全没有**的点击处理（控制栏 `view_control_vod_action.xml` 里
+`@+id/screenshot` 节点一直存在，但没有任何代码引用）：
+
+```java
+mBinding.control.action.screenshot.setOnClickListener(view -> capturePlaybackScreenshot());
+```
+
+以及两端各自新增 `public void capturePlaybackScreenshot()`
+（TV 用 `getExoView()`，手机同样），成功后 Toast「截图已保存」。
+
+底部控制面板（`dialog_control.xml`）的按钮注入已**停用** —— 截图入口只保留控制栏这一排，
+避免两套入口状态不一致。
+
+## v42 变更（双端彻底砍掉 EXO 截图）
+
+用户要求：EXO 截图**两端都不要**，只保留 MPV 原画截图。
+
+1. `PhoneScreenshot.capture()`（mobile + leanback 两份）的 EXO 分支现在是：
+
+```java
+// EXO：双端都不再支持截图（只保留 MPV 原画截图），直接返回失败提示。
+main.post(() -> {
+    if (callback != null) callback.onError("EXO 播放不支持截图（仅 MPV 支持）");
+});
+```
+
+2. `saveImage()` 不再读 `Setting.getExoScreenshotMode()`（那个开关已无意义），
+   只在 MPV 时取 `getMpvScreenshotMode()`，其余按 PNG。
+3. 手机端个性设置里两个 EXO 截图项设成 `android:visibility="gone"`：
+   `@+id/playbackScreenshotBtn`（截图格式）、`@+id/screenshotBrightnessBoost`（截图亮度）。
+   TV 端这两项本来就是 gone / 不存在。
+4. `Setting` 里的 `getExoScreenshotMode*` 方法保留不删（手机/TV 的
+   `SettingPersonalActivity` 仍在读它做 `setText`，删了会编译不过），但已没有任何入口能改。
+5. TV 控制栏的「截图」按钮仍显示（MPV 下正常出原画）；EXO 下点它会提示
+   「EXO 播放不支持截图（仅 MPV 支持）」。
+
+## v41 变更（TV 个性设置补两项）
+
+TV 的个性设置是**独立的 leanback 版**（`mod/app/src/leanback/.../SettingPersonalActivity.java`
++ `activity_setting_personal.xml`），与手机端那两份是不同文件。之前只在手机端加了项，
+所以 TV 上既没有「MPV字体默认放大」，也没有「播放器临时调试日志」。
+
+v41 由 hook 补进 TV 那份（都加在列表末尾，顺序与手机端一致）：
+
+```
+... hdrToSdr (HDR转码为SDR)
+ ├─ @+id/mpvFontScale    MPV字体默认放大    mpvFontScaleText
+ └─ @+id/debugLog        播放器临时调试日志  debugLogText
+```
+
+- 布局项用 `@drawable/selector_item`、`focusableInTouchMode=true`，与相邻项一致（遥控器可聚焦）
+- 点击处理：`setMpvFontScale()` 调 `Setting.cycleMpvFontScale()` +
+  `MpvSubtitleStylePolicy.applyRuntimeToActive()` + `ExoUtil.reapplySubtitleStyle()`；
+  `setDebugLog()` 调 `ModDebugLog.setRuntimeOverride()`（内存态，立即生效）
+- 初值在 `initView()` 里补（`mpvFontScaleText` / `debugLogText` / `mpvScreenshotBtnText`）
+
+顺便修掉 v39 漏的「播放器MPV截图」右侧空值：leanback 版只有点击时才 `setText`，
+进页面从未初始化。
+
+## v40 变更（TV 截图按钮真正生效 / 砍掉 EXO 原画截图）
+
+### 1. TV 控制栏的截图按钮（v39 没显示出来的根因）
+
+v39 把按钮加到了 `dialog_control.xml`（底部弹出的控制面板），但 TV 播放页的**控制栏**是
+`@layout/view_control_vod` → `view_control_vod_action.xml` 那一排（next/prev/…/repeat）。
+
+仓库 `mod/` 里那份 `view_control_vod_action.xml` **本来就有** `@+id/screenshot` 节点，
+但被 `android:visibility="gone"` 显式隐藏，且 `VideoActivity` 里没有任何点击处理
+—— 这是「砍掉 TV 截图」时留下的半截状态。
+
+v40 覆盖包提供去掉 `gone` 的版本，并新增 hook 注入：
+
+```java
+mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
+mBinding.control.action.screenshot.setOnClickListener(view -> capturePlaybackScreenshot());  // 新增
+```
+
+按钮文字用 `@string/play_screenshot`（main 的 strings_patch 已定义：Screenshot / 截图）。
+
+### 2. TV 个性设置「播放器MPV截图」右侧值为空
+
+leanback 版 `SettingPersonalActivity` 只写了 `setMpvScreenshotBtn()`（点击时刷新），
+`initView()` 里**没有给 `mpvScreenshotBtnText` 赋初值**，所以进页面右侧是空的。
+hook 补一行：
+
+```java
+try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}
+```
+
+### 3. 砍掉 EXO 截图相关
+
+`PhoneScreenshot` 里 EXO 分支不再独立解码取原画，直接 `captureSurface()`：
+
+```java
+// EXO：直接截当前 Surface
+captureSurface(activity, playerView, main, callback);
+```
+
+原来那套（`snapshotPlayer` / `decodeFromSnapshot` / `tryRetrieverUri` / `tryMediaCodecFrame` /
+`isNearlyBlack` / `frameStats` / `Snapshot`）已从两份文件里删除。
+代价：EXO 截图分辨率=屏幕；收益：不再出黑图、不再等几十秒。
+
 ## v39 变更（TV 端移植截图）
 
 TV 端（leanback）原来没有截图入口。本版把手机端整套截图能力移植过去：

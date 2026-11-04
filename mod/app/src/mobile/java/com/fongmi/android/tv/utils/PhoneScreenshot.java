@@ -44,9 +44,13 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 仅 mobile。截图时优先按当前进度「单独软解导出一帧」（MediaMetadataRetriever），
- * 不改动正在播放的解码器；失败再回退 Surface PixelCopy。
- * PNG；长边上限 3840。
+ * 截图入口（mobile / leanback 各一份，实现相同）。
+ *
+ * - MPV：走 {@link MpvScreenshot} 的 mpv screenshot-to-file video，真原画；失败回退 Surface。
+ * - EXO：直接截当前 Surface（PixelCopy），分辨率=屏幕、颜色正常、毫秒级。
+ *   V40 起已按用户要求砍掉 EXO 的「独立解码取原画」那套
+ *   （HDR/10bit 源取出来是黑帧、4K 还要几十秒，收益为负）。
+ * PNG / WebP；长边上限 3840。
  */
 public final class PhoneScreenshot {
 
@@ -62,30 +66,6 @@ public final class PhoneScreenshot {
         }
     }
 
-    /** 采样平均亮度（0~255）。用于判断解出来的是不是黑帧。 */
-    private static String frameStats(Bitmap b) {
-        try {
-            if (b == null) return "null";
-            int w = b.getWidth(), h = b.getHeight();
-            long sum = 0;
-            int cnt = 0;
-            int maxLum = 0;
-            for (int gy = 1; gy <= 8; gy++) {
-                for (int gx = 1; gx <= 8; gx++) {
-                    int px = b.getPixel(w * gx / 9, h * gy / 9);
-                    int r = (px >> 16) & 0xFF, g = (px >> 8) & 0xFF, bl = px & 0xFF;
-                    sum += r + g + bl;
-                    cnt++;
-                    int lum = (r * 30 + g * 59 + bl * 11) / 100;
-                    if (lum > maxLum) maxLum = lum;
-                }
-            }
-            int avg = cnt == 0 ? 0 : (int) (sum / (cnt * 3));
-            return w + "x" + h + " avg=" + avg + " max=" + maxLum + (maxLum < 24 ? " BLACK" : "");
-        } catch (Throwable t) {
-            return "statsErr=" + t;
-        }
-    }
 
     public interface Callback {
         void onSuccess(Uri uri);
@@ -134,238 +114,20 @@ public final class PhoneScreenshot {
                 });
                 return;
             }
-            // EXO：优先独立解码取「原画」帧（和 MPV 同样的优先级），失败再回退 Surface。
-            // 原来直接 Surface = 屏幕分辨率，属于降级；解码切换时的偏帧问题靠回退兜底。
-            int mode;
-            try {
-                mode = com.fongmi.android.tv.setting.Setting.getExoScreenshotMode();
-            } catch (Throwable e) {
-                mode = com.fongmi.android.tv.setting.Setting.SCREENSHOT_PNG;
-            }
-            if (mode == com.fongmi.android.tv.setting.Setting.SCREENSHOT_OFF) {
-                fail(main, callback);
-                return;
-            }
-            final Snapshot snap = snapshotPlayer(playerView);
-            if (diag()) try {
-                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "snapshot uri=" + (snap == null ? "null" : String.valueOf(snap.uri))
-                        + " posMs=" + (snap == null ? -1 : snap.posMs)
-                        + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
-            } catch (Throwable ignored) {
-            }
-            // 与 main 分支同一套：始终独立解码取原画（含 GO/127.0.0.1 代理），
-            // 串行 Retriever→Codec，高优先级；Codec 走软解，避免与播放中的硬解并行导致 CRASH_NATIVE。
-            Task.execute(() -> {
-                try {
-                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
-                } catch (Throwable ignored) {
-                }
-                Bitmap frame = null;
-                long t0 = android.os.SystemClock.elapsedRealtime();
-                try {
-                    if (snap != null && snap.uri != null) {
-                        frame = decodeFromSnapshot(snap);
-                    }
-                } catch (Throwable e) {
-                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
-                }
-                if (diag()) try {
-                    com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "decode costMs=" + (android.os.SystemClock.elapsedRealtime() - t0)
-                            + " frame=" + (frame == null ? "null" : (frame.getWidth() + "x" + frame.getHeight())));
-                } catch (Throwable ignored) {
-                }
-                if (frame != null) {
-                    Bitmap out = scaleToMax(frame, MAX_EDGE);
-                    if (out != frame) {
-                        try { frame.recycle(); } catch (Throwable ignored) {}
-                    }
-                    saveAsync(activity, out, callback);
-                    return;
-                }
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "path=SURFACE_FALLBACK decodeFrame=null"); } catch (Throwable ignored) {}
-                main.post(() -> captureSurface(activity, playerView, main, callback));
+            // EXO：双端都不再支持截图（只保留 MPV 原画截图），直接返回失败提示。
+            main.post(() -> {
+                if (callback != null) callback.onError("EXO 播放不支持截图（仅 MPV 支持）");
             });
         };
         if (Looper.myLooper() == Looper.getMainLooper()) start.run();
         else main.post(start);
     }
 
-    private static final class Snapshot {
-        final Uri uri;
-        final long posMs;
-        final Map<String, String> headers;
-        final int videoW;
-        final int videoH;
-
-        Snapshot(Uri uri, long posMs, Map<String, String> headers, int videoW, int videoH) {
-            this.uri = uri;
-            this.posMs = posMs;
-            this.headers = headers != null ? headers : Collections.emptyMap();
-            this.videoW = videoW;
-            this.videoH = videoH;
-        }
-    }
-
-    /** 主线程调用：只在这里读 Player */
-    @Nullable
-    private static Snapshot snapshotPlayer(PlayerView playerView) {
-        try {
-            Player player = playerView.getPlayer();
-            if (player == null) return null;
-            MediaItem item = player.getCurrentMediaItem();
-            if (item == null || item.localConfiguration == null) return null;
-            Uri uri = item.localConfiguration.uri;
-            long posMs = player.getCurrentPosition();
-            Map<String, String> headers = extractHeaders(item);
-            int vw = 0, vh = 0;
-            try {
-                VideoSize vs = player.getVideoSize();
-                if (vs != null) {
-                    vw = vs.width;
-                    vh = vs.height;
-                }
-            } catch (Throwable ignored) {
-            }
-            return new Snapshot(uri, posMs, headers, vw, vh);
-        } catch (Throwable e) {
-            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "snapshotPlayer err=" + e); } catch (Throwable ignored) {}
-            return null;
-        }
-    }
 
 
-    @Nullable
-    private static Bitmap decodeFromSnapshot(Snapshot snap) {
-        long posUs = Math.max(0L, snap.posMs) * 1000L;
-        Bitmap b = tryRetrieverUri(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
-        if (b != null && !isNearlyBlack(b)) return b;
-        if (b != null) {
-            // HDR / 10bit 源上 MediaMetadataRetriever 常返回「尺寸正确但内容全黑」的帧，
-            // 这种结果不能当成功（保存下来就是一张黑图），必须换路再取。
-            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever frame black " + frameStats(b) + ", trying MediaCodec"); } catch (Throwable ignored) {}
-            try { b.recycle(); } catch (Throwable ignored) {}
-            b = null;
-        } else if (diag()) {
-            try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever null, trying MediaCodec uri=" + snap.uri); } catch (Throwable ignored) {}
-        }
-        b = tryMediaCodecFrame(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
-        if (b != null && !isNearlyBlack(b)) return b;
-        if (b != null) {
-            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec frame black " + frameStats(b) + ", fallback surface"); } catch (Throwable ignored) {}
-            try { b.recycle(); } catch (Throwable ignored) {}
-        }
-        return null;
-    }
 
-    /**
-     * 黑帧判定：采样 8x8（64 点），**最亮那一点的亮度** < 24 就判黑。
-     * 用最大值而不是平均值：真实的暗场景/夜景总有高光，全黑帧连最亮点都极暗。
-     */
-    private static boolean isNearlyBlack(Bitmap b) {
-        try {
-            if (b == null) return true;
-            int w = b.getWidth(), h = b.getHeight();
-            if (w <= 0 || h <= 0) return true;
-            int max = 0;
-            for (int gy = 1; gy <= 8; gy++) {
-                for (int gx = 1; gx <= 8; gx++) {
-                    int px = b.getPixel(w * gx / 9, h * gy / 9);
-                    int lum = (((px >> 16) & 0xFF) * 30 + ((px >> 8) & 0xFF) * 59 + (px & 0xFF) * 11) / 100;
-                    if (lum > max) max = lum;
-                }
-            }
-            return max < 24;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
 
-    @Nullable
-    private static Bitmap tryRetrieverUri(Uri uri, Map<String, String> headers, long posUs, int playW, int playH) {
-        if (uri == null) return null;
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.US);
-        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever scheme=" + scheme + " posUs=" + posUs); } catch (Throwable ignored) {}
 
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        try {
-            if ("file".equals(scheme) || "content".equals(scheme) || "android.resource".equals(scheme)) {
-                retriever.setDataSource(App.get(), uri);
-            } else if ("http".equals(scheme) || "https".equals(scheme)) {
-                Map<String, String> hdr = headers == null ? Collections.emptyMap() : headers;
-                retriever.setDataSource(uri.toString(), hdr);
-            } else {
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever skip scheme=" + scheme); } catch (Throwable ignored) {}
-                return null;
-            }
-
-            int metaW = 0, metaH = 0;
-            try {
-                String ws = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
-                String hs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
-                if (ws != null && hs != null) {
-                    metaW = Integer.parseInt(ws);
-                    metaH = Integer.parseInt(hs);
-                }
-            } catch (Throwable ignored) {
-            }
-            int dstW = 0, dstH = 0;
-            if (metaW > 0 && metaH > 0 && playW > 0 && playH > 0) {
-                if ((long) metaW * metaH >= (long) playW * playH) {
-                    dstW = metaW;
-                    dstH = metaH;
-                } else {
-                    dstW = playW;
-                    dstH = playH;
-                }
-            } else if (metaW > 0 && metaH > 0) {
-                dstW = metaW;
-                dstH = metaH;
-            } else if (playW > 0 && playH > 0) {
-                dstW = playW;
-                dstH = playH;
-            }
-            if (dstW > 0 && dstH > 0) {
-                int[] fitted = fit(dstW, dstH, MAX_EDGE);
-                dstW = fitted[0];
-                dstH = fitted[1];
-            }
-            if (diag()) try {
-                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "meta=" + metaW + "x" + metaH + " playVideoSize=" + playW + "x" + playH + " dst=" + dstW + "x" + dstH);
-            } catch (Throwable ignored) {}
-
-            Bitmap bitmap = null;
-            if (dstW > 0 && dstH > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                try {
-                    bitmap = retriever.getScaledFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST, dstW, dstH);
-                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
-                } catch (Throwable e) {
-                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST err=" + e); } catch (Throwable ignored) {}
-                }
-                if (bitmap == null) {
-                    try {
-                        bitmap = retriever.getScaledFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dstW, dstH);
-                        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
-                    } catch (Throwable e) {
-                        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC err=" + e); } catch (Throwable ignored) {}
-                    }
-                }
-            }
-            if (bitmap == null) {
-                try {
-                    bitmap = retriever.getFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getFrameAtTime " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
-                } catch (Throwable e) {
-                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getFrameAtTime err=" + e); } catch (Throwable ignored) {}
-                }
-            }
-            return bitmap;
-        } catch (Throwable e) {
-            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever exception: " + e); } catch (Throwable ignored) {}
-            return null;
-        } finally {
-            try { retriever.release(); } catch (Throwable ignored) {}
-        }
-    }
 
     private static void captureSurface(Activity activity, PlayerView playerView, Handler main, Callback callback) {
         View surfaceView = playerView.getVideoSurfaceView();
@@ -752,7 +514,7 @@ public final class PhoneScreenshot {
                     }
                     toSave = bright;
                 }
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "savePng bitmap=" + toSave.getWidth() + "x" + toSave.getHeight() + " stats=" + frameStats(toSave)); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "savePng bitmap=" + toSave.getWidth() + "x" + toSave.getHeight()); } catch (Throwable ignored) {}
                 uri = savePng(activity, toSave);
             } catch (Throwable e) {
                 err = e.getMessage();
@@ -780,13 +542,10 @@ public final class PhoneScreenshot {
     private static Uri saveImage(Activity activity, Bitmap bitmap) throws Exception {
         int mode = com.fongmi.android.tv.setting.Setting.SCREENSHOT_PNG;
         try {
-            mode = com.fongmi.android.tv.setting.Setting.getExoScreenshotMode();
-                try {
-                    if (com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
-                            == com.fongmi.android.tv.setting.PlayerSetting.MPV) {
-                        mode = com.fongmi.android.tv.setting.Setting.getMpvScreenshotMode();
-                    }
-                } catch (Throwable ignored) {}
+            if (com.fongmi.android.tv.setting.PlayerSetting.getPlayer()
+                    == com.fongmi.android.tv.setting.PlayerSetting.MPV) {
+                mode = com.fongmi.android.tv.setting.Setting.getMpvScreenshotMode();
+            }
         } catch (Throwable ignored) {
         }
         boolean webp = mode == com.fongmi.android.tv.setting.Setting.SCREENSHOT_WEBP
@@ -924,141 +683,6 @@ public final class PhoneScreenshot {
         return MediaCodec.createDecoderByType(mime);
     }
 
-    private static Bitmap tryMediaCodecFrame(Uri uri, Map<String, String> headers, long posUs, int playW, int playH) {
-        if (uri == null) return null;
-        MediaExtractor extractor = null;
-        MediaCodec codec = null;
-        ImageReader reader = null;
-        try {
-            extractor = new MediaExtractor();
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.US);
-            Map<String, String> hdr = headers == null ? Collections.emptyMap() : headers;
-            if ("file".equals(scheme) || "content".equals(scheme)) {
-                extractor.setDataSource(App.get(), uri, hdr.isEmpty() ? null : hdr);
-            } else if ("http".equals(scheme) || "https".equals(scheme)) {
-                extractor.setDataSource(uri.toString(), hdr);
-            } else {
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec skip scheme=" + scheme); } catch (Throwable ignored) {}
-                return null;
-            }
-
-            int videoTrack = -1;
-            MediaFormat format = null;
-            for (int i = 0; i < extractor.getTrackCount(); i++) {
-                MediaFormat f = extractor.getTrackFormat(i);
-                String mime = f.getString(MediaFormat.KEY_MIME);
-                if (mime != null && mime.startsWith("video/")) {
-                    videoTrack = i;
-                    format = f;
-                    break;
-                }
-            }
-            if (videoTrack < 0 || format == null) {
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec no video track"); } catch (Throwable ignored) {}
-                return null;
-            }
-            extractor.selectTrack(videoTrack);
-            try {
-                extractor.seekTo(posUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
-            } catch (Throwable ignored) {
-            }
-
-            int width = format.containsKey(MediaFormat.KEY_WIDTH) ? format.getInteger(MediaFormat.KEY_WIDTH) : 0;
-            int height = format.containsKey(MediaFormat.KEY_HEIGHT) ? format.getInteger(MediaFormat.KEY_HEIGHT) : 0;
-            if (width <= 0 || height <= 0) {
-                width = playW;
-                height = playH;
-            }
-            if (width <= 0 || height <= 0) {
-                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec unknown size"); } catch (Throwable ignored) {}
-                return null;
-            }
-            int[] fitted = fit(width, height, MAX_EDGE);
-            int outW = fitted[0];
-            int outH = fitted[1];
-            String mime = format.getString(MediaFormat.KEY_MIME);
-            if (mime == null) return null;
-            if (diag()) try {
-                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec track=" + width + "x" + height + " out=" + outW + "x" + outH + " mime=" + mime);
-            } catch (Throwable ignored) {}
-
-            reader = ImageReader.newInstance(outW, outH, ImageFormat.YUV_420_888, 2);
-            codec = createSafeVideoDecoder(mime);
-            codec.configure(format, reader.getSurface(), null, 0);
-            codec.start();
-
-            boolean inputDone = false;
-            boolean gotFrame = false;
-            long deadline = System.nanoTime() + 8_000_000_000L;
-            MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            Bitmap result = null;
-            int framesPastTarget = 0;
-
-            while (!gotFrame && System.nanoTime() < deadline) {
-                if (!inputDone) {
-                    int inIndex = codec.dequeueInputBuffer(10000);
-                    if (inIndex >= 0) {
-                        java.nio.ByteBuffer inBuf = codec.getInputBuffer(inIndex);
-                        if (inBuf == null) break;
-                        int sampleSize = extractor.readSampleData(inBuf, 0);
-                        if (sampleSize < 0) {
-                            codec.queueInputBuffer(inIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-                            inputDone = true;
-                        } else {
-                            long sampleTime = extractor.getSampleTime();
-                            codec.queueInputBuffer(inIndex, 0, sampleSize, sampleTime, 0);
-                            extractor.advance();
-                            if (sampleTime >= posUs) {
-                                framesPastTarget++;
-                                if (framesPastTarget > 12) {
-                                    // 再喂几帧后结束输入，促使输出
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-                int outIndex = codec.dequeueOutputBuffer(info, 10000);
-                if (outIndex >= 0) {
-                    boolean render = info.size > 0 && (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0;
-                    // 只在达到目标时间附近才取图
-                    boolean near = info.presentationTimeUs + 500000 >= posUs || posUs < 1000000;
-                    codec.releaseOutputBuffer(outIndex, render && near);
-                    if (render && near) {
-                        Image image = null;
-                        try {
-                            for (int w = 0; w < 50 && image == null; w++) {
-                                image = reader.acquireLatestImage();
-                                if (image == null) {
-                                    try { Thread.sleep(15); } catch (InterruptedException ignored) {}
-                                }
-                            }
-                            if (image != null) {
-                                result = yuv420ToBitmap(image);
-                                if (diag()) try {
-                                    com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec frame=" + (result == null ? "null" : (result.getWidth() + "x" + result.getHeight())));
-                                } catch (Throwable ignored) {}
-                                if (result != null) gotFrame = true;
-                            }
-                        } finally {
-                            if (image != null) {
-                                try { image.close(); } catch (Throwable ignored) {}
-                            }
-                        }
-                    }
-                    if ((info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) break;
-                }
-            }
-            return result;
-        } catch (Throwable e) {
-            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec error: " + e); } catch (Throwable ignored) {}
-            return null;
-        } finally {
-            try { if (codec != null) { codec.stop(); codec.release(); } } catch (Throwable ignored) {}
-            try { if (extractor != null) extractor.release(); } catch (Throwable ignored) {}
-            try { if (reader != null) reader.close(); } catch (Throwable ignored) {}
-        }
-    }
 
     private static Bitmap yuv420ToBitmap(Image image) {
         int width = image.getWidth();
