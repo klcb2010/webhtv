@@ -18,7 +18,7 @@ public final class ModDebugLog {
     // ============================================================
     // 日志总开关：排查问题时把 false 改成 true（改这一处即可，其余不用动）
     // ============================================================
-    private static final boolean LOG_ACTIVE = false;
+    private static final boolean LOG_ACTIVE = true;
 
     private static final String PREF = "mod_debug_log";
     private static final long MAX_BYTES = 2L * 1024 * 1024;
