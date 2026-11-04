@@ -217,6 +217,26 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v25 变更（检查更新：只在同分支 release 里找最新）
+
+**问题**：`releases/latest` 是「仓库最新那个 release」。main 一同步上游就先发版，
+latest 就变成 main 的包，里面没有 `-mpv` 资产 → MPV 版检测必然失败。
+这跟补丁无关，是「用发布时间判断最新版」这个前提本身错了。
+
+**改法**（`MPV_SUB_UPD_SELFBASE_V1`）：本版是 MPV 版，就只在带 `-mpv` 的 release 里找最新的。
+
+```
+1) releases/latest/download/<name>-mpv.json        ← 快，latest 恰好是 mpv 时一次命中
+2) 失败 → releases.atom（github.com 域，约 20KB）
+   → 按时间倒序的 tag 列表 → 挑第一个含 -mpv 的 tag
+   → releases/download/<该 tag>/<name>-mpv.json   ← 命中
+3) 两条都没拿到 manifest → 明确标记失败（不会假装「已是最新」）
+```
+
+为什么用 `releases.atom` 而不是 `api.github.com`：atom 在 **github.com 主域**，
+和下载 apk 同一个域（你那边确定能通）；`api.github.com` 在大陆经常超时。
+两个 URL 都会走「用户加速源 → 直连 → 内置镜像」的路由。
+
 ## v22 变更（检查更新：真正的原因）
 
 **之前的方向全错了**：`app/.../Updater.java` 早就被 `mod/app/.../Updater.java`（仓库自带的定制版）

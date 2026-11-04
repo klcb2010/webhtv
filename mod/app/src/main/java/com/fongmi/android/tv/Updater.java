@@ -179,11 +179,96 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        // 不走 api.github.com：用户选的加速镜像 → 直连 → 其它内置镜像
-        // MPV_SUB_UPD_ASSET_V1 (MPV-BRANCH-ONLY): 本分支 release 的资产名带 -mpv 后缀
-        // （leanback-arm64_v8a-mpv.json）。按原名请求 leanback-arm64_v8a.json 会 404，
-        // 所有镜像都 404 → lastError → 提示「检查更新失败」。
+        // MPV_SUB_UPD_SELFBASE_V1 (MPV-BRANCH-ONLY):
+        // 不能用「谁发布得晚」判断最新版 —— main 一同步上游就先发，MPV 版会永远检测失败。
+        // 正确做法：只在「与本版同类的 release」里找最新的。
+        //   1) 先试 releases/latest/download（快；latest 恰好是本分支时一次命中）
+        //   2) latest 被另一分支抢走 → 用 releases.atom（github.com 域，不依赖 api.github.com）
+        //      取最近 tag 列表，挑出含本分支标记（-mpv）的最新一个
+        Update latest = modTryLatest(channel);
+        if (latest != null && latest.hasManifest()) return latest;
+        Update sameBase = modTrySameBranchFeed(channel);
+        if (sameBase != null && sameBase.hasManifest()) return sameBase;
+        Update failed = latest != null ? latest : Update.empty(channel);
+        if (!failed.hasManifest() && TextUtils.isEmpty(failed.error)) {
+            // 两条路都没拿到 manifest：明确标记为失败，避免被当成「已是最新」
+            failed.error = "no matching release for " + modMarkedName(getName());
+        }
+        return failed;
+    }
+
+    /** 1) releases/latest/download/<name><mark>.json，多镜像轮询 */
+    private Update modTryLatest(String channel) {
         String direct = Github.getJson(modMarkedName(getName()));
+        java.util.LinkedHashSet<String> urls = modRouteUrls(direct);
+        com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
+                "latest start name=" + getName() + " urls=" + urls.size() + " direct=" + direct);
+        Update last = null;
+        for (String url : urls) {
+            try {
+                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "latest try " + url);
+                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
+                if (update.hasManifest()) {
+                    com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "latest ok name=" + update.name);
+                    return update;
+                }
+                last = update;
+            } catch (Exception e) {
+                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "latest fail url=" + url + " err=" + e);
+            }
+        }
+        return last;
+    }
+
+    /** 2) 在同类 release 里找最新：releases.atom 的 tag 列表 → 含本分支标记的最前面几个 */
+    private Update modTrySameBranchFeed(String channel) {
+        java.util.LinkedHashSet<String> urls = modRouteUrls(modAtomUrl());
+        for (String url : urls) {
+            try {
+                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "atom try " + url);
+                String xml = UpdateHttp.string(url, GITHUB_DOWNLOAD_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
+                if (TextUtils.isEmpty(xml)) continue;
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("releases/tag/([^\"'<>\s]+)").matcher(xml);
+                int picked = 0;
+                while (m.find()) {
+                    String tag = m.group(1).trim();
+                    if (!tag.contains(Github.RELEASE_TAG_MARK)) continue;
+                    if (picked >= 3) break;
+                    picked++;
+                    String jsonUrl = modReleaseDownloadUrl(tag);
+                    com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "atom pick tag=" + tag);
+                    try {
+                        Update update = readUpdate(Update.CHANNEL_STABLE, jsonUrl, GITHUB_DOWNLOAD_HEADERS, "");
+                        if (update.hasManifest()) return update;
+                    } catch (Exception e) {
+                        com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "atom tag fail " + tag + " err=" + e);
+                    }
+                }
+                if (picked > 0) return null;
+            } catch (Exception e) {
+                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "atom fail url=" + url + " err=" + e);
+            }
+        }
+        return null;
+    }
+
+    private String modRepoBase() {
+        String probe = Github.getCnbAsset("probe");
+        int idx = probe.indexOf("/releases/latest/download/");
+        return idx > 0 ? probe.substring(0, idx) : "https://github.com/klcb2010/webhtv";
+    }
+
+    private String modAtomUrl() {
+        return modRepoBase() + "/releases.atom";
+    }
+
+    private String modReleaseDownloadUrl(String tag) {
+        return modRepoBase() + "/releases/download/" + tag + "/" + modMarkedName(getName()) + ".json";
+    }
+
+    /** 路由顺序：用户选的加速源 → 直连 → 内置镜像 */
+    private java.util.LinkedHashSet<String> modRouteUrls(String directUrl) {
         java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         try {
             String selected = Setting.getUpdateGithubProxy();
@@ -192,54 +277,26 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
                     Setting.getUpdateGithubProxyUrl(),
                     Setting.getUpdateGithubProxyMode());
             if (github != null && !GithubProxy.DIRECT.equals(github.id)) {
-                String rewritten = github.rewrite(direct);
+                String rewritten = github.rewrite(directUrl);
                 if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
             }
         } catch (Throwable ignored) {
         }
-        urls.add(direct);
+        urls.add(directUrl);
         try {
             for (GithubProxy.Preset preset : GithubProxy.presets()) {
                 if (GithubProxy.DIRECT.equals(preset.id) || GithubProxy.CUSTOM.equals(preset.id)) continue;
                 if (TextUtils.isEmpty(preset.baseUrl)) continue;
                 try {
                     GithubProxy.Config cfg = GithubProxy.resolve(preset.id, "", GithubProxy.MODE_FULL_URL);
-                    String rewritten = cfg.rewrite(direct);
+                    String rewritten = cfg.rewrite(directUrl);
                     if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
                 } catch (Throwable ignored) {
                 }
             }
         } catch (Throwable ignored) {
         }
-        com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
-                "check start name=" + getName() + " urls=" + urls.size() + " direct=" + direct);
-        String lastError = "";
-        for (String url : urls) {
-            try {
-                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "try " + url);
-                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
-                if (update.hasManifest()) {
-                    com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
-                            "ok name=" + update.name + " code=" + update.code + " url=" + url);
-                    return update;
-                }
-                if (!TextUtils.isEmpty(update.error)) lastError = update.error;
-                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "no-manifest url=" + url + " err=" + update.error);
-            } catch (Exception e) {
-                e.printStackTrace();
-                lastError = e.getMessage();
-                com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "fail url=" + url + " err=" + e);
-            }
-        }
-        com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "all routes failed lastError=" + lastError);
-        // MPV_SUB_UPD_FALLBACK_V1 (MPV-BRANCH-ONLY): main 与 MPV 两个分支都在发 release，
-        // /releases/latest 一旦指向 main 的包，<name>-mpv.json 就 404（加速镜像同样 404）。
-        // 这时退回 /releases 列表，按 tag 含 -mpv 找最近的可用 release。
-        Update fallback = modFallbackFromList();
-        if (fallback != null && fallback.hasManifest()) return fallback;
-        Update empty = Update.empty(Update.CHANNEL_STABLE);
-        empty.error = lastError;
-        return empty;
+        return urls;
     }
 
     private boolean isBetaRelease(JSONObject release) {
@@ -333,34 +390,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private String getAssetName(String channel, String ext) {
         String suffix = Update.CHANNEL_BETA.equals(channel) ? "-beta" : "";
         return modMarkedName(getName()) + suffix + "." + ext;
-    }
-
-    /** MPV_SUB_UPD_FALLBACK_V1: latest 指向别的分支时，用 release 列表再找一次 */
-    private Update modFallbackFromList() {
-        try {
-            String json = UpdateHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
-            JSONArray releases = new JSONArray(json);
-            String manifest = modMarkedName(getName()) + ".json";
-            com.fongmi.android.tv.utils.ModDebugLog.i("Updater",
-                    "fallback list releases=" + releases.length() + " manifest=" + manifest);
-            for (int i = 0; i < releases.length(); i++) {
-                JSONObject release = releases.optJSONObject(i);
-                if (release == null) continue;
-                String tag = release.optString("tag_name");
-                if (tag == null || !tag.contains(Github.RELEASE_TAG_MARK)) continue;
-                if (isBetaRelease(release)) continue;
-                JSONObject asset = findAsset(release.optJSONArray("assets"), manifest);
-                if (asset == null) continue;
-                String url = asset.optString("browser_download_url");
-                if (TextUtils.isEmpty(url)) continue;
-                com.fongmi.android.tv.utils.ModDebugLog.i("Updater", "fallback try tag=" + tag + " url=" + url);
-                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, release.optString("body"));
-                if (update.hasManifest()) return update;
-            }
-        } catch (Throwable e) {
-            com.fongmi.android.tv.utils.ModDebugLog.w("Updater", "fallback err=" + e);
-        }
-        return null;
     }
 
     /** MPV_SUB_UPD_ASSET_V1: 资产名统一带本分支标记，已带则不重复加 */
