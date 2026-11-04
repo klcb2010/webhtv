@@ -230,10 +230,12 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 
 ## v30 变更（EXO 原画截图 / 日志默认开 / 修一个空指针）
 
-1. **EXO 截图改成原画**。`PhoneScreenshot` 里 EXO 分支原来直接 `captureSurface()`
-   （= 屏幕分辨率，属于降级）。现在与 MPV 一样「优先独立解码取原画帧」：
-   `snapshotPlayer()` 拿 uri/位置/尺寸 → `decodeFromSnapshot()`（先 MediaMetadataRetriever，
-   再 MediaCodec）→ 失败才回退 Surface。上限仍是 3840（超过 4K 才缩）。
+1. **EXO 截图改成原画，实现直接对齐 main 分支**。`PhoneScreenshot` 的 EXO 分支原来直接
+   `captureSurface()`（= 屏幕分辨率，降级）。现在与 main 分支的截图入口完全一致：
+   `snapshotPlayer()` 取 uri/位置/尺寸 → 独立线程（`THREAD_PRIORITY_URGENT_DISPLAY`）
+   → `decodeFromSnapshot()` 串行 Retriever→Codec（Codec 软解，避免与播放中的硬解并行
+   导致 CRASH_NATIVE）→ 失败才回退 Surface。上限仍是 3840（超过 4K 才缩）。
+   MPV 分支仍保留 mpv 的 `screenshot-to-file video` 原画路径。
 2. **日志默认开启**（`LOG_ACTIVE = true`），并在个性设置**最后**加了一项
    「调试日志（临时，重启恢复）」，点一下切换本次运行是否打日志，不落盘。
    与系统自带的调试开关不冲突（个性设置里原本没有类似项）。

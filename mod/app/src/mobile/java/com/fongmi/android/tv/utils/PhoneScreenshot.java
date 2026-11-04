@@ -115,10 +115,31 @@ public final class PhoneScreenshot {
                 return;
             }
             final Snapshot snap = snapshotPlayer(playerView);
+            if (DIAG) try {
+                Log.i(TAG, "snapshot uri=" + (snap == null ? "null" : String.valueOf(snap.uri))
+                        + " posMs=" + (snap == null ? -1 : snap.posMs)
+                        + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
+            } catch (Throwable ignored) {
+            }
+            // 与 main 分支同一套：始终独立解码取原画（含 GO/127.0.0.1 代理），
+            // 串行 Retriever→Codec，高优先级；Codec 走软解，避免与播放中的硬解并行导致 CRASH_NATIVE。
             Task.execute(() -> {
-                Bitmap frame = null;
                 try {
-                    if (snap != null) frame = decodeFromSnapshot(snap);
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+                } catch (Throwable ignored) {
+                }
+                Bitmap frame = null;
+                long t0 = android.os.SystemClock.elapsedRealtime();
+                try {
+                    if (snap != null && snap.uri != null) {
+                        frame = decodeFromSnapshot(snap);
+                    }
+                } catch (Throwable e) {
+                    if (DIAG) try { Log.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
+                }
+                if (DIAG) try {
+                    Log.i(TAG, "decode costMs=" + (android.os.SystemClock.elapsedRealtime() - t0)
+                            + " frame=" + (frame == null ? "null" : (frame.getWidth() + "x" + frame.getHeight())));
                 } catch (Throwable ignored) {
                 }
                 if (frame != null) {
@@ -129,6 +150,7 @@ public final class PhoneScreenshot {
                     saveAsync(activity, out, callback);
                     return;
                 }
+                if (DIAG) try { Log.i(TAG, "path=SURFACE_FALLBACK decodeFrame=null"); } catch (Throwable ignored) {}
                 main.post(() -> captureSurface(activity, playerView, main, callback));
             });
         };
