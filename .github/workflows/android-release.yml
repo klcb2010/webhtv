@@ -383,13 +383,11 @@ jobs:
           # 定时任务：仅当「本轮成功同步了已发版的上游」才打包
           # 避免：上游只推源码未发 Release 时误打包，或无同步却重复发版
           if [ "$EVENT" = "schedule" ] || { [ "$EVENT" = "workflow_dispatch" ] && [ "$AUTO" = "true" ]; }; then
-            if [ "$SYNCED" != "true" ]; then
-              echo "定时任务且本轮未同步上游 → 跳过打包"
-              echo "build=false" >> "$GITHUB_OUTPUT"
-              echo "reason=schedule-no-upstream-sync" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [ "$SYNCED" = "true" ]; then
+              echo "定时任务且本轮已同步就绪上游 → 继续打包检测"
+            else
+              echo "定时任务且本轮未同步上游 → 不跳过，继续检查本地是否有未发布提交（本地改动同样要打包）"
             fi
-            echo "定时任务且本轮已同步就绪上游 → 继续打包检测"
           fi
 
           # 手动 force_build
