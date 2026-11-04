@@ -217,6 +217,27 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v29 变更（修「MPV字体默认放大」不生效）
+
+**根因**：`sub-ass-override` 被强制成 `force`。这个模式下 mpv **忽略 ASS 文件里的样式，
+改用 `--sub-*` 系列选项**，字幕字号来自 `--sub-font-size`（默认 55）；
+`--sub-scale` 对 ASS 不生效（只在 `scale` 模式下才作用于 ASS）。
+V26/V27 设的是 `sub-scale`，所以界面上改了倍率但画面没变化。
+
+**修法**：按倍率换算字号
+
+```java
+float f = Setting.getMpvFontScaleFactor();
+modSetRuntimeProperty("sub-scale", String.valueOf(f));                      // 非 ASS 字幕
+modSetRuntimeProperty("sub-font-size", String.valueOf(Math.round(55f * f)));// 55 → 63 / 66 / 72
+```
+
+三处都设：初始化选项、`modApplySubtitleStyleRuntime`、`modForcePreferredSubtitleTrack`（就绪兜底）。
+
+另外修了一个幂等标记冲突：`patch_mpv_sub_scale` 原先用 `MPV_SUB_SCALE_V1` 做判重，
+而 `modForcePreferredSubtitleTrack` 里也有同名标记，导致整段注入被误判为「已注入」而跳过。
+
+## v28 变更（起播阶段点击倍率无效）
 ## v26 变更（新增「MPV字体默认放大」）
 
 个性设置**最后一项**：`MPV字体默认放大`，点一下切下一个倍率。
@@ -236,6 +257,10 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 - 点击：`MpvSubtitleStylePolicy.applyRuntimeToActive()` 立即刷新
 - **切换倍率同时触发 `sub-reload`**：`MPV_SUB_RELOAD_V1` 的判定条件里加上了 scale，
   所以改倍率会连字幕一起重载（400ms 后自动恢复原 sid），ASS 字幕也会立刻重绘。
+- **起播阶段点击也能生效**：`modApplySubtitleStyleRuntime` 在 `!modIsNativeReady()` 时会直接返回，
+  这时点倍率不会有任何效果（真机日志实测）。为此：
+  1. 设置页点击时若返回 `false`，延迟 1.5s / 4s 各重试一次；
+  2. `modForcePreferredSubtitleTrack()` 在 native 就绪后也会补设 `sub-scale`（并在倍率变化时 sub-reload）。
 
 涉及文件：
 ```

@@ -421,9 +421,30 @@ public class SettingPersonalActivity extends BaseActivity {
             mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel());
         } catch (Throwable ignored) {
         }
+        boolean applied = false;
         try {
-            com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
+            applied = com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
         } catch (Throwable ignored) {
+        }
+        // MPV-BRANCH-ONLY: mpv 还没 file-loaded 时上面这次会直接返回 false，
+        // 延迟再补两次，保证「起播中改倍率」也能立刻生效（就绪后 modForcePreferredSubtitleTrack 还会再兜一次）
+        if (!applied) {
+            try {
+                android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+                h.postDelayed(() -> {
+                    try {
+                        com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
+                    } catch (Throwable ignored) {
+                    }
+                }, 1500L);
+                h.postDelayed(() -> {
+                    try {
+                        com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
+                    } catch (Throwable ignored) {
+                    }
+                }, 4000L);
+            } catch (Throwable ignored) {
+            }
         }
         refreshTexts();
     }
