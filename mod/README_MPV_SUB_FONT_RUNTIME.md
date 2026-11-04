@@ -217,6 +217,31 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v30 变更（EXO 侧也用同一倍率）
+
+「MPV字体默认放大」原来只作用于 mpv。EXO 的字幕字号走 media3 `SubtitleView` 的
+**fractional text size**，由 `Setting.getEffectiveSubtitleFontScale()` 决定，之前只对楷体系生效。
+
+改法：`= (楷体系 ? 楷体档位 : 1.0) × getMpvFontScaleFactor()`
+
+- 非楷体字 + 1.15x → 1.15（EXO 画面里字幕同样变大）
+- 楷体系 + 1.15x → 楷体档位 × 1.15（两个设置各自独立，会叠加）
+- 切换倍率时同时调 `ExoUtil.reapplySubtitleStyle()`，EXO 正在播也立即生效
+
+## v30 变更（EXO 原画截图 / 日志默认开 / 修一个空指针）
+
+1. **EXO 截图改成原画**。`PhoneScreenshot` 里 EXO 分支原来直接 `captureSurface()`
+   （= 屏幕分辨率，属于降级）。现在与 MPV 一样「优先独立解码取原画帧」：
+   `snapshotPlayer()` 拿 uri/位置/尺寸 → `decodeFromSnapshot()`（先 MediaMetadataRetriever，
+   再 MediaCodec）→ 失败才回退 Surface。上限仍是 3840（超过 4K 才缩）。
+2. **日志默认开启**（`LOG_ACTIVE = true`），并在个性设置**最后**加了一项
+   「调试日志（临时，重启恢复）」，点一下切换本次运行是否打日志，不落盘。
+   与系统自带的调试开关不冲突（个性设置里原本没有类似项）。
+3. **修 `SubtitleMatch` 的空指针刷屏**：切换到 EXO 的瞬间 `engine` 为 null，
+   而字幕匹配的重试（0/400/1200/3000/8000ms）正好撞上 → 连续
+   `Attempt to invoke interface method ... on a null object reference`。
+   给 `PlayerManager.getCurrentTracks()` 加了空保护，返回 `Tracks.EMPTY`。
+
 ## v29 变更（修「MPV字体默认放大」不生效）
 
 **根因**：`sub-ass-override` 被强制成 `force`。这个模式下 mpv **忽略 ASS 文件里的样式，

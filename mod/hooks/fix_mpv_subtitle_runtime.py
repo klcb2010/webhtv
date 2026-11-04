@@ -1195,6 +1195,45 @@ def patch_mpv_sub_scale(path: Path) -> None:
         ERR.append("sub-scale patch not applied")
 
 
+def patch_player_tracks_guard(path: Path) -> None:
+    """getCurrentTracks() 在切换解码瞬间 engine 为 null 会抛 NPE。
+
+    真机日志：
+      SubtitleMatch: preferChineseEmbedded getCurrentTracks: Attempt to invoke
+      interface method 'w15 nr3.j()' on a null object reference
+    字幕匹配的重试任务（0/400/1200/3000/8000ms）正好落在 engine.release() 之后、
+    buildEngine() 之前，于是连刷 NPE。这里返回 Tracks.EMPTY 即可，调用方本来就会判空/判 isEmpty。
+    """
+    if not path.is_file():
+        ERR.append(f"PlayerManager.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_TRACKS_GUARD_V1" in text:
+        OK.append("tracks guard already injected")
+        return
+    old = """    public Tracks getCurrentTracks() {
+        return engine.getCurrentTracks();
+    }"""
+    new = """    public Tracks getCurrentTracks() {
+        // MPV_SUB_TRACKS_GUARD_V1 (MPV-BRANCH-ONLY): 切换解码时 engine 可能为 null，
+        // 字幕匹配的重试任务会踩到 NPE → 返回空轨道，调用方本来就按空处理
+        try {
+            return engine == null ? Tracks.EMPTY : engine.getCurrentTracks();
+        } catch (Throwable t) {
+            return Tracks.EMPTY;
+        }
+    }"""
+    if old not in text:
+        ERR.append("getCurrentTracks anchor not found")
+        return
+    text = text.replace(old, new, 1)
+    write(path, text)
+    if "MPV_SUB_TRACKS_GUARD_V1" in read(path):
+        OK.append("inject getCurrentTracks null guard")
+    else:
+        ERR.append("tracks guard not applied")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -1222,6 +1261,7 @@ def main() -> int:
     patch_mpv_sub_add_lang(player)
     patch_mpv_track_ready(player)
     patch_mpv_sub_scale(player)
+    patch_player_tracks_guard(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
     patch_updater_filter(ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java")
 
     for x in OK:

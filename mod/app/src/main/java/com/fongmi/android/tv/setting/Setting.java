@@ -1388,9 +1388,14 @@ public class Setting {
         return false;
     }
 
-    /** 最终应用到 SubtitleView 的倍率：非楷体恒为 1.0，楷体为所选档位。 */
+    /**
+     * 最终应用到 SubtitleView 的倍率（EXO 侧）。
+     * = （楷体系 ? 楷体档位 : 1.0） × 「MPV字体默认放大」倍率
+     * 后者是 MPV 分支的全局字号开关，EXO 播放同样要吃这个倍率，否则两个解码器字号不一致。
+     */
     public static float getEffectiveSubtitleFontScale() {
-        return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
+        float kai = isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;
+        return kai * getMpvFontScaleFactor();
     }
 
     /**

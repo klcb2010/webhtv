@@ -16,9 +16,13 @@ import java.util.Locale;
 public final class ModDebugLog {
 
     // ============================================================
-    // 日志总开关：排查问题时把 false 改成 true（改这一处即可，其余不用动）
+    // 日志总开关（编译期）：V30 起默认 true；想彻底不打日志就改成 false
+    // 运行期可在「个性设置 → 调试日志（临时）」里临时关闭，重启恢复默认
     // ============================================================
     private static final boolean LOG_ACTIVE = true;
+
+    /** 运行期临时覆盖（不落盘，重启失效） */
+    private static volatile Boolean runtimeOverride;
 
     private static final String PREF = "mod_debug_log";
     private static final long MAX_BYTES = 2L * 1024 * 1024;
@@ -32,10 +36,18 @@ public final class ModDebugLog {
         try { Prefers.put(PREF, on); } catch (Throwable ignored) {}
     }
 
+    public static void setRuntimeOverride(boolean on) {
+        runtimeOverride = on;
+    }
+
+    /** 当前是否在打日志（含临时开关） */
+    public static boolean isRuntimeOverrideOn() {
+        return runtimeOverride != null ? runtimeOverride : LOG_ACTIVE;
+    }
+
     public static boolean isEnabled() {
         if (!LOG_ACTIVE) return false;
-        if (enabled != null) return enabled;
-        enabled = Boolean.TRUE;
+        if (runtimeOverride != null) return runtimeOverride;
         return true;
     }
 

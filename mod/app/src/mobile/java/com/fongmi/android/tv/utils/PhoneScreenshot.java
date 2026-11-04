@@ -102,7 +102,8 @@ public final class PhoneScreenshot {
                 });
                 return;
             }
-            // EXO / 其它：仅 Surface，不再独立解码（降延迟、避免偏帧/崩溃）
+            // EXO：优先独立解码取「原画」帧（和 MPV 同样的优先级），失败再回退 Surface。
+            // 原来直接 Surface = 屏幕分辨率，属于降级；解码切换时的偏帧问题靠回退兜底。
             int mode;
             try {
                 mode = com.fongmi.android.tv.setting.Setting.getExoScreenshotMode();
@@ -113,7 +114,23 @@ public final class PhoneScreenshot {
                 fail(main, callback);
                 return;
             }
-            captureSurface(activity, playerView, main, callback);
+            final Snapshot snap = snapshotPlayer(playerView);
+            Task.execute(() -> {
+                Bitmap frame = null;
+                try {
+                    if (snap != null) frame = decodeFromSnapshot(snap);
+                } catch (Throwable ignored) {
+                }
+                if (frame != null) {
+                    Bitmap out = scaleToMax(frame, MAX_EDGE);
+                    if (out != frame) {
+                        try { frame.recycle(); } catch (Throwable ignored) {}
+                    }
+                    saveAsync(activity, out, callback);
+                    return;
+                }
+                main.post(() -> captureSurface(activity, playerView, main, callback));
+            });
         };
         if (Looper.myLooper() == Looper.getMainLooper()) start.run();
         else main.post(start);

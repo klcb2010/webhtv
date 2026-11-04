@@ -81,6 +81,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.mpvScreenshotBrightnessBoost.setOnClickListener(this::setMpvScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
         try { mBinding.mpvFontScale.setOnClickListener(this::setMpvFontScale); } catch (Throwable ignored) {}
+        try { mBinding.debugLog.setOnClickListener(this::setDebugLog); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -134,6 +135,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
         try { mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel()); } catch (Throwable ignored) {}
+        try { mBinding.debugLogText.setText(getSwitch(com.fongmi.android.tv.utils.ModDebugLog.isRuntimeOverrideOn())); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -411,6 +413,16 @@ public class SettingPersonalActivity extends BaseActivity {
     }
 
 
+    /** MPV-BRANCH-ONLY: 调试日志临时开关（只影响本次运行，重启恢复默认开启） */
+    private void setDebugLog(View view) {
+        boolean next = !com.fongmi.android.tv.utils.ModDebugLog.isRuntimeOverrideOn();
+        com.fongmi.android.tv.utils.ModDebugLog.setRuntimeOverride(next);
+        try {
+            mBinding.debugLogText.setText(getSwitch(next));
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** MPV-BRANCH-ONLY: 点一下切下一个倍率（1.00 / 1.15 / 1.20 / 1.30），立即作用于 mpv 字幕 */
     private void setMpvFontScale(View view) {
         try {
@@ -419,6 +431,11 @@ public class SettingPersonalActivity extends BaseActivity {
         }
         try {
             mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel());
+        } catch (Throwable ignored) {
+        }
+        // EXO 侧：走 media3 SubtitleView 的 fractional text size（与 MPV 共用同一倍率）
+        try {
+            com.fongmi.android.tv.player.exo.ExoUtil.reapplySubtitleStyle();
         } catch (Throwable ignored) {
         }
         boolean applied = false;
