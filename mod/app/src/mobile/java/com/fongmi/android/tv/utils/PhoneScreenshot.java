@@ -69,15 +69,19 @@ public final class PhoneScreenshot {
             int w = b.getWidth(), h = b.getHeight();
             long sum = 0;
             int cnt = 0;
+            int maxLum = 0;
             for (int gy = 1; gy <= 8; gy++) {
                 for (int gx = 1; gx <= 8; gx++) {
                     int px = b.getPixel(w * gx / 9, h * gy / 9);
-                    sum += ((px >> 16) & 0xFF) + ((px >> 8) & 0xFF) + (px & 0xFF);
+                    int r = (px >> 16) & 0xFF, g = (px >> 8) & 0xFF, bl = px & 0xFF;
+                    sum += r + g + bl;
                     cnt++;
+                    int lum = (r * 30 + g * 59 + bl * 11) / 100;
+                    if (lum > maxLum) maxLum = lum;
                 }
             }
             int avg = cnt == 0 ? 0 : (int) (sum / (cnt * 3));
-            return w + "x" + h + " avg=" + avg + (avg < 6 ? " BLACK" : "");
+            return w + "x" + h + " avg=" + avg + " max=" + maxLum + (maxLum < 24 ? " BLACK" : "");
         } catch (Throwable t) {
             return "statsErr=" + t;
         }
@@ -234,9 +238,46 @@ public final class PhoneScreenshot {
     private static Bitmap decodeFromSnapshot(Snapshot snap) {
         long posUs = Math.max(0L, snap.posMs) * 1000L;
         Bitmap b = tryRetrieverUri(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
-        if (b != null) return b;
-        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever failed, trying MediaCodec uri=" + snap.uri); } catch (Throwable ignored) {}
-        return tryMediaCodecFrame(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
+        if (b != null && !isNearlyBlack(b)) return b;
+        if (b != null) {
+            // HDR / 10bit 源上 MediaMetadataRetriever 常返回「尺寸正确但内容全黑」的帧，
+            // 这种结果不能当成功（保存下来就是一张黑图），必须换路再取。
+            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever frame black " + frameStats(b) + ", trying MediaCodec"); } catch (Throwable ignored) {}
+            try { b.recycle(); } catch (Throwable ignored) {}
+            b = null;
+        } else if (diag()) {
+            try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever null, trying MediaCodec uri=" + snap.uri); } catch (Throwable ignored) {}
+        }
+        b = tryMediaCodecFrame(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
+        if (b != null && !isNearlyBlack(b)) return b;
+        if (b != null) {
+            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec frame black " + frameStats(b) + ", fallback surface"); } catch (Throwable ignored) {}
+            try { b.recycle(); } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    /**
+     * 黑帧判定：采样 8x8（64 点），**最亮那一点的亮度** < 24 就判黑。
+     * 用最大值而不是平均值：真实的暗场景/夜景总有高光，全黑帧连最亮点都极暗。
+     */
+    private static boolean isNearlyBlack(Bitmap b) {
+        try {
+            if (b == null) return true;
+            int w = b.getWidth(), h = b.getHeight();
+            if (w <= 0 || h <= 0) return true;
+            int max = 0;
+            for (int gy = 1; gy <= 8; gy++) {
+                for (int gx = 1; gx <= 8; gx++) {
+                    int px = b.getPixel(w * gx / 9, h * gy / 9);
+                    int lum = (((px >> 16) & 0xFF) * 30 + ((px >> 8) & 0xFF) * 59 + (px & 0xFF) * 11) / 100;
+                    if (lum > max) max = lum;
+                }
+            }
+            return max < 24;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     @Nullable

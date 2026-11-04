@@ -217,6 +217,25 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v37 变更（黑帧判废 + 回退）
+
+EXO 原画截图在 **HDR / 10bit 源**上会拿到「尺寸正确、内容全黑」的帧：
+`getScaledFrameAtTime CLOSEST 3840x2160` 返回非 null，代码当成成功直接保存 → 得到黑图。
+
+现在 `decodeFromSnapshot()` 对 Retriever / MediaCodec 两条路的结果都做黑帧判废
+（采样 8×8，**最亮采样点亮度 < 24** 判黑 —— 用最大值而非平均值，暗场景不会被误杀）：
+判黑就销毁换下一条路，两条都黑则返回 null
+→ 自动回退 `captureSurface()`（屏幕分辨率，但颜色正常，已 tone-map）。
+
+日志可区分：
+```
+retriever frame black 3840x2160 avg=9 max=17 BLACK, trying MediaCodec
+codec frame black ..., fallback surface
+savePng bitmap=1920x1080 stats=1920x1080 avg=118 max=255
+```
+物理限制：EXO 侧对 HDR 源无法同时拿到「原画分辨率 + 正确色彩」；
+要 HDR 原画请用 MPV 播放（mpv 自带 tone-mapping，`screenshot-to-file video` 是真原画）。
+
 ## v36 变更（EXO 只认楷体档位 / 截图日志进文件）
 
 1. **EXO 与 MPV 彻底解耦**：`getEffectiveSubtitleFontScale()` = `楷体系 ? 楷体档位 : 1.0`，
