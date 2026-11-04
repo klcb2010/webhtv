@@ -3986,8 +3986,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setR1Callback();
     }
 
-    private boolean refreshAndSwitchPlayerKernel(int type) {
+    private boolean refreshAndSwitchPlayerKernel(int type) { /* MOD_FAST_KERNEL_SWITCH_V1 */
         if (playerKernelSwitchRefreshing) return true;
+        // MOD_FAST_KERNEL_SWITCH_V1: non-parse + valid URL → local switch (秒切)
+        if (!isUseParse()) {
+            String curUrl = player() != null ? player().getUrl() : null;
+            if (curUrl != null && !curUrl.isEmpty()) {
+                return false;
+            }
+        }
         Flag currentFlag = getFlag();
         Episode currentEpisode = getEpisode();
         if (currentFlag == null || currentEpisode == null || TextUtils.isEmpty(currentFlag.getFlag()) || TextUtils.isEmpty(currentEpisode.getUrl())) return false;
