@@ -1,7 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
-
 import android.annotation.SuppressLint;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
@@ -28,6 +26,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.LinearInterpolator;
@@ -58,6 +57,7 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
+import androidx.media3.mpvplayer.MpvPlayer;
 import androidx.media3.ui.PlayerView;
 import androidx.palette.graphics.Palette;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -93,7 +93,6 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
 import com.fongmi.android.tv.model.SiteViewModel;
-import com.fongmi.android.tv.playback.EpisodeProgressStore;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.playback.PlaybackOrientation;
 import com.fongmi.android.tv.player.PlayerHelper;
@@ -113,6 +112,7 @@ import com.fongmi.android.tv.player.lyrics.LyricsResult;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
+import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.LyricsSetting;
@@ -274,6 +274,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private final Map<String, String> mAudioQueuePics = new HashMap<>();
     private final Map<String, String> mAudioQueueLyrics = new HashMap<>();
     private Map<String, View> mActionButtons;
+    private final List<View> mCustomActionViews = new ArrayList<>();
+    private HorizontalScrollView mCustomLeftButtons;
+    private HorizontalScrollView mCustomRightButtons;
+    private HorizontalScrollView mCustomPortraitButtons;
+    private LinearLayout mCustomLeftButtonRow;
+    private LinearLayout mCustomRightButtonRow;
+    private LinearLayout mCustomPortraitButtonRow;
     private SiteViewModel mViewModel;
     private FlagAdapter mFlagAdapter;
     private PlayerOsdController mOsd;
@@ -305,6 +312,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Runnable mR3;
     private Runnable mR4;
     private Clock mClock;
+    private MpvPlayer mDiscMenuPlayer;
+    private MpvPlayer mCustomButtonPlayer;
+    private final Runnable mCustomButtonStateListener = this::updateCustomButtonStates;
+    private final Runnable mDiscMenuStateListener = this::updateDiscMenuTools;
     private PiP mPiP;
     private String mContextWallUrl;
     private String mContextWallLockedUrl;
@@ -783,9 +794,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.karaoke.setOnClickListener(view -> onKaraokeMode());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
-        try { mBinding.control.action.screenshot.setOnClickListener(view -> onScreenshot()); } catch (Throwable ignored) {}
-        updateScreenshotBtn();
+        mBinding.control.action.change2.setOnClickListener(view -> onChange());
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
+        mBinding.control.action.discMenu.setOnClickListener(view -> {
+            hideControl();
+            openDiscMenu();
+        });
+        mBinding.control.action.discMenu.setOnLongClickListener(view -> {
+            hideControl();
+            showDiscMenuControls();
+            return true;
+        });
+        mBinding.discTools.fullscreen.setOnClickListener(view -> onFullscreen());
         mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
         mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.prev.setOnClickListener(view -> checkPrev());
@@ -797,7 +817,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.opening.setOnClickListener(view -> onOpening());
         mBinding.control.action.danmaku.setOnClickListener(view -> onDanmaku());
         mBinding.control.action.episodes.setOnClickListener(view -> onEpisodes());
-        mBinding.control.action.change2.setOnClickListener(view -> onChange());
         mBinding.audioPlay.setOnClickListener(view -> checkPlay());
         mBinding.audioNext.setOnClickListener(view -> checkNext());
         mBinding.audioPrev.setOnClickListener(view -> checkPrev());
@@ -818,7 +837,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.reset.setOnLongClickListener(view -> onResetToggle());
         mBinding.control.action.ending.setOnLongClickListener(view -> onEndingReset());
         mBinding.control.action.opening.setOnLongClickListener(view -> onOpeningReset());
-        mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
+        mBinding.video.setOnTouchListener((view, event) ->
+                (!isVisible(mBinding.control.getRoot()) && dispatchDiscMenuTouch(event))
+                        || mKeyDown.onTouchEvent(event));
         mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
         mBinding.swipeLayout.setOnRefreshListener(this::onSwipeRefresh);
     }
@@ -969,16 +990,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setVideoView() {
-        if (!PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
-            mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
-        } else {
-            mBinding.control.action.danmaku.setVisibility(View.GONE);
-        }
+        mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         setupActionButtons();
         mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             mPiP.update(this, view);
-            /* Log.d SIZE_TAG silenced */
+            updateCustomButtonLayout();
+            Log.d(SIZE_TAG, "video layout new=" + (right - left) + "x" + (bottom - top)
+                    + " old=" + (oldRight - oldLeft) + "x" + (oldBottom - oldTop)
+                    + " fullscreen=" + isFullscreen()
+                    + " land=" + isLand()
+                    + " scale=" + getScale()
+                    + " player=" + (service() == null ? "none" : player().getPlayerText()));
         });
     }
 
@@ -1004,15 +1027,155 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         addActionButton(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes);
         addActionButton(PlayerButtonSetting.CHANGE, mBinding.control.action.change2);
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
-        PlayerButtonSetting.forceHidden(mActionButtons);
+        setupCustomActionButtons();
     }
 
     private void addActionButton(String id, View view) {
         mActionButtons.put(id, view);
     }
 
+    private void setupCustomActionButtons() {
+        ensureCustomButtonContainers();
+        for (View view : mCustomActionViews) {
+            ViewParent parent = view.getParent();
+            if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(view);
+        }
+        mCustomActionViews.clear();
+        mCustomLeftButtonRow.removeAllViews();
+        mCustomRightButtonRow.removeAllViews();
+        mCustomPortraitButtonRow.removeAllViews();
+        List<MpvConfigStore.CustomButton> buttons = MpvConfigStore.customButtons();
+        boolean landscape = isLand();
+        for (int index = 0; index < buttons.size(); index++) {
+            MpvConfigStore.CustomButton button = buttons.get(index);
+            if (!button.isButtonVisible()) continue;
+            TextView view = new TextView(this);
+            view.setTextSize(13);
+            view.setTextColor(Color.WHITE);
+            view.setGravity(Gravity.CENTER);
+            view.setMinHeight(ResUtil.dp2px(40));
+            view.setMinWidth(ResUtil.dp2px(56));
+            view.setPadding(ResUtil.dp2px(10), ResUtil.dp2px(4), ResUtil.dp2px(10), ResUtil.dp2px(4));
+            view.setBackgroundResource(R.drawable.selector_control_sheet_button);
+            view.setText(button.title);
+            view.setSingleLine(true);
+            view.setMaxWidth(ResUtil.dp2px(144));
+            view.setEllipsize(TextUtils.TruncateAt.END);
+            view.setContentDescription(button.title);
+            view.setTag(button.id);
+            view.setOnClickListener(item -> {
+                player().sendMpvCustomButton(button.id, false);
+                setR1Callback();
+            });
+            view.setOnLongClickListener(item -> {
+                player().sendMpvCustomButton(button.id, true);
+                setR1Callback();
+                return true;
+            });
+            if (Util.isLeanback()) {
+                view.setFocusable(true);
+                view.setFocusableInTouchMode(true);
+            }
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ResUtil.dp2px(40));
+            params.setMargins(ResUtil.dp2px(4), ResUtil.dp2px(2), ResUtil.dp2px(4), ResUtil.dp2px(2));
+            LinearLayout target = landscape
+                    ? (index < 4 ? mCustomLeftButtonRow : mCustomRightButtonRow)
+                    : mCustomPortraitButtonRow;
+            target.addView(view, params);
+            mCustomActionViews.add(view);
+        }
+        updateCustomButtonLayout();
+        updateCustomButtonVisibility();
+    }
+
+    private void updateCustomButtonStates() {
+        MpvPlayer mpv = service() != null && isOwner()
+                && player().getPlayer() instanceof MpvPlayer active ? active : null;
+        if (mCustomButtonPlayer != mpv) {
+            if (mCustomButtonPlayer != null) mCustomButtonPlayer.removeCustomButtonStateListener(mCustomButtonStateListener);
+            mCustomButtonPlayer = mpv;
+            if (mpv != null) mpv.addCustomButtonStateListener(mCustomButtonStateListener);
+        }
+        for (View view : mCustomActionViews) {
+            view.setSelected(mpv != null && mpv.isCustomButtonActive((String) view.getTag()));
+        }
+    }
+
+    private void ensureCustomButtonContainers() {
+        if (mCustomLeftButtons != null) return;
+        mCustomLeftButtons = createCustomButtonScroll();
+        mCustomRightButtons = createCustomButtonScroll();
+        mCustomPortraitButtons = createCustomButtonScroll();
+        mCustomLeftButtonRow = createCustomButtonRow(mCustomLeftButtons);
+        mCustomRightButtonRow = createCustomButtonRow(mCustomRightButtons);
+        mCustomPortraitButtonRow = createCustomButtonRow(mCustomPortraitButtons);
+        mCustomRightButtons.setFillViewport(true);
+        mCustomRightButtonRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        mCustomRightButtonRow.getLayoutParams().width = ViewGroup.LayoutParams.MATCH_PARENT;
+
+        FrameLayout.LayoutParams leftParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.TOP);
+        FrameLayout.LayoutParams rightParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.TOP);
+        int margin = ResUtil.dp2px(8);
+        leftParams.setMargins(margin, 0, margin, 0);
+        rightParams.setMargins(margin, 0, margin, 0);
+        mBinding.video.addView(mCustomLeftButtons, leftParams);
+        mBinding.video.addView(mCustomRightButtons, rightParams);
+
+        RelativeLayout.LayoutParams portraitParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        portraitParams.addRule(RelativeLayout.ABOVE, R.id.bottom);
+        portraitParams.setMargins(margin, 0, margin, ResUtil.dp2px(2));
+        ((ViewGroup) mBinding.control.getRoot()).addView(mCustomPortraitButtons, portraitParams);
+    }
+
+    private HorizontalScrollView createCustomButtonScroll() {
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setFillViewport(false);
+        scroll.setClipToPadding(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        return scroll;
+    }
+
+    private LinearLayout createCustomButtonRow(HorizontalScrollView scroll) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setClipChildren(false);
+        scroll.addView(row, new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    private void updateCustomButtonLayout() {
+        if (mCustomLeftButtons == null || mBinding.video.getWidth() <= 0) return;
+        boolean landscape = isLand();
+        if (!landscape) return;
+
+        int margin = ResUtil.dp2px(8);
+        int width = Math.max(ResUtil.dp2px(96), mBinding.video.getWidth() / 2 - margin * 2);
+        int height = Math.max(mCustomLeftButtons.getMeasuredHeight(), ResUtil.dp2px(40));
+        int top = Math.max(margin, Math.round(mBinding.video.getHeight() * 0.65f - height / 2f));
+        FrameLayout.LayoutParams leftParams = (FrameLayout.LayoutParams) mCustomLeftButtons.getLayoutParams();
+        FrameLayout.LayoutParams rightParams = (FrameLayout.LayoutParams) mCustomRightButtons.getLayoutParams();
+        leftParams.width = width;
+        rightParams.width = width;
+        leftParams.topMargin = top;
+        rightParams.topMargin = top;
+        mCustomLeftButtons.setLayoutParams(leftParams);
+        mCustomRightButtons.setLayoutParams(rightParams);
+    }
+
+    private void updateCustomButtonVisibility() {
+        updateCustomButtonStates();
+        boolean visible = service() != null && player().isMpv() && isVisible(mBinding.control.getRoot());
+        if (mCustomLeftButtons != null) mCustomLeftButtons.setVisibility(visible && isLand() ? View.VISIBLE : View.GONE);
+        if (mCustomRightButtons != null) mCustomRightButtons.setVisibility(visible && isLand() ? View.VISIBLE : View.GONE);
+        if (mCustomPortraitButtons != null) mCustomPortraitButtons.setVisibility(visible && !isLand() ? View.VISIBLE : View.GONE);
+        updateCustomButtonLayout();
+    }
+
     private void applyActionButtonVisibility() {
         if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
+        updateCustomButtonVisibility();
     }
 
     private void setVideoView(boolean isInPictureInPictureMode) {
@@ -1079,7 +1242,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void getDetail(Vod item) {
-        mPanDrillDepth = 0;
         revealManualSearch = false;
         if (!isAutoMode()) mViewModel.stopSearch();
         saveHistory();
@@ -1099,181 +1261,25 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         getDetail();
     }
 
-
-    /** 播放直达：网盘多级文件夹自动下钻深度 */
-    private int mPanDrillDepth = 0;
-
-    private boolean shouldAutoDrillPan() {
-        try {
-            if (getId() != null && getId().startsWith("msearch:") && com.fongmi.android.tv.setting.Setting.isPlayDirect()) return true;
-            if (isAutoMode() || isInitAuto()) return true;
-            return com.fongmi.android.tv.setting.Setting.isPlayDirect();
-        } catch (Throwable e) {
-            return false;
-        }
-    }
-
-    private Vod pickDetailVod(java.util.List<Vod> list) {
-        if (list == null || list.isEmpty()) return new Vod();
-        Vod firstOk = null;
-        for (Vod v : list) {
-            if (v == null || isBadPanDrillTarget(v)) continue;
-            try {
-                if (!v.isFolder()) return v;
-            } catch (Throwable ignored) {
-                return v;
-            }
-            if (firstOk == null) firstOk = v;
-        }
-        return firstOk != null ? firstOk : list.get(0);
-    }
-
-    private boolean hasPlayableEpisode(Vod item) {
-        if (item == null || item.getFlags() == null) return false;
-        for (Object o : item.getFlags()) {
-            if (!(o instanceof Flag)) continue;
-            Flag f = (Flag) o;
-            if (f.getEpisodes() != null && !f.getEpisodes().isEmpty()) return true;
-        }
-        return false;
-    }
-
-
-    private boolean isBadPanDrillTarget(Vod item) {
-        if (item == null) return true;
-        String id = item.getId() == null ? "" : item.getId().trim();
-        String name = item.getName() == null ? "" : item.getName().trim();
-        String lowId = id.toLowerCase();
-        String lowName = name.toLowerCase();
-        if (id.isEmpty()) return true;
-        if (lowId.equals("pws_tip") || lowId.endsWith("_tip") || lowId.contains("pws_tip")) return true;
-        if (lowName.contains("404") || lowName.contains("not found") || lowName.contains("error")) return true;
-        if (lowName.startsWith("http") && lowName.contains(" ")) return true;
-        if (name.equals("null") || name.equals("undefined")) return true;
-        // tip / notice only
-        if ("提示".equals(name) || "notice".equals(lowName) || "tip".equals(lowName)) return true;
-        return false;
-    }
-
-    private boolean looksLikePanNode(Vod item) {
-        if (item == null) return false;
-        try {
-            if (item.isFolder()) return true;
-        } catch (Throwable ignored) {}
-        String id = item.getId();
-        if (id == null) id = "";
-        String low = id.toLowerCase();
-        if (low.startsWith("pws:")) return true;
-        if (low.contains("quark") || low.contains("ucpan") || low.contains("alipan") || low.contains("aliyundrive")) return true;
-        String name = item.getName() == null ? "" : item.getName();
-        if (name.contains("网盘") || name.contains("夸克") || name.contains("UC") || name.contains("百度") || name.contains("阿里")) return true;
-        String remarks = item.getRemarks() == null ? "" : item.getRemarks();
-        if (remarks.contains("网盘") || remarks.contains("夸克")) return true;
-        return false;
-    }
-
-    private boolean tryDrillPanFolder(Vod item, Result parent) {
-        if (!shouldAutoDrillPan()) return false;
-        if (mPanDrillDepth >= 4) return false;
-        if (item == null) return false;
-        if (isBadPanDrillTarget(item)) return false;
-
-        boolean multiFolder = false;
-        if (parent != null && parent.getList() != null && parent.getList().size() > 1) {
-            int folderCount = 0;
-            for (Vod v : parent.getList()) {
-                try {
-                    if (v != null && v.isFolder()) folderCount++;
-                } catch (Throwable ignored) {}
-            }
-            multiFolder = folderCount >= 1;
-        }
-
-        boolean needDrill = false;
-        try {
-            if (item.isFolder()) needDrill = true;
-        } catch (Throwable ignored) {}
-        if (!hasPlayableEpisode(item) && looksLikePanNode(item)) needDrill = true;
-        if (multiFolder && !hasPlayableEpisode(item)) needDrill = true;
-        if (!needDrill) return false;
-
-        Vod target = item;
-        if (parent != null && parent.getList() != null && !parent.getList().isEmpty()) {
-            target = pickDetailVod(parent.getList());
-        }
-        return drillIntoPanNode(target);
-    }
-
-    private boolean drillIntoPanNode(Vod item) {
-        if (item == null || isBadPanDrillTarget(item)) return false;
-        String id = item.getId();
-        if (id == null || id.isEmpty()) return false;
-        mPanDrillDepth++;
-        try {
-            getIntent().putExtra("id", id);
-            if (item.getName() != null && !item.getName().isEmpty()) getIntent().putExtra("name", item.getName());
-            if (item.getPic() != null && !item.getPic().isEmpty()) getIntent().putExtra("pic", item.getPic());
-            try {
-                if (mBinding != null && mBinding.swipeLayout != null) mBinding.swipeLayout.setRefreshing(true);
-            } catch (Throwable ignored) {}
-            try {
-                if (mBinding != null && mBinding.name != null && item.getName() != null) mBinding.name.setText(item.getName());
-            } catch (Throwable ignored) {}
-            SpiderDebug.log("video-flow", "pan-drill depth=%d key=%s id=%s name=%s", mPanDrillDepth, getKey(), id, item.getName());
-            mViewModel.detailContent(getKey(), id);
-            return true;
-        } catch (Throwable e) {
-            mPanDrillDepth = Math.max(0, mPanDrillDepth - 1);
-            return false;
-        }
-    }
-
-
     private void setDetail(Result result) {
         long cost = System.currentTimeMillis() - detailStartTime;
         SpiderDebug.log("video-flow", "detail finish cost=%dms empty=%s msg=%s", cost, result.getList().isEmpty(), result.getMsg());
         recordDetailHealth(result, cost);
-        try { mBinding.swipeLayout.setRefreshing(false); } catch (Throwable ignored) {}
-        if (result.getList().isEmpty()) {
-            setEmpty(result.hasMsg());
-        } else {
-            Vod pick = pickDetailVod(result.getList());
-            if (tryDrillPanFolder(pick, result)) {
-                try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
-                return;
-            }
-            setDetail(pick);
-        }
-        try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
+        mBinding.swipeLayout.setRefreshing(false);
+        if (result.getList().isEmpty()) setEmpty(result.hasMsg());
+        else setDetail(result.getVod());
+        Notify.show(result.getMsg());
     }
 
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
             finish();
-        } else if (getName().isEmpty() && !(getId() != null && getId().startsWith("msearch:"))) {
+        } else if (getName().isEmpty()) {
             showEmpty();
         } else {
-            String name = getName();
-            if ((name == null || name.isEmpty()) && getId() != null && getId().startsWith("msearch:")) {
-                name = getId().substring("msearch:".length()).trim();
-            }
-            if (name == null) name = "";
-            mBinding.name.setText(name);
+            mBinding.name.setText(getName());
             App.post(mR4, 10000);
-            // 豆瓣等 msearch：开启「播放直达」才静默搜源，否则进搜索页
-            if (getId() != null && getId().startsWith("msearch:")) {
-                if (com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
-                    checkSearch(true);
-                } else {
-                    String q = name;
-                    try {
-                        com.fongmi.android.tv.ui.activity.SearchActivity.start(this, q);
-                    } catch (Throwable ignored) {}
-                    try { finish(); } catch (Throwable ignored) {}
-                }
-            } else {
-                checkSearch(false);
-            }
+            checkSearch(false);
         }
     }
 
@@ -1288,8 +1294,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             mPendingDetailVod = item;
             return;
         }
-        if (tryDrillPanFolder(item, null)) return;
-        maybeStartPanPreferSearch(item);
         item.checkPic(getPic());
         item.checkName(getName());
         item.checkContent(getContent());
@@ -1372,15 +1376,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setPlayer(Result result) {
         if (isFinishing() || isDestroyed()) return;
-        // PUSH_HANDOFF_SILENT: push:// 已切到 push_agent，忽略空地址结果，避免失败页盖住推送
-        try {
-            if (com.fongmi.android.tv.player.extractor.Push.isHandoff()) {
-                if (result == null || result.hasMsg() || result.getRealUrl() == null || result.getRealUrl().isEmpty()) {
-                    return;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
         if (service() == null) {
             mPendingPlayerResult = result;
             return;
@@ -1501,9 +1496,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setEpisodeAdapter(List<Episode> items) {
         int size = items.size();
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes, size >= 2);
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.NEXT, mBinding.control.action.next, size >= 2);
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.PREV, mBinding.control.action.prev, size >= 2);
+        mBinding.control.action.episodes.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
+        mBinding.control.action.next.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
+        mBinding.control.action.prev.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
         applyActionButtonVisibility();
         mBinding.control.next.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
         mBinding.control.prev.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
@@ -1923,6 +1918,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onSetting() {
+        setTrackVisible();
         ControlDialog.create().parent(mBinding).history(mHistory).parse(isUseParse()).player(player()).show(this);
     }
 
@@ -3358,7 +3354,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void generateKaraokeTrack() {
         List<LyricsLine> lines = getKaraokeGenerationLines();
-        /* log silenced */if (service() == null || !KaraokeTrackRepository.canGenerate(lines)) {
+        android.util.Log.i("karaoke-generate", "rhythm requested lines=" + lines.size() + " inline=" + (!TextUtils.isEmpty(mInlineLyrics)) + " service=" + (service() != null));
+        if (service() == null || !KaraokeTrackRepository.canGenerate(lines)) {
             Notify.show(R.string.player_karaoke_track_generate_no_lyrics);
             return;
         }
@@ -3379,7 +3376,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void generateKaraokePitchTrack() {
         List<LyricsLine> lines = getKaraokeGenerationLines();
         KaraokeTrackRepository.MediaInput input = service() == null ? null : KaraokeTrackRepository.snapshot(player());
-        /* log silenced */if (!KaraokeTrackRepository.canGeneratePitch(input, lines)) {
+        android.util.Log.i("karaoke-generate", "pitch requested basicPitch=" + PlayerSetting.isKaraokeBasicPitchTflite() + " lines=" + lines.size() + " input=" + (input == null ? "null" : input.getUrl()));
+        if (!KaraokeTrackRepository.canGeneratePitch(input, lines)) {
             Notify.show(R.string.player_karaoke_track_generate_no_lyrics);
             return;
         }
@@ -3877,10 +3875,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         player().toggleDecode();
         setR1Callback();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
     }
 
     private boolean refreshAndSwitchDecode() {
@@ -3989,15 +3983,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         player().switchPlayer(type);
         setPlayerKernel();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
         setR1Callback();
     }
 
-    private boolean refreshAndSwitchPlayerKernel(int type) {
+    private boolean refreshAndSwitchPlayerKernel(int type) { /* MOD_FAST_KERNEL_SWITCH_V1 */
         if (playerKernelSwitchRefreshing) return true;
+        // MOD_FAST_KERNEL_SWITCH_V1: non-parse + valid URL → local switch (秒切)
+        if (!isUseParse()) {
+            String curUrl = player() != null ? player().getUrl() : null;
+            if (curUrl != null && !curUrl.isEmpty()) {
+                return false;
+            }
+        }
         Flag currentFlag = getFlag();
         Episode currentEpisode = getEpisode();
         if (currentFlag == null || currentEpisode == null || TextUtils.isEmpty(currentFlag.getFlag()) || TextUtils.isEmpty(currentEpisode.getUrl())) return false;
@@ -4048,10 +4045,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         setPlayerKernel();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
         setR1Callback();
     }
 
@@ -4121,7 +4114,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setTransition() {
         if (!shouldAnimateVideoFrameTransition()) {
-            /* Log.d SIZE_TAG silenced */
+            Log.d(SIZE_TAG, "video transition skipped native player=" + player().getPlayerText());
             return;
         }
         ChangeBounds transition = new ChangeBounds();
@@ -4172,6 +4165,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             hideControl();
             return;
         }
+        setTrackVisible();
         hideWidgetOverlay();
         mBinding.control.danmaku.setVisibility(isLock() || !player().haveDanmaku() ? View.GONE : View.VISIBLE);
         mBinding.control.setting.setVisibility(View.GONE);
@@ -4181,7 +4175,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         boolean showPlayParams = PlayerButtonSetting.isVisible(PlayerButtonSetting.PLAY_PARAMS);
         mBinding.control.action.playParams.setVisibility(showPlayParams ? View.VISIBLE : View.GONE);
         mBinding.control.osdDiagnostics.setVisibility(PlayerSetting.isOsdDiagnostics() && PlayerButtonSetting.isVisible(PlayerButtonSetting.PLAY_PARAMS) && !player().isEmpty() ? View.VISIBLE : View.GONE);
-        mBinding.control.osdDiagnostics.setAlpha(mOsd != null && mOsd.isDiagnosticsVisible() ? 1f : 0.72f);
+        mBinding.control.osdDiagnostics.setAlpha(mOsd != null && mOsd.isDiagnosticsVisible() ? 1f : 0.30f);
         mBinding.control.action.playParams.setSelected(mOsd != null && mOsd.isDiagnosticsVisible());
         mBinding.control.parse.setVisibility(isFullscreen() && isUseParse() ? View.VISIBLE : View.GONE);
         mBinding.control.action.getRoot().setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
@@ -4193,6 +4187,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.back.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.top.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
+        updateDiscMenuTools();
+        updateCustomButtonVisibility();
         if (mOsd != null) mOsd.setControlsVisible(true);
         checkFullscreenImg();
         setR1Callback();
@@ -4200,6 +4196,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void hideControl() {
         mBinding.control.getRoot().setVisibility(View.GONE);
+        updateDiscMenuTools();
+        updateCustomButtonVisibility();
         if (mOsd != null) mOsd.setControlsVisible(false);
         App.removeCallbacks(mR1);
     }
@@ -4467,11 +4465,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mHistory == null || Setting.isIncognito()) return;
         if (service() != null && isOwner()) {
             updatePlaybackHistoryPosition();
-            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             mHistory.setCreateTime(System.currentTimeMillis());
         }
         if (exit && service() != null) PlaybackEventCollector.get().onStop(player());
-        if (!mHistory.canSave()) return;
+        if (!canSavePlaybackHistory(mHistory)) return;
         History history = mHistory.copy();
         Task.execute(() -> {
             if (history.getDuration() > 0) history.merge().save();
@@ -4487,27 +4484,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void updateHistory(Episode item) {
-        if (!Setting.isEpisodeHistory()) {
-            if (service() != null) updatePlaybackHistoryPosition();
-            PlaybackEventCollector.get().updateHistory(mHistory);
-            return;
-        }
         Flag flag = getFlag();
         String vodFlag = flag == null ? "" : flag.getFlag();
         boolean sameEpisode = item.matchesName(mHistory.getEpisode());
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), vodFlag);
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
-            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             PlaybackEventCollector.get().onStop(player());
         }
-        if (sameEpisode) {
-            mHistory.setPosition(mHistory.getPosition());
-        } else {
-            mHistory.setPosition(C.TIME_UNSET);
-            mHistory.setDuration(C.TIME_UNSET);
-            try { EpisodeProgressStore.applyToHistory(mHistory, item); } catch (Throwable ignored) {}
-        }
+        mHistory.setPosition(sameEpisode ? mHistory.getPosition() : C.TIME_UNSET);
+        if (!sameEpisode) mHistory.setDuration(C.TIME_UNSET);
         mHistory.setVodFlag(vodFlag);
         mHistory.setVodRemarks(item.getName());
         mHistory.setEpisodeUrl(item.getUrl());
@@ -4634,7 +4620,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         refreshLyrics();
         setTrackVisible();
         mClock.setCallback(this);
-        try { AssrtSubtitleMatch.onTracksReady(player()); } catch (Throwable ignored) {}
     }
 
     private void updateAudioOnlyState() {
@@ -5770,48 +5755,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setTitleVisible();
     }
 
-    
-    private void updateScreenshotBtn() {
-        try {
-            android.view.View v = mBinding.control.action.screenshot;
-            if (v == null) return;
-            boolean show = com.fongmi.android.tv.setting.Setting.isPlaybackScreenshotBtn();
-            v.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    private void onScreenshot() {
-        try {
-            com.fongmi.android.tv.utils.PhoneScreenshot.capture(this, getExoView(),
-                new com.fongmi.android.tv.utils.PhoneScreenshot.Callback() {
-                    @Override
-                    public void onSuccess(android.net.Uri uri) {
-                        try { com.fongmi.android.tv.utils.Notify.show(getString(com.fongmi.android.tv.R.string.screenshot_ok)); } catch (Throwable ignored) {}
-                    }
-                    @Override
-                    public void onError(String message) {
-                        try {
-                            com.fongmi.android.tv.utils.Notify.show(message == null || message.isEmpty()
-                                ? getString(com.fongmi.android.tv.R.string.screenshot_fail) : message);
-                        } catch (Throwable ignored) {}
-                    }
-                });
-        } catch (Throwable e) {
-            try { com.fongmi.android.tv.utils.Notify.show(getString(com.fongmi.android.tv.R.string.screenshot_fail)); } catch (Throwable ignored) {}
-        }
-    }
-
     @Override
     protected void onError(String msg) {
-        try {
-            if (com.fongmi.android.tv.player.extractor.Push.isHandoff()) {
-                com.fongmi.android.tv.player.extractor.Push.consumeHandoff();
-                try { if (service() != null) { player().reset(); player().stop(); } } catch (Throwable ignored) {}
-                return;
-            }
-        } catch (Throwable ignored) {
-        }
         recordPlayHealth(false, msg);
         mBinding.swipeLayout.setEnabled(true);
         Track.delete(player().getKey());
@@ -5954,6 +5899,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (!isOwner()) return;
         long position, duration;
         mHistory.setCreateTime(time);
+        if (hasDiscNavigationTimeline()) {
+            if (canSavePlaybackHistory(mHistory) && mHistory.canSync()) syncHistory();
+            return;
+        }
         updatePlaybackHistoryPosition();
         syncCurrentAudioPlaylistMetadata();
         debugLyricsLoop("clock", false);
@@ -5970,7 +5919,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void updatePlaybackHistoryPosition() {
-        if (mHistory == null) return;
+        if (mHistory == null || hasDiscNavigationTimeline()) return;
         long position = player().getPosition();
         long duration = player().getDuration();
         if (position > 0) mHistory.setPosition(position);
@@ -6002,7 +5951,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setPosition() {
-        if (mHistory == null) return;
+        if (mHistory == null || hasDiscMenu()) return;
         if (mHistory.isNearEnding()) {
             SpiderDebug.log("video-flow", "reset near-end history position=%d duration=%d key=%s", mHistory.getPosition(), mHistory.getDuration(), getHistoryKey());
             mHistory.resetPlaybackPosition();
@@ -6033,7 +5982,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void logVideoFrame(String step) {
         if (mBinding == null) return;
-        /* Log.d SIZE_TAG silenced */
+        Log.d(SIZE_TAG, "video " + step
+                + " frameParam=" + (mFrameParams == null ? "null" : mFrameParams.width + "x" + mFrameParams.height)
+                + " frameHeight=" + mFrameHeight
+                + " video=" + viewSize(mBinding.video)
+                + " exo=" + viewSize(mBinding.exo)
+                + " fullscreen=" + isFullscreen()
+                + " land=" + isLand()
+                + " scale=" + getScale()
+                + " player=" + (service() == null ? "none" : player().getPlayerText()));
     }
 
     private static String viewSize(View view) {
@@ -6091,12 +6048,31 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setTrackVisible() {
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.TEXT, mBinding.control.action.text,
-                player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() || (player() != null && !player().isEmpty()));
+        mBinding.control.action.discMenu.setVisibility(hasDiscMenu() ? View.VISIBLE : View.GONE);
+        updateDiscMenuTools();
+        mBinding.control.action.text.setVisibility(player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() ? View.VISIBLE : View.GONE);
         mBinding.control.action.audio.setVisibility(player().haveTrack(C.TRACK_TYPE_AUDIO) ? View.VISIBLE : View.GONE);
         mBinding.control.action.video.setVisibility(player().haveTrack(C.TRACK_TYPE_VIDEO) ? View.VISIBLE : View.GONE);
         applyActionButtonVisibility();
         updateAudioStageControls();
+    }
+
+    private void updateDiscMenuTools() {
+        updateCustomButtonStates();
+        MpvPlayer mpv = service() != null && isOwner()
+                && player().getPlayer() instanceof MpvPlayer active ? active : null;
+        if (mDiscMenuPlayer != mpv) {
+            if (mDiscMenuPlayer != null) mDiscMenuPlayer.removeDiscMenuStateListener(mDiscMenuStateListener);
+            mDiscMenuPlayer = mpv;
+            if (mpv != null) mpv.addDiscMenuStateListener(mDiscMenuStateListener);
+        }
+        boolean visible = mpv != null && mpv.isDiscMenuActive() && !isLock() && !isInPictureInPictureMode()
+                && !mAudioStageVisible && !isVisible(mBinding.control.getRoot());
+        mBinding.discTools.getRoot().setVisibility(visible ? View.VISIBLE : View.GONE);
+        mBinding.discTools.fullscreen.setImageResource(isFullscreen()
+                ? R.drawable.ic_control_fullscreen_exit : R.drawable.ic_control_fullscreen);
+        mBinding.discTools.fullscreen.setContentDescription(getString(isFullscreen()
+                ? R.string.play_exit_fullscreen : R.string.play_fullscreen));
     }
 
     private void setTitleVisible() {
@@ -6149,40 +6125,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         else nextFlag(position);
     }
 
-    
-    // PLAY_DIRECT_PAN_STRENGTHEN: 非网盘详情成功后，主动搜网盘源并在命中时 nextSite
-    private boolean mPanPreferSearchStarted = false;
-
-    private void maybeStartPanPreferSearch(Vod item) {
-        try {
-            if (mPanPreferSearchStarted) return;
-            if (!com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer()) return;
-            if (item != null && com.fongmi.android.tv.utils.PanSiteHelper.isPanVod(item)) return;
-            Site cur = getSite();
-            if (cur != null && com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(cur)) return;
-            String name = mBinding.name.getText() != null ? mBinding.name.getText().toString() : "";
-            if (name == null || name.trim().isEmpty()) {
-                if (item != null) name = item.getName();
-            }
-            if (name == null || name.trim().isEmpty()) return;
-            mPanPreferSearchStarted = true;
-            initSearch(name.trim(), true);
-        } catch (Throwable ignored) {
-        }
-    }
-
     private void checkSearch(boolean force) {
-        boolean msearch = getId() != null && getId().startsWith("msearch:")
-                && com.fongmi.android.tv.setting.Setting.isPlayDirect();
-        boolean panPrefer = false;
-        try {
-            panPrefer = com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer();
-        } catch (Throwable ignored) {
-        }
-        // PLAY_DIRECT_PAN_STRENGTHEN
-        if (!force && !msearch && !panPrefer && !PlayerSetting.isAutoChange()) return;
+        if (!force && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.isEmpty()) initSearch(mBinding.name.getText().toString(), true);
-        else if (isAutoMode() || force || msearch || panPrefer) nextSite();
+        else if (isAutoMode() || force) nextSite();
     }
 
     private void initSearch(String keyword, boolean auto) {
@@ -6193,16 +6139,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private boolean isPass(Site item) {
-        // PLAY_DIRECT_PAN_STRENGTHEN: 网盘优先时，即使 changeable=0 也允许进搜源列表
-        if (isAutoMode() && !item.isChangeable()) {
-            try {
-                if (com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer()
-                        && com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(item)
-                        && item.isSearchable()) return true;
-            } catch (Throwable ignored) {
-            }
-            return false;
-        }
+        if (isAutoMode() && !item.isChangeable()) return false;
         return item.isSearchable();
     }
 
@@ -6214,47 +6151,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         List<Site> sites = new ArrayList<>();
         for (Site item : VodConfig.get().getSites()) if (isPass(item)) sites.add(item);
         SiteHealthStore.sortSites(sites);
-        boolean panPrefer = false;
-        try {
-            panPrefer = com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer();
-        } catch (Throwable ignored) {
-        }
-        // PLAY_DIRECT_PAN_STRENGTHEN: 网盘优先 — 网盘站全量前置，截断时绝不丢掉网盘
-        if (panPrefer && !sites.isEmpty()) {
-            java.util.ArrayList<Site> pan = new java.util.ArrayList<>();
-            java.util.ArrayList<Site> other = new java.util.ArrayList<>();
-            for (Site s : sites) {
-                if (com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(s)) pan.add(s);
-                else other.add(s);
-            }
-            boolean limitDirect = (getId() != null && getId().startsWith("msearch:"))
-                    || (isAutoMode() && com.fongmi.android.tv.setting.Setting.isPlayDirect())
-                    || isAutoMode();
-            if (limitDirect) {
-                int lim = com.fongmi.android.tv.setting.Setting.getPlayDirectSearchLimit();
-                if (lim <= 0) lim = 10;
-                // 网盘全部保留；其余名额给非网盘
-                int rest = Math.max(0, lim - pan.size());
-                if (other.size() > rest) {
-                    java.util.Collections.shuffle(other);
-                    other = new java.util.ArrayList<>(other.subList(0, rest));
-                }
-            }
-            sites = new java.util.ArrayList<>(pan.size() + other.size());
-            sites.addAll(pan);
-            sites.addAll(other);
-        } else {
-            // 仅播放直达(msearch)：随机最多 N 站；普通搜索不截断
-            boolean limitDirect = (getId() != null && getId().startsWith("msearch:"))
-                    || (isAutoMode() && com.fongmi.android.tv.setting.Setting.isPlayDirect());
-            if (limitDirect) {
-                int lim = com.fongmi.android.tv.setting.Setting.getPlayDirectSearchLimit();
-                if (lim > 0 && sites.size() > lim) {
-                    java.util.Collections.shuffle(sites);
-                    sites = new java.util.ArrayList<>(sites.subList(0, lim));
-                }
-            }
-        }
         mViewModel.searchContent(sites, keyword, true);
     }
 
@@ -6265,13 +6161,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickAdapter.addAll(items);
         if (isQuickSearchVisible()) mQuickSearchDialog.addAll(items);
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
-        // PLAY_DIRECT_PAN_STRENGTHEN
-        boolean panPreferGo = false;
-        try {
-            panPreferGo = com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer();
-        } catch (Throwable ignored) {
-        }
-        if (isInitAuto() && (PlayerSetting.isAutoChange() || panPreferGo || ((getId() != null && getId().startsWith("msearch:")) && com.fongmi.android.tv.setting.Setting.isPlayDirect()))) nextSite();
+        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
@@ -6331,6 +6221,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setFullscreen(boolean fullscreen) {
         Util.toggleFullscreen(this, this.fullscreen = fullscreen);
+        updateDiscMenuTools();
     }
 
     private boolean isInitAuto() {
@@ -6573,6 +6464,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             restoreContextWall();
             if (isStop()) finish();
         }
+        updateDiscMenuTools();
     }
 
     @Override
@@ -6594,6 +6486,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             return;
         }
         syncFullscreenForOrientation(newConfig.orientation);
+        setupCustomActionButtons();
         if (isFullscreen()) Util.hideSystemUI(this);
     }
 
@@ -6660,11 +6553,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         } else if (isVisible(mBinding.control.getRoot())) {
             hideControl();
         } else if (isFullscreen() && !isLock()) {
-            if (Setting.isPlayBackToDetail()) exitFullscreen();
-            else {
-                if (showKaraokeResultIfNeeded(KARAOKE_RESULT_ACTION_SYSTEM_BACK)) return;
-                finishVideoPlaybackFromSystemBack();
-            }
+            exitFullscreen();
         } else if (!isLock()) {
             if (showKaraokeResultIfNeeded(KARAOKE_RESULT_ACTION_SYSTEM_BACK)) return;
             finishVideoPlaybackFromSystemBack();
@@ -6682,6 +6571,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onDestroy() {
+        if (mCustomButtonPlayer != null) {
+            mCustomButtonPlayer.removeCustomButtonStateListener(mCustomButtonStateListener);
+            mCustomButtonPlayer = null;
+        }
+        if (mDiscMenuPlayer != null) {
+            mDiscMenuPlayer.removeDiscMenuStateListener(mDiscMenuStateListener);
+            mDiscMenuPlayer = null;
+        }
         dismissKaraokeResultDialogForRecreation();
         mLyricsSearchSeq++;
         cancelKaraokePitchGeneration(false);

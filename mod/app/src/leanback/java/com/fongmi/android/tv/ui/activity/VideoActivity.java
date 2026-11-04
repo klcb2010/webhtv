@@ -1,7 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-import com.fongmi.android.tv.subtitle.AssrtSubtitleMatch;
-
 import android.annotation.SuppressLint;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
@@ -25,6 +23,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.LinearInterpolator;
@@ -55,6 +54,7 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
+import androidx.media3.mpvplayer.MpvPlayer;
 import androidx.media3.ui.PlayerView;
 import androidx.palette.graphics.Palette;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -87,7 +87,6 @@ import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.model.SearchProgress;
-import com.fongmi.android.tv.playback.EpisodeProgressStore;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
@@ -105,6 +104,7 @@ import com.fongmi.android.tv.player.lyrics.LyricsResult;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
+import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.LyricsSetting;
@@ -122,6 +122,7 @@ import com.fongmi.android.tv.ui.adapter.QuickAdapter;
 import com.fongmi.android.tv.ui.custom.CustomKeyDownVod;
 import com.fongmi.android.tv.ui.custom.CustomMovement;
 import com.fongmi.android.tv.ui.custom.CustomSeekView;
+import com.fongmi.android.tv.ui.custom.FlagSelectionListener;
 import com.fongmi.android.tv.ui.custom.AudioPlayerBackgroundDrawable;
 import com.fongmi.android.tv.ui.custom.KaraokeResultView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
@@ -250,6 +251,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private final Map<String, String> mAudioQueuePics = new HashMap<>();
     private final Map<String, String> mAudioQueueLyrics = new HashMap<>();
     private Map<String, View> mActionButtons;
+    private final List<View> mCustomActionViews = new ArrayList<>();
+    private HorizontalScrollView mCustomPortraitButtons;
+    private LinearLayout mCustomPortraitButtonRow;
     private QuickSearchDialog mQuickSearchDialog;
     private PlayerOsdController mOsd;
     private CustomKeyDownVod mKeyDown;
@@ -292,6 +296,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private long mInitialPlaybackPosition = C.TIME_UNSET;
     private boolean pendingLutImport;
     private boolean playerKernelSwitchRefreshing;
+    private MpvPlayer mDiscMenuPlayer;
+    private MpvPlayer mCustomButtonPlayer;
+    private final Runnable mCustomButtonStateListener = this::updateCustomButtonStates;
+    private final Runnable mDiscMenuStateListener = this::updateDiscMenuAction;
 
     private final ActivityResultLauncher<Intent> mLutDir = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
@@ -567,15 +575,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (TextUtils.isEmpty(id) || id.equals(oldId)) return;
         saveHistory();
         getIntent().putExtras(intent);
-        // PUSH_TV_NEWINTENT_FIX
-        detailRequested = false;
-        try {
-            if (service() != null) {
-                player().reset();
-                player().stop();
-            }
-        } catch (Throwable ignored) {
-        }
         checkId();
     }
 
@@ -683,12 +682,19 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.next.setOnClickListener(view -> checkNext());
         mBinding.control.action.prev.setOnClickListener(view -> checkPrev());
         mBinding.control.action.episodes.setOnClickListener(view -> onEpisodes());
+        mBinding.control.action.discMenu.setOnClickListener(view -> {
+            hideControl();
+            openDiscMenu();
+        });
+        mBinding.control.action.discMenu.setOnLongClickListener(view -> {
+            hideControl();
+            showDiscMenuControls();
+            return true;
+        });
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
         mBinding.control.action.lut.setOnClickListener(view -> onLut());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
-        try { mBinding.control.action.screenshot.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
-        updateScreenshotBtn();
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
         mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
         mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
@@ -727,13 +733,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.ending.setOnLongClickListener(view -> onEndingReset());
         mBinding.control.action.opening.setOnLongClickListener(view -> onOpeningReset());
         setActionFocusScroll();
-        mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
-        mBinding.flag.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
-            @Override
-            public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-                if (mFlagAdapter.getItemCount() > 0) onItemClick(mFlagAdapter.get(position));
-            }
-        });
+        mBinding.video.setOnTouchListener((view, event) -> dispatchDiscMenuTouch(event) || mKeyDown.onTouchEvent(event));
+        mBinding.flag.addOnChildViewHolderSelectedListener(new FlagSelectionListener(mBinding.flag, mFlagAdapter, this));
         mBinding.episode.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
@@ -842,12 +843,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setVideoView() {
-        // 弹幕/嗷呜弹幕：由 PlayerButtonSetting 控制，禁止强制 VISIBLE
-        if (!PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
-            mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
-        } else {
-            mBinding.control.action.danmaku.setVisibility(View.GONE);
-        }
+        mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         mBinding.control.action.karaoke.setVisibility(View.GONE);
         updateImmersiveAudioAction();
@@ -878,62 +874,119 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         addActionButton(PlayerButtonSetting.DANMAKU, mBinding.control.action.danmaku);
         addActionButton(PlayerButtonSetting.TITLE, mBinding.control.action.title);
         addActionButton(PlayerButtonSetting.REPEAT, mBinding.control.action.repeat);
-        try { addActionButton(PlayerButtonSetting.TIMER, mBinding.control.action.timer); } catch (Throwable ignored) {}
-        try { addActionButton(PlayerButtonSetting.PAN_DIAGNOSTIC, mBinding.control.action.panDiagnostic); } catch (Throwable ignored) {}
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
-        PlayerButtonSetting.forceHidden(mActionButtons);
+        setupCustomActionButtons();
         placePanDiagnosticAction();
         updatePanDiagnosticAction();
-        // 最终强制：隐藏项绝不再显示
-        forceHideConfiguredActionButtons();
+        updateDiscMenuAction();
     }
 
-    /** 隐藏播放按钮配置中关闭的项；含无 id 的「嗷呜弹幕」自定义 TextView */
-    private void forceHideConfiguredActionButtons() {
-        try {
-            if (mActionButtons != null) PlayerButtonSetting.forceHidden(mActionButtons);
-        } catch (Throwable ignored) {}
-        try {
-            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.DANMAKU)) {
-                mBinding.control.action.danmaku.setVisibility(View.GONE);
-                hideDanmakuLikeViews(mBinding.control.action.container);
-                try { hideDanmakuLikeViews(mBinding.control.getRoot()); } catch (Throwable ignored) {}
-            }
-        } catch (Throwable ignored) {}
-        try {
-            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.TIMER))
-                mBinding.control.action.timer.setVisibility(View.GONE);
-        } catch (Throwable ignored) {}
-        try {
-            if (PlayerButtonSetting.isHidden(PlayerButtonSetting.PAN_DIAGNOSTIC))
-                mBinding.control.action.panDiagnostic.setVisibility(View.GONE);
-        } catch (Throwable ignored) {}
-    }
-
-    private void hideDanmakuLikeViews(View root) {
-        if (root == null) return;
-        if (root instanceof android.widget.TextView) {
-            CharSequence cs = ((android.widget.TextView) root).getText();
-            String t = cs == null ? "" : cs.toString();
-            if (t.contains("弹幕") || t.contains("嗷呜") || t.toLowerCase().contains("danmaku")) {
-                root.setVisibility(View.GONE);
-            }
+    private void updateDiscMenuAction() {
+        updateCustomButtonStates();
+        MpvPlayer mpv = service() != null && isOwner()
+                && player().getPlayer() instanceof MpvPlayer active ? active : null;
+        if (mDiscMenuPlayer != mpv) {
+            if (mDiscMenuPlayer != null) mDiscMenuPlayer.removeDiscMenuStateListener(mDiscMenuStateListener);
+            mDiscMenuPlayer = mpv;
+            if (mpv != null) mpv.addDiscMenuStateListener(mDiscMenuStateListener);
         }
-        if (root instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) root;
-            for (int i = 0; i < g.getChildCount(); i++) hideDanmakuLikeViews(g.getChildAt(i));
-        }
+        boolean available = mpv != null && mpv.isDiscMenuAvailable();
+        if (!available && mBinding.control.action.discMenu.hasFocus()) mBinding.control.action.playParams.requestFocus();
+        mBinding.control.action.discMenu.setVisibility(available ? View.VISIBLE : View.GONE);
     }
 
     private void addActionButton(String id, View view) {
         mActionButtons.put(id, view);
     }
 
+    private void setupCustomActionButtons() {
+        ensureCustomButtonContainers();
+        for (View view : mCustomActionViews) {
+            ViewParent parent = view.getParent();
+            if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(view);
+        }
+        mCustomActionViews.clear();
+        mCustomPortraitButtonRow.removeAllViews();
+        List<MpvConfigStore.CustomButton> buttons = MpvConfigStore.customButtons();
+        for (int index = 0; index < buttons.size(); index++) {
+            MpvConfigStore.CustomButton button = buttons.get(index);
+            if (!button.isButtonVisible()) continue;
+            TextView view = new TextView(this);
+            view.setTextSize(13);
+            view.setTextColor(Color.WHITE);
+            view.setGravity(Gravity.CENTER);
+            view.setMinHeight(ResUtil.dp2px(40));
+            view.setMinWidth(ResUtil.dp2px(56));
+            view.setPadding(ResUtil.dp2px(10), ResUtil.dp2px(4), ResUtil.dp2px(10), ResUtil.dp2px(4));
+            view.setBackgroundResource(R.drawable.selector_control_sheet_button);
+            view.setText(button.title);
+            view.setSingleLine(true);
+            view.setMaxWidth(ResUtil.dp2px(144));
+            view.setEllipsize(TextUtils.TruncateAt.END);
+            view.setContentDescription(button.title);
+            view.setTag(button.id);
+            view.setOnClickListener(item -> {
+                player().sendMpvCustomButton(button.id, false);
+                setR1Callback();
+            });
+            view.setOnLongClickListener(item -> {
+                player().sendMpvCustomButton(button.id, true);
+                setR1Callback();
+                return true;
+            });
+            view.setFocusable(true);
+            view.setFocusableInTouchMode(true);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ResUtil.dp2px(40));
+            params.setMargins(ResUtil.dp2px(4), ResUtil.dp2px(2), ResUtil.dp2px(4), ResUtil.dp2px(2));
+            mCustomPortraitButtonRow.addView(view, params);
+            mCustomActionViews.add(view);
+        }
+        updateCustomButtonVisibility();
+    }
+
+    private void updateCustomButtonStates() {
+        MpvPlayer mpv = service() != null && isOwner()
+                && player().getPlayer() instanceof MpvPlayer active ? active : null;
+        if (mCustomButtonPlayer != mpv) {
+            if (mCustomButtonPlayer != null) mCustomButtonPlayer.removeCustomButtonStateListener(mCustomButtonStateListener);
+            mCustomButtonPlayer = mpv;
+            if (mpv != null) mpv.addCustomButtonStateListener(mCustomButtonStateListener);
+        }
+        for (View view : mCustomActionViews) {
+            view.setSelected(mpv != null && mpv.isCustomButtonActive((String) view.getTag()));
+        }
+    }
+
+    private void ensureCustomButtonContainers() {
+        if (mCustomPortraitButtons != null) return;
+        mCustomPortraitButtons = new HorizontalScrollView(this);
+        mCustomPortraitButtons.setHorizontalScrollBarEnabled(false);
+        mCustomPortraitButtons.setFillViewport(false);
+        mCustomPortraitButtons.setClipToPadding(false);
+        mCustomPortraitButtons.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        mCustomPortraitButtonRow = new LinearLayout(this);
+        mCustomPortraitButtonRow.setGravity(Gravity.CENTER_VERTICAL);
+        mCustomPortraitButtonRow.setOrientation(LinearLayout.HORIZONTAL);
+        mCustomPortraitButtonRow.setClipChildren(false);
+        mCustomPortraitButtons.addView(mCustomPortraitButtonRow, new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, ResUtil.dp2px(8));
+        ((ViewGroup) mBinding.control.getRoot()).addView(mCustomPortraitButtons, 0, params);
+    }
+
+    private void updateCustomButtonVisibility() {
+        updateCustomButtonStates();
+        boolean visible = service() != null && player().isMpv() && isVisible(mBinding.control.getRoot());
+        if (mCustomPortraitButtons != null) mCustomPortraitButtons.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
     private void applyActionButtonVisibility() {
+        if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
+        updateCustomButtonVisibility();
         mBinding.control.action.cast.setVisibility(isFullscreen() ? View.GONE : View.VISIBLE);
         updateImmersiveAudioAction();
         updatePanDiagnosticAction();
-        forceHideConfiguredActionButtons();
+        updateDiscMenuAction();
     }
 
     private void placePanDiagnosticAction() {
@@ -946,9 +999,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updatePanDiagnosticAction() {
-        boolean show = isFullscreen() && canRunPanDiagnostic()
-                && !PlayerButtonSetting.isHidden(PlayerButtonSetting.PAN_DIAGNOSTIC);
-        mBinding.control.action.panDiagnostic.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (mBinding == null) return;
+        mBinding.control.action.panDiagnostic.setVisibility(isFullscreen() && canRunPanDiagnostic() ? View.VISIBLE : View.GONE);
     }
 
     private boolean canRunPanDiagnostic() {
@@ -1032,7 +1084,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void getDetail(Vod item) {
-        mPanDrillDepth = 0;
         revealManualSearch = false;
         if (!isAutoMode()) mViewModel.stopSearch();
         saveHistory();
@@ -1050,135 +1101,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         getDetail();
     }
 
-
-    /** 播放直达：网盘多级文件夹自动下钻深度 */
-    private int mPanDrillDepth = 0;
-
-    private boolean shouldAutoDrillPan() {
-        try {
-            if (getId() != null && getId().startsWith("msearch:") && com.fongmi.android.tv.setting.Setting.isPlayDirect()) return true;
-            if (isAutoMode() || isInitAuto()) return true;
-            return com.fongmi.android.tv.setting.Setting.isPlayDirect();
-        } catch (Throwable e) {
-            return false;
-        }
-    }
-
-    private Vod pickDetailVod(java.util.List<Vod> list) {
-        if (list == null || list.isEmpty()) return new Vod();
-        Vod firstOk = null;
-        for (Vod v : list) {
-            if (v == null || isBadPanDrillTarget(v)) continue;
-            try {
-                if (!v.isFolder()) return v;
-            } catch (Throwable ignored) {
-                return v;
-            }
-            if (firstOk == null) firstOk = v;
-        }
-        return firstOk != null ? firstOk : list.get(0);
-    }
-
-    private boolean hasPlayableEpisode(Vod item) {
-        if (item == null || item.getFlags() == null) return false;
-        for (Object o : item.getFlags()) {
-            if (!(o instanceof Flag)) continue;
-            Flag f = (Flag) o;
-            if (f.getEpisodes() != null && !f.getEpisodes().isEmpty()) return true;
-        }
-        return false;
-    }
-
-
-    private boolean isBadPanDrillTarget(Vod item) {
-        if (item == null) return true;
-        String id = item.getId() == null ? "" : item.getId().trim();
-        String name = item.getName() == null ? "" : item.getName().trim();
-        String lowId = id.toLowerCase();
-        String lowName = name.toLowerCase();
-        if (id.isEmpty()) return true;
-        if (lowId.equals("pws_tip") || lowId.endsWith("_tip") || lowId.contains("pws_tip")) return true;
-        if (lowName.contains("404") || lowName.contains("not found") || lowName.contains("error")) return true;
-        if (lowName.startsWith("http") && lowName.contains(" ")) return true;
-        if (name.equals("null") || name.equals("undefined")) return true;
-        // tip / notice only
-        if ("提示".equals(name) || "notice".equals(lowName) || "tip".equals(lowName)) return true;
-        return false;
-    }
-
-    private boolean looksLikePanNode(Vod item) {
-        if (item == null) return false;
-        try {
-            if (item.isFolder()) return true;
-        } catch (Throwable ignored) {}
-        String id = item.getId();
-        if (id == null) id = "";
-        String low = id.toLowerCase();
-        if (low.startsWith("pws:")) return true;
-        if (low.contains("quark") || low.contains("ucpan") || low.contains("alipan") || low.contains("aliyundrive")) return true;
-        String name = item.getName() == null ? "" : item.getName();
-        if (name.contains("网盘") || name.contains("夸克") || name.contains("UC") || name.contains("百度") || name.contains("阿里")) return true;
-        String remarks = item.getRemarks() == null ? "" : item.getRemarks();
-        if (remarks.contains("网盘") || remarks.contains("夸克")) return true;
-        return false;
-    }
-
-    private boolean tryDrillPanFolder(Vod item, Result parent) {
-        if (!shouldAutoDrillPan()) return false;
-        if (mPanDrillDepth >= 4) return false;
-        if (item == null) return false;
-        if (isBadPanDrillTarget(item)) return false;
-
-        boolean multiFolder = false;
-        if (parent != null && parent.getList() != null && parent.getList().size() > 1) {
-            int folderCount = 0;
-            for (Vod v : parent.getList()) {
-                try {
-                    if (v != null && v.isFolder()) folderCount++;
-                } catch (Throwable ignored) {}
-            }
-            multiFolder = folderCount >= 1;
-        }
-
-        boolean needDrill = false;
-        try {
-            if (item.isFolder()) needDrill = true;
-        } catch (Throwable ignored) {}
-        if (!hasPlayableEpisode(item) && looksLikePanNode(item)) needDrill = true;
-        if (multiFolder && !hasPlayableEpisode(item)) needDrill = true;
-        if (!needDrill) return false;
-
-        Vod target = item;
-        if (parent != null && parent.getList() != null && !parent.getList().isEmpty()) {
-            target = pickDetailVod(parent.getList());
-        }
-        return drillIntoPanNode(target);
-    }
-
-    private boolean drillIntoPanNode(Vod item) {
-        if (item == null || isBadPanDrillTarget(item)) return false;
-        String id = item.getId();
-        if (id == null || id.isEmpty()) return false;
-        mPanDrillDepth++;
-        try {
-            getIntent().putExtra("id", id);
-            if (item.getName() != null && !item.getName().isEmpty()) getIntent().putExtra("name", item.getName());
-            if (item.getPic() != null && !item.getPic().isEmpty()) getIntent().putExtra("pic", item.getPic());
-            try {
-            } catch (Throwable ignored) {}
-            try {
-                if (mBinding != null && mBinding.name != null && item.getName() != null) mBinding.name.setText(item.getName());
-            } catch (Throwable ignored) {}
-            SpiderDebug.log("video-flow", "pan-drill depth=%d key=%s id=%s name=%s", mPanDrillDepth, getKey(), id, item.getName());
-            mViewModel.detailContent(getKey(), id);
-            return true;
-        } catch (Throwable e) {
-            mPanDrillDepth = Math.max(0, mPanDrillDepth - 1);
-            return false;
-        }
-    }
-
-
     private void setDetail(Result result) {
         long cost = System.currentTimeMillis() - detailStartTime;
         SpiderDebug.log("video-flow", "detail finish cost=%dms empty=%s msg=%s", cost, result.getList().isEmpty(), result.getMsg());
@@ -1188,46 +1110,20 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             SpiderDebug.log("video-flow", "detail pending service key=%s id=%s", getKey(), getId());
             return;
         }
-        if (result.getList().isEmpty()) {
-            setEmpty(result.hasMsg());
-        } else {
-            Vod pick = pickDetailVod(result.getList());
-            if (tryDrillPanFolder(pick, result)) {
-                try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
-                return;
-            }
-            setDetail(pick);
-        }
-        try { Notify.show(result.getMsg()); } catch (Throwable ignored) {}
+        if (result.getList().isEmpty()) setEmpty(result.hasMsg());
+        else setDetail(result.getVod());
+        Notify.show(result.getMsg());
     }
 
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
             finish();
-        } else if (getName().isEmpty() && !(getId() != null && getId().startsWith("msearch:"))) {
+        } else if (getName().isEmpty()) {
             showEmpty();
         } else {
-            String name = getName();
-            if ((name == null || name.isEmpty()) && getId() != null && getId().startsWith("msearch:")) {
-                name = getId().substring("msearch:".length()).trim();
-            }
-            if (name == null) name = "";
-            mBinding.name.setText(name);
+            mBinding.name.setText(getName());
             App.post(mR4, 10000);
-            // 豆瓣等 msearch：开启「播放直达」才静默搜源，否则进搜索页
-            if (getId() != null && getId().startsWith("msearch:")) {
-                if (com.fongmi.android.tv.setting.Setting.isPlayDirect()) {
-                    checkSearch(true);
-                } else {
-                    String q = name;
-                    try {
-                        com.fongmi.android.tv.ui.activity.SearchActivity.start(this, q);
-                    } catch (Throwable ignored) {}
-                    try { finish(); } catch (Throwable ignored) {}
-                }
-            } else {
-                checkSearch(false);
-            }
+            checkSearch(false);
         }
     }
 
@@ -1236,8 +1132,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setDetail(Vod item) {
-        if (tryDrillPanFolder(item, null)) return;
-        maybeStartPanPreferSearch(item);
         item.checkPic(getPic());
         item.checkName(getName());
         item.checkContent(getContent());
@@ -1314,15 +1208,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void setPlayer(Result result) {
         if (isFinishing() || isDestroyed()) return;
-        // PUSH_HANDOFF_SILENT: push:// 已切到 push_agent，忽略空地址结果
-        try {
-            if (com.fongmi.android.tv.player.extractor.Push.isHandoff()) {
-                if (result == null || result.hasMsg() || result.getRealUrl() == null || result.getRealUrl().isEmpty()) {
-                    return;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
         SpiderDebug.log("video-flow", "player finish cost=%dms useParse=%s multi=%s msg=%s", System.currentTimeMillis() - playerStartTime, result.shouldUseParse(), result.getUrl().isMulti(), result.getMsg());
         if (service() == null) {
             mPendingPlayer = result;
@@ -1372,7 +1257,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     public void onItemClick(Flag item) {
-        if (mFlagAdapter.getItemCount() == 0 || item.isSelected()) return;
+        if (isFinishing() || isDestroyed() || mFlagAdapter.getItemCount() == 0 || item.isSelected()) return;
         int oldPosition = mFlagAdapter.getSelectedPosition();
         mFlagAdapter.setSelected(item);
         int newPosition = mFlagAdapter.getSelectedPosition();
@@ -1388,9 +1273,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setEpisodeAdapter(List<Episode> items, boolean scrollToCurrent) {
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.EPISODES, mBinding.control.action.episodes, items.size() >= 2);
-        try { PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.NEXT, mBinding.control.action.next, items.size() >= 2); } catch (Throwable ignored) {}
-        try { PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.PREV, mBinding.control.action.prev, items.size() >= 2); } catch (Throwable ignored) {}
+        mBinding.control.action.episodes.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         applyActionButtonVisibility();
         mBinding.episode.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
         boolean audioList = isMusicLike();
@@ -3467,14 +3350,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         player().switchPlayer(type);
         setPlayerKernel();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
     }
 
-    private boolean refreshAndSwitchPlayerKernel(int type) {
+    private boolean refreshAndSwitchPlayerKernel(int type) { /* MOD_FAST_KERNEL_SWITCH_V1 */
         if (playerKernelSwitchRefreshing) return true;
+        // MOD_FAST_KERNEL_SWITCH_V1: non-parse + valid URL → local switch (秒切)
+        if (!isUseParse()) {
+            String curUrl = player() != null ? player().getUrl() : null;
+            if (curUrl != null && !curUrl.isEmpty()) {
+                return false;
+            }
+        }
         Flag currentFlag = getFlag();
         Episode currentEpisode = getEpisode();
         if (currentFlag == null || currentEpisode == null || TextUtils.isEmpty(currentFlag.getFlag()) || TextUtils.isEmpty(currentEpisode.getUrl())) return false;
@@ -3515,10 +3401,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
         setPlayerKernel();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
     }
 
     private void onDecode() {
@@ -3526,10 +3408,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         clearLyrics();
         player().toggleDecode();
         setDecode();
-        try {
-            AssrtSubtitleMatch.reapplyAfterPlayerChange(() -> player());
-        } catch (Throwable ignored) {
-        }
     }
 
     private void onTrack(View view) {
@@ -3622,41 +3500,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         showTopInfo();
         setPlayParamsState();
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
+        updateCustomButtonVisibility();
         if (mOsd != null) mOsd.setControlsVisible(true);
-        forceHideConfiguredActionButtons();
-        View focus = view;
-        if (focus == null || focus.getVisibility() != View.VISIBLE || !focus.isFocusable()) {
-            focus = findFirstFocusableControlAction();
-        }
-        final View target = focus;
-        if (target != null) {
-            try {
-                // 先滚到可见区域，避免 HorizontalScrollView 里第一个按钮在屏外
-                target.getParent().requestChildFocus(target, target);
-            } catch (Throwable ignored) {
-            }
-            target.requestFocus();
-            // 机顶盒：布局完成后再强制定焦到目标，防止焦点落到解码等中间项
-            App.post(() -> {
-                try {
-                    if (!isVisible(mBinding.control.getRoot())) return;
-                    target.requestFocus();
-                } catch (Throwable ignored) {
-                }
-            }, 30);
-            App.post(() -> {
-                try {
-                    if (!isVisible(mBinding.control.getRoot())) return;
-                    if (getCurrentFocus() != target) target.requestFocus();
-                } catch (Throwable ignored) {
-                }
-            }, 120);
-        }
+        view.requestFocus();
         setR1Callback();
     }
 
     private void hideControl() {
         mBinding.control.getRoot().setVisibility(View.GONE);
+        updateCustomButtonVisibility();
         if (mOsd != null) mOsd.setControlsVisible(false);
         if (player().isPlaying()) mBinding.widget.top.setVisibility(View.GONE);
         App.removeCallbacks(mR1);
@@ -3876,11 +3728,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mHistory == null || Setting.isIncognito()) return;
         if (service() != null && isOwner()) {
             updatePlaybackHistoryPosition();
-            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             mHistory.setCreateTime(System.currentTimeMillis());
         }
         if (exit && service() != null) PlaybackEventCollector.get().onStop(player());
-        if (!mHistory.canSave()) return;
+        if (!canSavePlaybackHistory(mHistory)) return;
         History history = mHistory.copy();
         Task.execute(() -> {
             if (history.getDuration() > 0) history.merge().save();
@@ -3896,27 +3747,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updateHistory(Episode item) {
-        if (!Setting.isEpisodeHistory()) {
-            if (service() != null) updatePlaybackHistoryPosition();
-            PlaybackEventCollector.get().updateHistory(mHistory);
-            return;
-        }
         boolean sameEpisode = item.matchesName(mHistory.getEpisode());
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), getFlag().getFlag());
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
-            // 换集前：把当前集进度写入分集缓存
-            try { EpisodeProgressStore.saveCurrent(mHistory); } catch (Throwable ignored) {}
             PlaybackEventCollector.get().onStop(player());
         }
-        if (sameEpisode) {
-            mHistory.setPosition(mHistory.getPosition());
-        } else {
-            // 换到新集：先清，再尝试加载该集缓存进度
-            mHistory.setPosition(C.TIME_UNSET);
-            mHistory.setDuration(C.TIME_UNSET);
-            try { EpisodeProgressStore.applyToHistory(mHistory, item); } catch (Throwable ignored) {}
-        }
+        mHistory.setPosition(sameEpisode ? mHistory.getPosition() : C.TIME_UNSET);
+        if (!sameEpisode) mHistory.setDuration(C.TIME_UNSET);
         mHistory.setVodFlag(getFlag().getFlag());
         mHistory.setVodRemarks(item.getName());
         mHistory.setEpisodeUrl(item.getUrl());
@@ -4024,7 +3862,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     protected void onTracksChanged() {
-        try { AssrtSubtitleMatch.onTracksReady(player()); } catch (Throwable ignored) {}
         refreshLyrics();
         setTrackVisible();
         mClock.setCallback(this);
@@ -5628,28 +5465,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setTitleVisible();
     }
 
-    
-    private void updateScreenshotBtn() {
-        try { mBinding.control.action.screenshot.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
-    }
-
-
-
-
-
-
-
-
     @Override
     protected void onError(String msg) {
-        try {
-            if (com.fongmi.android.tv.player.extractor.Push.isHandoff()) {
-                com.fongmi.android.tv.player.extractor.Push.consumeHandoff();
-                try { if (service() != null) { player().reset(); player().stop(); } } catch (Throwable ignored) {}
-                return;
-            }
-        } catch (Throwable ignored) {
-        }
         recordPlayHealth(false, msg);
         Track.delete(player().getKey());
         mClock.setCallback(null);
@@ -5731,6 +5548,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (!isOwner()) return;
         long position, duration;
         mHistory.setCreateTime(time);
+        if (hasDiscNavigationTimeline()) {
+            if (canSavePlaybackHistory(mHistory) && mHistory.canSync()) syncHistory();
+            return;
+        }
         updatePlaybackHistoryPosition();
         syncKaraokePosition();
         if (mLyrics != null) mLyrics.update(player());
@@ -5745,7 +5566,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updatePlaybackHistoryPosition() {
-        if (mHistory == null) return;
+        if (mHistory == null || hasDiscNavigationTimeline()) return;
         long position = player().getPosition();
         long duration = player().getDuration();
         if (position > 0) mHistory.setPosition(position);
@@ -5771,7 +5592,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setPosition() {
-        if (mHistory == null) return;
+        if (mHistory == null || hasDiscMenu()) return;
         long position = resolveInitialPlaybackPosition();
         if (position <= 0) return;
         if (mInitialPlaybackPosition == position) {
@@ -5807,8 +5628,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setTrackVisible() {
-        PlayerButtonSetting.setVisibleIfAllowed(PlayerButtonSetting.TEXT, mBinding.control.action.text,
-                player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() || (player() != null && !player().isEmpty()));
+        mBinding.control.action.text.setVisibility(player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() ? View.VISIBLE : View.GONE);
         mBinding.control.action.audio.setVisibility(player().haveTrack(C.TRACK_TYPE_AUDIO) ? View.VISIBLE : View.GONE);
         mBinding.control.action.video.setVisibility(player().haveTrack(C.TRACK_TYPE_VIDEO) ? View.VISIBLE : View.GONE);
         applyActionButtonVisibility();
@@ -5856,34 +5676,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         else nextFlag(position);
     }
 
-    
-    // PLAY_DIRECT_PAN_STRENGTHEN: 非网盘详情成功后，主动搜网盘源并在命中时 nextSite
-    private boolean mPanPreferSearchStarted = false;
-
-    private void maybeStartPanPreferSearch(Vod item) {
-        try {
-            if (mPanPreferSearchStarted) return;
-            if (!com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer()) return;
-            if (item != null && com.fongmi.android.tv.utils.PanSiteHelper.isPanVod(item)) return;
-            Site cur = getSite();
-            if (cur != null && com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(cur)) return;
-            String name = mBinding.name.getText() != null ? mBinding.name.getText().toString() : "";
-            if (name == null || name.trim().isEmpty()) {
-                if (item != null) name = item.getName();
-            }
-            if (name == null || name.trim().isEmpty()) return;
-            mPanPreferSearchStarted = true;
-            initSearch(name.trim(), true);
-        } catch (Throwable ignored) {
-        }
-    }
-
     private void checkSearch(boolean force) {
-        boolean msearch = getId() != null && getId().startsWith("msearch:")
-                && com.fongmi.android.tv.setting.Setting.isPlayDirect();
-        if (!force && !msearch && !PlayerSetting.isAutoChange()) return;
+        if (!force && !PlayerSetting.isAutoChange()) return;
         if (mQuickAdapter.getItemCount() == 0) initSearch(mBinding.name.getText().toString(), true);
-        else if (isAutoMode() || force || msearch) nextSite();
+        else if (isAutoMode() || force) nextSite();
     }
 
     private void initSearch(String keyword, boolean auto) {
@@ -5895,16 +5691,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private boolean isPass(Site item) {
-        // PLAY_DIRECT_PAN_STRENGTHEN: 网盘优先时，即使 changeable=0 也允许进搜源列表
-        if (isAutoMode() && !item.isChangeable()) {
-            try {
-                if (com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer()
-                        && com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(item)
-                        && item.isSearchable()) return true;
-            } catch (Throwable ignored) {
-            }
-            return false;
-        }
+        if (isAutoMode() && !item.isChangeable()) return false;
         return item.isSearchable();
     }
 
@@ -5921,45 +5708,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
         SiteHealthStore.sortSites(sites);
-        boolean panPrefer = false;
-        try {
-            panPrefer = com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer();
-        } catch (Throwable ignored) {
-        }
-        // PLAY_DIRECT_PAN_STRENGTHEN: 网盘全量前置，截断不丢网盘
-        if (panPrefer && !sites.isEmpty()) {
-            java.util.ArrayList<Site> pan = new java.util.ArrayList<>();
-            java.util.ArrayList<Site> other = new java.util.ArrayList<>();
-            for (Site s : sites) {
-                if (com.fongmi.android.tv.utils.PanSiteHelper.isPanSite(s)) pan.add(s);
-                else other.add(s);
-            }
-            boolean limitDirect = (getId() != null && getId().startsWith("msearch:"))
-                    || (isAutoMode() && com.fongmi.android.tv.setting.Setting.isPlayDirect())
-                    || isAutoMode();
-            if (limitDirect) {
-                int lim = com.fongmi.android.tv.setting.Setting.getPlayDirectSearchLimit();
-                if (lim <= 0) lim = 10;
-                int rest = Math.max(0, lim - pan.size());
-                if (other.size() > rest) {
-                    java.util.Collections.shuffle(other);
-                    other = new java.util.ArrayList<>(other.subList(0, rest));
-                }
-            }
-            sites = new java.util.ArrayList<>(pan.size() + other.size());
-            sites.addAll(pan);
-            sites.addAll(other);
-        } else {
-            boolean limitDirect = (getId() != null && getId().startsWith("msearch:"))
-                    || (isAutoMode() && com.fongmi.android.tv.setting.Setting.isPlayDirect());
-            if (limitDirect) {
-                int lim = com.fongmi.android.tv.setting.Setting.getPlayDirectSearchLimit();
-                if (lim > 0 && sites.size() > lim) {
-                    java.util.Collections.shuffle(sites);
-                    sites = new ArrayList<>(sites.subList(0, lim));
-                }
-            }
-        }
         mViewModel.searchContent(sites, keyword, true);
     }
 
@@ -5972,13 +5720,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (!isInitAuto() && !items.isEmpty()) {
             showQuickSearchDialog(items);
         }
-        // PLAY_DIRECT_PAN_STRENGTHEN
-        boolean panPreferGo = false;
-        try {
-            panPreferGo = com.fongmi.android.tv.setting.Setting.isPlayDirectPanPrefer();
-        } catch (Throwable ignored) {
-        }
-        if (isInitAuto() && (PlayerSetting.isAutoChange() || panPreferGo || ((getId() != null && getId().startsWith("msearch:")) && com.fongmi.android.tv.setting.Setting.isPlayDirect()))) nextSite();
+        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
@@ -6184,94 +5926,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private View getFocus2() {
-        if (mFocus2 != null && mFocus2.getVisibility() == View.VISIBLE
-                && mFocus2 != mBinding.control.action.opening
-                && mFocus2 != mBinding.control.action.ending
-                && mFocus2.isFocusable()) {
-            return mFocus2;
-        }
-        return findFirstFocusableControlAction();
-    }
-
-    /**
-     * 下键专用：显示底栏 → 滚到最左 → 按从左到右第一个可见可焦按钮定焦。
-     * 不使用 mFocus2，不硬编码 player/decode。
-     */
-    private void showControlBarFocusFirst() {
-        if (mAudioStageVisible) {
-            hideControl();
-            hideInfo();
-            focusAudioStageDefault();
-            return;
-        }
-        showTopInfo();
-        setPlayParamsState();
-        mBinding.control.getRoot().setVisibility(View.VISIBLE);
-        if (mOsd != null) mOsd.setControlsVisible(true);
-        forceHideConfiguredActionButtons();
-        // 必须先滚回最左，否则「屏幕上看到的第一个」和 container 第一个可能不是同一个
-        scrollControlActionToStart();
-        final View target = findFirstFocusableControlAction();
-        if (target != null) {
-            try {
-                target.requestFocus();
-            } catch (Throwable ignored) {
-            }
-            App.post(() -> {
-                try {
-                    if (!isVisible(mBinding.control.getRoot())) return;
-                    scrollControlActionToStart();
-                    target.requestFocus();
-                } catch (Throwable ignored) {
-                }
-            }, 40);
-            App.post(() -> {
-                try {
-                    if (!isVisible(mBinding.control.getRoot())) return;
-                    if (getCurrentFocus() != target) {
-                        scrollControlActionToStart();
-                        target.requestFocus();
-                    }
-                } catch (Throwable ignored) {
-                }
-            }, 150);
-        }
-        setR1Callback();
-    }
-
-    private void scrollControlActionToStart() {
-        try {
-            android.widget.HorizontalScrollView scroll = mBinding.control.action.getRoot();
-            if (scroll != null) {
-                scroll.scrollTo(0, 0);
-                scroll.fullScroll(View.FOCUS_LEFT);
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 从左到右：container 里第一个 VISIBLE + focusable + enabled 的子 View。
-     * 顺序已是布局/applyOrder 后的真实顺序；谁排第一（上集/EXO/字幕…）就定谁。
-     */
-    private View findFirstFocusableControlAction() {
-        try {
-            android.view.ViewGroup container = mBinding.control.action.container;
-            if (container != null) {
-                for (int i = 0; i < container.getChildCount(); i++) {
-                    View child = container.getChildAt(i);
-                    if (child == null || child.getVisibility() != View.VISIBLE) continue;
-                    if (!child.isFocusable() || !child.isEnabled()) continue;
-                    try {
-                        if (child == mBinding.control.action.opening || child == mBinding.control.action.ending) continue;
-                    } catch (Throwable ignored) {
-                    }
-                    return child;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return null;
+        return mFocus2 == null || mFocus2.getVisibility() != View.VISIBLE || mFocus2 == mBinding.control.action.opening || mFocus2 == mBinding.control.action.ending ? mBinding.control.action.next : mFocus2;
     }
 
     private boolean dispatchOpeningEndingAdjust(KeyEvent event) {
@@ -6305,7 +5960,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     @Override
+    protected boolean dispatchDiscMenuKey(KeyEvent event) {
+        // Let TV controls own DPAD/ENTER while visible, including the shared
+        // PlaybackActivity dispatch performed by super.dispatchKeyEvent().
+        if (isVisible(mBinding.control.getRoot()) || isVisible(mBinding.lutQuick)) return false;
+        return super.dispatchDiscMenuKey(event);
+    }
+
+    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (dispatchDiscMenuKey(event)) return true;
         if (KeyUtil.isActionUp(event) && KeyUtil.isBackKey(event) && mBinding.lutQuick.hideIfVisible()) return true;
         if (isVisible(mBinding.lutQuick)) return dispatchLutQuickKey(event);
         if (isFullscreen() && KeyUtil.isMenuKey(event)) onToggle();
@@ -6616,9 +6280,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     public void onKeyDown() {
-        // 下键呼出：无视上次焦点与按钮排序记忆，定到底栏「当前从左到右第一个可见可焦按钮」
-        mFocus2 = null;
-        showControlBarFocusFirst();
+        showControl(getFocus2());
     }
 
     @Override
@@ -6686,8 +6348,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         } else if (isVisible(mBinding.widget.center)) {
             hideCenter();
         } else if (isFullscreen()) {
-            if (Setting.isPlayBackToDetail()) exitFullscreen();
-            else finishVideoPlayback();
+            exitFullscreen();
         } else {
             finishVideoPlayback();
         }
@@ -6710,6 +6371,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     @Override
     protected void onDestroy() {
+        if (mCustomButtonPlayer != null) {
+            mCustomButtonPlayer.removeCustomButtonStateListener(mCustomButtonStateListener);
+            mCustomButtonPlayer = null;
+        }
+        if (mDiscMenuPlayer != null) {
+            mDiscMenuPlayer.removeDiscMenuStateListener(mDiscMenuStateListener);
+            mDiscMenuPlayer = null;
+        }
         mLyricsSearchSeq++;
         mLyricsRefreshSeq++;
         dismissLyricsResultDialog();
