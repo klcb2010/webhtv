@@ -298,6 +298,67 @@ def hide_tv_mpv_screenshot_items(path: Path) -> None:
     OK.append("TV mpv screenshot items hidden")
 
 
+def fix_tv_menu_order(path: Path) -> None:
+    """TV 个性设置菜单整理：改文案 + 把「楷体放大」搬到「MPV字体默认放大」下面。"""
+    if not path.is_file():
+        ERR.append("missing " + str(path))
+        return
+    t = path.read_text(encoding="utf-8")
+    if "EXO楷体默认放大" in t and 'android:id="@+id/mpvFontScale"' in t \
+            and t.index("EXO楷体默认放大") > t.index('android:id="@+id/mpvFontScale"'):
+        OK.append("TV menu already reordered")
+        return
+    t = t.replace('android:text="@string/setting_kaiti_scale"', 'android:text="EXO楷体默认放大"', 1)
+    t = t.replace('android:text="@string/setting_mpv_screenshot_brightness"', 'android:text="MPV截图亮度值"', 1)
+    t = t.replace('android:text="@string/setting_hdr_to_sdr"', 'android:text="HDR转码SDR"', 1)
+    try:
+        block, s, e = extract_item_block(t, "kaitiScale")
+        rest = t[:s] + t[e:].lstrip("\n")
+        import re as _re
+        rest = _re.sub(r"\n{3,}", "\n\n", rest)
+        _, _, me = extract_item_block(rest, "mpvFontScale")
+        t = rest[:me] + "\n\n" + block.strip("\n") + rest[me:]
+    except SystemExit as ex:
+        ERR.append("TV menu move failed: " + str(ex))
+        return
+    # 间距：kaitiScale 变成末项补 bottom margin，hdrToSdr 不再是末项去掉 bottom margin
+    i = t.index('android:id="@+id/kaitiScale"')
+    seg_end = t.index(">", i)
+    seg = t[i:seg_end]
+    if "layout_marginBottom" not in seg:
+        seg = seg.replace('\n            android:layout_marginTop="16dp"',
+                          '\n            android:layout_marginTop="16dp"\n            android:layout_marginBottom="24dp"', 1)
+        t = t[:i] + seg + t[seg_end:]
+    i = t.index('android:id="@+id/hdrToSdr"')
+    seg_end = t.index(">", i)
+    seg = t[i:seg_end].replace('\n            android:layout_marginBottom="24dp"', "", 1)
+    t = t[:i] + seg + t[seg_end:]
+    path.write_text(t, encoding="utf-8")
+    OK.append("TV menu reordered (kaiti -> below mpvFontScale)")
+
+
+def extract_item_block(t: str, item_id: str):
+    """按 LinearLayoutCompat 嵌套配对取整块（不依赖缩进，谁缩进歪了都能对上）。"""
+    key = 'android:id="@+id/%s"' % item_id
+    i = t.index(key)
+    lines = t.split("\n")
+    line_no = t[:i].count("\n")
+    open_line = line_no
+    while "androidx.appcompat.widget.LinearLayoutCompat" not in lines[open_line]:
+        open_line -= 1
+    depth = 0
+    close_line = open_line
+    for k in range(open_line, len(lines)):
+        depth += lines[k].count("<androidx.appcompat.widget.LinearLayoutCompat")
+        depth -= lines[k].count("</androidx.appcompat.widget.LinearLayoutCompat>")
+        if depth == 0 and k > open_line:
+            close_line = k
+            break
+    start = sum(len(l) + 1 for l in lines[:open_line])
+    end = sum(len(l) + 1 for l in lines[:close_line + 1]) - 1
+    return t[start:end], start, end
+
+
 def patch_tv_personal_layout(path: Path) -> None:
     if not path.is_file():
         ERR.append("missing " + str(path))
@@ -326,6 +387,7 @@ def main() -> None:
     patch_tv_personal_activity(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java")
     patch_tv_personal_layout(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
     hide_tv_mpv_screenshot_items(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
+    fix_tv_menu_order(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
     for line in OK:
         print("[mod] OK", line)
     for line in ERR:
