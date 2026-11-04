@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""TV 端（leanback）截图入口 + 两端截图按钮显隐 + TV 个性设置补「MPV字体默认放大」。
+"""手机端播放页截图入口（TV 端已按用户要求全部回退，不再处理 leanback）。
 
-幂等。改动清单：
-1) VideoActivity（leanback / mobile 两份）
+改动（幂等，按方法名定位，不用整段文本锚点）：
+1) app/src/mobile/.../ui/activity/VideoActivity.java
    - 新增 public capturePlaybackScreenshot()
    - 控制栏 @+id/screenshot 的点击监听
    - updateScreenshotAction()：只在「MPV + MPV截图未关」时显示按钮
-2) SettingPersonalActivity（leanback）
-   - 「播放器MPV截图」右侧初值
-   - 新增「MPV字体默认放大」一项（TV 端**不加**调试日志开关：TV 不好操作也不好读）
-3) activity_setting_personal.xml（leanback）—— 上面那一项的布局
+2) app/src/leanback/.../ui/activity/SettingPersonalActivity.java
+   - 「播放器MPV截图」右侧初值（原来只有点击才刷新）
+   - 新增「MPV字体默认放大」一项（TV 端不加调试日志开关）
+3) app/src/leanback/res/layout/activity_setting_personal.xml —— 上面那一项的布局
 
-定位方式：按方法名找定义再插到花括号内，不用整段文本锚点
-（apply.sh 里 inject_player_buttons_fix.py 会先改写这些方法，精确文本锚点会失效）。
+TV 播放页（leanback VideoActivity）、leanback 版 PhoneScreenshot、
+view_control_vod_action.xml 的改动，全部已移除。
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
 OK: list[str] = []
 ERR: list[str] = []
 
-MARK = "TV_SCREENSHOT_V1"
+MARK = "MOBILE_SCREENSHOT_V1"
 
 CAPTURE_METHOD = """
     /** MOD: 截图入口（%s）。MPV 走 mpv 原画 screenshot；EXO 不支持截图。 */
@@ -116,7 +116,6 @@ PERSONAL_XML = """        <androidx.appcompat.widget.LinearLayoutCompat
 
 
 def insert_into_method(t: str, name: str, line: str) -> tuple[str, bool]:
-    """把 line 插到名为 name 的方法的开花括号之后。找不到返回 (t, False)。"""
     i = t.find("private void %s(" % name)
     if i < 0:
         return t, False
@@ -126,13 +125,12 @@ def insert_into_method(t: str, name: str, line: str) -> tuple[str, bool]:
     return t[: b + 1] + "\n        " + line + t[b + 1:], True
 
 
-def patch_video_activity(path: Path, tag: str) -> None:
+def patch_mobile_video_activity(path: Path) -> None:
     if not path.is_file():
         ERR.append("missing " + str(path))
         return
     t = path.read_text(encoding="utf-8")
 
-    # ① capturePlaybackScreenshot()
     if MARK not in t:
         anchor = """    @Override
     protected PlayerView getExoView() {
@@ -141,12 +139,10 @@ def patch_video_activity(path: Path, tag: str) -> None:
 """
         if anchor in t:
             t = t.replace(anchor, anchor + CAPTURE_METHOD, 1)
-            OK.append(tag + " capturePlaybackScreenshot added")
+            OK.append("mobile VideoActivity capturePlaybackScreenshot added")
         else:
-            # 兜底：插到 isMpv()/getExoView 附近的类尾部不可靠，直接报错
-            ERR.append(tag + " anchor (getExoView) not found")
+            ERR.append("mobile VideoActivity anchor (getExoView) not found")
 
-    # ② 控制栏按钮监听
     if "action.screenshot.setOnClickListener" not in t:
         hook = "        mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());"
         if hook in t:
@@ -155,24 +151,22 @@ def patch_video_activity(path: Path, tag: str) -> None:
                 hook + "\n        mBinding.control.action.screenshot.setOnClickListener(view -> capturePlaybackScreenshot());",
                 1,
             )
-            OK.append(tag + " control-bar screenshot listener added")
+            OK.append("mobile VideoActivity control-bar screenshot listener added")
         else:
-            ERR.append(tag + " anchor (control.action.repeat listener) not found")
+            ERR.append("mobile VideoActivity anchor (control.action.repeat listener) not found")
 
-    # ③ 显隐规则
     if "updateScreenshotAction" not in t:
         done = False
         for name in ("updateCustomButtonVisibility", "applyActionButtonVisibility", "forceHideConfiguredActionButtons"):
             t2, ok = insert_into_method(t, name, "updateScreenshotAction();")
             if ok:
-                # 方法本体插在它前面
                 i = t2.find("private void %s(" % name)
                 t = t2[:i] + VISIBILITY_METHOD + t2[i:]
-                OK.append(tag + " screenshot visibility wired via " + name + "()")
+                OK.append("mobile VideoActivity screenshot visibility wired via " + name + "()")
                 done = True
                 break
         if not done:
-            ERR.append(tag + " no place to wire updateScreenshotAction()")
+            ERR.append("mobile VideoActivity no place to wire updateScreenshotAction()")
 
     path.write_text(t, encoding="utf-8")
 
@@ -185,7 +179,7 @@ def patch_tv_personal_activity(path: Path) -> None:
 
     ev = "        try { mBinding.kaitiScale.setOnClickListener(this::setKaiTiScale); } catch (Throwable ignored) {}"
     if "setMpvFontScale)" in t:
-        OK.append("TV personal listeners already added")
+        OK.append("TV personal listener already added")
     elif ev in t:
         t = t.replace(
             ev,
@@ -247,9 +241,8 @@ def patch_tv_personal_layout(path: Path) -> None:
 
 
 def main() -> None:
-    print("[mod] inject_tv_screenshot ROOT", ROOT)
-    patch_video_activity(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java", "TV VideoActivity")
-    patch_video_activity(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java", "mobile VideoActivity")
+    print("[mod] inject_playback_screenshot ROOT", ROOT)
+    patch_mobile_video_activity(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java")
     patch_tv_personal_activity(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java")
     patch_tv_personal_layout(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
     for line in OK:
@@ -258,7 +251,7 @@ def main() -> None:
         print("[mod] ERR", line)
     if ERR:
         sys.exit(1)
-    print("[mod] inject_tv_screenshot SUCCESS")
+    print("[mod] inject_playback_screenshot SUCCESS")
 
 
 if __name__ == "__main__":

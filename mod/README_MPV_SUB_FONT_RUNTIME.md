@@ -217,6 +217,25 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v45 变更（回退 TV 端截图）
+
+用户决定不在 TV 端做截图，本版把所有 TV 侧截图内容撤掉：
+
+| 撤掉的东西 | 说明 |
+|---|---|
+| `mod/app/src/leanback/java/.../utils/PhoneScreenshot.java` | 删除（leanback 不再有截图类） |
+| `mod/app/src/leanback/res/layout/view_control_vod_action.xml` | 不再交付（用仓库 mod 里那份，`@+id/screenshot` 仍是 `visibility="gone"`） |
+| leanback `VideoActivity` 的截图注入 | 删除（`capturePlaybackScreenshot` / 监听 / `updateScreenshotAction`） |
+
+保留的部分：
+
+- **手机端**截图照旧：`PhoneScreenshot`（mobile 那份）+ `VideoActivity` 的按钮监听与显隐规则
+  （只在「MPV + MPV截图未关」时显示）
+- TV 个性设置里「**MPV字体默认放大**」照样加（用户要求）
+- TV 个性设置「播放器MPV截图」右侧值的初始化修复（原来进页面是空的）
+
+hook 改名为 `inject_tv_screenshot.py`（文件名没变，内容是「手机端截图 + TV 字体项」）。
+
 ## v44 变更（hook 锚点改按方法名定位 / TV 只加字体项 / 日志默认关）
 
 ### 1. 修 CI 报错 `anchor for applyActionButtonVisibility not found`
