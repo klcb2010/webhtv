@@ -187,6 +187,9 @@ FORCE_CN_METHOD = """    // MPV_SUB_TRACKREADY_V1: 轨道表就绪后的自动�
     // MPV_SUB_LANG_V1_END"""
 
 FORCE_CN_HOOK = """                // MPV_SUB_LANG_V1_HOOK (MPV-BRANCH-ONLY): 等轨道表就绪后强制中文轨
+                // MPV_SUB_LANG_LADDER_V1: 原来只调度 900ms / 2600ms 两次，
+                // 中间 mpv 会把 sid 重置成默认轨（英文）并停留 1~2 秒 → 表现为
+                // 「先简体 → 变英文 → 又拉回」。改成阶梯，把回落窗口压到 200~600ms。
                 try {
                     android.os.Handler modLangHandler = new android.os.Handler(android.os.Looper.getMainLooper());
                     Runnable modLangRunnable = new Runnable() {
@@ -195,9 +198,10 @@ FORCE_CN_HOOK = """                // MPV_SUB_LANG_V1_HOOK (MPV-BRANCH-ONLY): �
                             MpvPlayer.this.modForcePreferredSubtitleTrack();
                         }
                     };
-                    modLangHandler.postDelayed(modLangRunnable, 900L);
-                    // MPV_SUB_SIMSELECT_RETRY: 外挂字幕可能晚于 file-loaded 才挂上，再补一次
-                    modLangHandler.postDelayed(modLangRunnable, 2600L);
+                    long[] modLangDelays = new long[]{180L, 420L, 700L, 1100L, 1600L, 2300L, 3200L, 4500L, 6500L};
+                    for (long modDelay : modLangDelays) {
+                        modLangHandler.postDelayed(modLangRunnable, modDelay);
+                    }
                 } catch (Throwable ignored) {
                 }"""
 
@@ -516,7 +520,7 @@ def patch_mpv_player(path: Path) -> None:
                 "                            }\n"
                 "                            modForcePreferredSubtitleTrack();\n"
                 "                        }\n"
-                "                    }, 400L);\n"
+                "                    }, 120L);\n"
                 "                } else {\n"
                 f'                    {LOG}.i("{TAG}", "sub-reload skipped: no subtitle track");\n'
                 "                }\n"

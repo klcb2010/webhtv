@@ -217,6 +217,28 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v52 变更（消除「先简体 → 变英文 → 又拉回」的抖动）
+
+现象：起播或切内核后，字幕先显示简体，过一两秒跳成英文，再被拉回简体，反复几次。
+
+根因：mpv 在轨道表重建 / sub 重新加载时会把 `sid` 重置成默认轨（这里是 1 = 英文），
+而我们的校正原本只调度两次（900ms / 2600ms），中间那段就是肉眼可见的英文窗口。
+
+改法：
+
+1. **校正阶梯**（`MPV_SUB_LANG_LADDER_V1`）：一次 file-loaded 调度 9 次
+   ```java
+   long[] modLangDelays = {180, 420, 700, 1100, 1600, 2300, 3200, 4500, 6500};  // ms
+   ```
+   回落窗口从 1~2 秒压到 200~600ms，反复拉回的次数也变少（每次校正都是幂等的
+   `keep`，只有真跑偏才 `select`）。
+2. **sub-reload 后恢复 sid 的延迟 400ms → 120ms**：reload 必然重置 sid，
+   原来的 400ms 是一段纯英文空窗。
+
+> 注意：`modForcePreferredSubtitleTrack()` 每次都会读 `track-list` 全表打分，
+> 单次开销很小（几十个 track），阶梯 9 次也不会影响播放；但如果以后轨数暴涨
+> （>200），可以把 6500ms 之后的那几次去掉。
+
 ## v51 变更（修「秒切后字体 / 简中一起失效」）
 
 背景：引入 `MOD_FAST_KERNEL_SWITCH_V1`（非解析源本地秒切，不再走 `SiteApi.playerContent`）
