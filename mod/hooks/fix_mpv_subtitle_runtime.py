@@ -38,10 +38,13 @@ MARK_LANG = "MPV_SUB_LANG_V1"
 MARK_FONT_PROBE = "MPV_SUB_FONTPROBE_V1"
 
 RELOAD_STATE = """    // MPV_SUB_RELOAD_STATE_V1 (MPV-BRANCH-ONLY): 只在字体/颜色真正变化时重载字幕
-    private static volatile String sModLastFont = "";
-    private static volatile String sModLastColor = "";
-    private static volatile String sModLastStyle = "";
-    private static volatile String sModLastScale = "";
+    // MPV_SUB_INSTANCE_STATE_V1 (MPV-BRANCH-ONLY): 这四个原来是 static，
+    // 秒切内核会新建 MpvPlayer 实例，静态值仍等于上次 → 误判"没变化" → 字体/颜色整场不应用。
+    // 改成实例字段后，每个新实例首轮必然应用一次。
+    private volatile String sModLastFont = "";
+    private volatile String sModLastColor = "";
+    private volatile String sModLastStyle = "";
+    private volatile String sModLastScale = "";
     // 每个播放器实例首次应用样式时校正一次字幕轨（EXO<->MPV 切换后仍生效）
     private volatile boolean sModLangApplied = false;
 
@@ -66,10 +69,26 @@ FORCE_CN_METHOD = """    // MPV_SUB_TRACKREADY_V1: 轨道表就绪后的自动�
     private boolean modCorrectScheduled;
     private long modLastCorrectAt;
 
+    // MPV_SUB_FASTSWITCH_RETRY_V1: 秒切后新实例 native 可能还没就绪。
+    // 原来这里直接 return，而调用方是一次性 POST → 整场不再校正（字体+简中一起失效）。
+    private int modForceRetryCount = 0;
+
     // MPV_SUB_LANG_V1_BEGIN (MPV-BRANCH-ONLY): file-loaded 后强制优先中文轨
     public void modForcePreferredSubtitleTrack() {
         try {
-            if (!modIsNativeReady()) return;
+            if (!modIsNativeReady()) {
+                if (modForceRetryCount < 10) {
+                    modForceRetryCount++;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            modForcePreferredSubtitleTrack();
+                        }
+                    }, 600L);
+                }
+                return;
+            }
+            modForceRetryCount = 0;
             // MPV_SUB_FONT_KAI_ONLY_V3: 轨道就绪时补一次字号。
             // 只有楷体系字体才吃「MPV字体默认放大」，其它字体保持 mpv 默认 55，不放大。
             try {

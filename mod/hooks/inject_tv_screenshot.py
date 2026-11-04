@@ -378,9 +378,54 @@ def patch_tv_personal_layout(path: Path) -> None:
     OK.append("TV personal layout: mpvFontScale added")
 
 
+FAST_SWITCH_RESUB = """        // MPV_SUB_FASTSWITCH_APPLY_V1: 秒切会新建引擎实例，主动补一次样式/轨迹应用
+        try {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }, 1200L);
+        } catch (Throwable ignored) {
+        }
+"""
+
+
+def patch_fast_switch_resub(path: Path, tag: str) -> None:
+    """秒切（switchPlayerKernel 走本地 switchPlayer）之后补一次字幕样式应用。"""
+    if not path.is_file():
+        ERR.append("missing " + str(path))
+        return
+    t = path.read_text(encoding="utf-8")
+    if "MPV_SUB_FASTSWITCH_APPLY_V1" in t:
+        OK.append(tag + " fast-switch resubmit already present")
+        return
+    anchors = [
+        """        player().switchPlayer(type);
+        setPlayerKernel();
+        setDecode();
+        setR1Callback();""",
+        """        player().switchPlayer(type);
+        setPlayerKernel();
+        setDecode();""",
+    ]
+    anchor = next((a for a in anchors if a in t), None)
+    if anchor is None:
+        ERR.append(tag + " anchor (switchPlayerKernel body) not found")
+        return
+    t = t.replace(anchor, anchor + "\n" + FAST_SWITCH_RESUB, 1)
+    path.write_text(t, encoding="utf-8")
+    OK.append(tag + " fast-switch resubmit added")
+
+
 def main() -> None:
     print("[mod] inject_playback_screenshot ROOT", ROOT)
     patch_mobile_video_activity(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java")
+    patch_fast_switch_resub(ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java", "mobile VideoActivity")
+    patch_fast_switch_resub(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java", "TV VideoActivity")
     patch_tv_personal_activity(ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java")
     patch_tv_personal_layout(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")
     hide_tv_mpv_screenshot_items(ROOT / "app/src/leanback/res/layout/activity_setting_personal.xml")

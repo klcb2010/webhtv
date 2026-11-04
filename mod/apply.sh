@@ -17,7 +17,8 @@ sync_subtitle_fonts() {
   local dst_dir="$MOD/app/src/main/assets/fonts"
   mkdir -p "$dst_dir"
   if [[ -d "$src_dir" ]]; then
-    for id in yiqicukai huipianheyuan fangzhengzhunyuan; do
+    # MPV-BRANCH-ONLY: 增加 筑紫A圆D
+    for id in yiqicukai huipianheyuan fangzhengzhunyuan zhuziAyuanD; do
       for ext in ttf otf TTF OTF ttc TTC ""; do
         local f
         if [[ -n "$ext" ]]; then f="$src_dir/${id}.${ext}"; else f="$src_dir/${id}"; fi
@@ -249,12 +250,6 @@ if [[ -f "$MOD/hooks/inject_mpv_phase_c.py" ]]; then
   python3 "$MOD/hooks/inject_mpv_phase_c.py" "$ROOT" || exit 1
 fi
 
-# ===== 内核秒切：非解析源跳过 playerContent 重取 =====
-if [[ -f "$MOD/hooks/inject_fast_kernel_switch.py" ]]; then
-  echo "[mod] inject_fast_kernel_switch"
-  python3 "$MOD/hooks/inject_fast_kernel_switch.py" "$ROOT" || exit 1
-fi
-
 # 静音 MPV_SIZE 调试日志仍可保留（与是否禁用内核无关）
 if [[ -f "$MOD/hooks/inject_silence_mpv_size.py" ]]; then
   echo "[mod] inject_silence_mpv_size"
@@ -288,4 +283,16 @@ fi
 if [[ -f "$MOD/hooks/inject_hdr_to_sdr.py" ]]; then
   echo "[mod] inject_hdr_to_sdr"
   python3 "$MOD/hooks/inject_hdr_to_sdr.py" "$ROOT" || exit 1
+fi
+
+# TV 端截图入口（leanback）：把手机端的截图能力（MPV 原画 / EXO 解码）移植过去
+if [[ -f "$MOD/hooks/inject_tv_screenshot.py" ]]; then
+  echo "[mod] inject_tv_screenshot"
+  python3 "$MOD/hooks/inject_tv_screenshot.py" "$ROOT" || exit 1
+fi
+
+# MPV-BRANCH-ONLY: 字幕字体/颜色运行时刷新（必须在 inject_mpv_phase_c 之后）
+if [[ -f "$MOD/hooks/fix_mpv_subtitle_runtime.py" ]]; then
+  echo "[mod] fix_mpv_subtitle_runtime"
+  python3 "$MOD/hooks/fix_mpv_subtitle_runtime.py" "$ROOT" || exit 1
 fi

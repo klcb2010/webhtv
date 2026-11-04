@@ -217,6 +217,52 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v51 变更（修「秒切后字体 / 简中一起失效」）
+
+背景：引入 `MOD_FAST_KERNEL_SWITCH_V1`（非解析源本地秒切，不再走 `SiteApi.playerContent`）
+之后，MPV 字幕字体和简体中文优选**同时**失效。
+
+两者共用的入口都是 `MpvPlayer.modApplySubtitleStyleRuntime` /
+`modForcePreferredSubtitleTrack`，而它们各自踩了一个坑：
+
+### 1. 四个 `sModLast*` 是 static（字体不生效的根因）
+
+```java
+private static volatile String sModLastFont  = "";   // ← 原来都是 static
+private static volatile String sModLastColor = "";
+private static volatile String sModLastStyle = "";
+private static volatile String sModLastScale = "";
+```
+
+秒切会**新建 MpvPlayer 实例**，但静态值仍是上一个实例写下的 → 判定「没变化」→
+整场不再 `sub-reload`、不重新应用字体/颜色。
+
+改为实例字段（`MPV_SUB_INSTANCE_STATE_V1`）：新实例首轮必然应用一次，
+同一实例内仍然只在变化时才 reload。
+
+### 2. `modForcePreferredSubtitleTrack()` 在 native 未就绪时直接 return
+
+```java
+if (!modIsNativeReady()) return;   // ← 调用方是一次性 POST，return 掉就整场不再校正
+```
+
+秒切后新实例的 native 可能还没就绪（旧实例刚 destroy），一次错过就永远不选轨
+→ 简中失效。
+
+改为自排队重试（`MPV_SUB_FASTSWITCH_RETRY_V1`）：每 600ms 一次，最多 10 次，
+就绪后 `modForceRetryCount` 归零。
+
+### 3. 秒切后主动补一次样式应用（两端）
+
+`switchPlayerKernel()` 的本地切分支末尾追加（`MPV_SUB_FASTSWITCH_APPLY_V1`）：
+
+```java
+new Handler(Looper.getMainLooper()).postDelayed(
+        () -> MpvSubtitleStylePolicy.applyRuntimeToActive(), 1200L);
+```
+
+不依赖任何回调时序，纯补一次调用。
+
 ## v50 变更（菜单间距 / 位置修正）
 
 1. **手机端「字幕字体」被搬到了末尾** —— V49 搬节点时按缩进配对，
