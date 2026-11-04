@@ -217,6 +217,36 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v26 变更（新增「MPV字体默认放大」）
+
+个性设置**最后一项**：`MPV字体默认放大`，点一下切下一个倍率。
+
+| 项 | 值 |
+|---|---|
+| 倍率 | 1.00x / 1.15x / 1.20x / 1.30x |
+| 默认 | **1.15x** |
+| 作用范围 | mpv 下所有字幕（ASS / 内封 / 外挂），不影响 EXO |
+| 生效方式 | 立即生效（播放中切换也立刻变） |
+
+**实现**：用 mpv 原生 `sub-scale` 属性（渲染层全局缩放），只加一个属性，不动任何现有逻辑。
+
+- 存储：`Setting.getMpvFontScaleFactor()` / `cycleMpvFontScale()`，键 `mpv_font_scale_index`
+- 运行时：`modApplySubtitleStyleRuntime()` 开头设 `sub-scale`
+- 初始化：`modSetInitOption("sub-scale", ...)`，保证首帧就是目标倍率（不会先 1.0 再跳）
+- 点击：`MpvSubtitleStylePolicy.applyRuntimeToActive()` 立即刷新
+- **切换倍率同时触发 `sub-reload`**：`MPV_SUB_RELOAD_V1` 的判定条件里加上了 scale，
+  所以改倍率会连字幕一起重载（400ms 后自动恢复原 sid），ASS 字幕也会立刻重绘。
+
+涉及文件：
+```
+mod/app/src/main/java/com/fongmi/android/tv/setting/Setting.java            （新增 4 个方法 + 数组）
+mod/app/src/mobile/res/layout/activity_setting_personal.xml                 （末尾加一项 mpvFontScale）
+mod/app/src/mobile/java/com/fongmi/android/tv/ui/activity/SettingPersonalActivity.java
+mod/hooks/fix_mpv_subtitle_runtime.py                                       （patch_mpv_sub_scale）
+```
+
+注意：`Setting.java` 与布局都是**整文件覆盖**，基于仓库 `mod/` 里现有版本改的。
+
 ## v25 变更（检查更新：只在同分支 release 里找最新）
 
 **问题**：`releases/latest` 是「仓库最新那个 release」。main 一同步上游就先发版，

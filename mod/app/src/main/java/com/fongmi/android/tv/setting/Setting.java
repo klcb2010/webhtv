@@ -1343,6 +1343,34 @@ public class Setting {
      * 当前字幕字体是否为「楷体系」（义启粗楷 / KaiTi / 楷体等）。
      * 圆体、系统默认返回 false。
      */
+    // ---------- MPV 字体默认放大（作用于 mpv 下所有字幕，含 ASS/内封/外挂） ----------
+    private static final float[] MPV_FONT_SCALES = {1.00f, 1.15f, 1.20f, 1.30f};
+    private static final String[] MPV_FONT_SCALE_LABELS = {"1.00x", "1.15x", "1.20x", "1.30x"};
+
+    public static int getMpvFontScaleIndex() {
+        int v = Prefers.getInt("mpv_font_scale_index", 1); // 默认 1.15x
+        if (v < 0 || v >= MPV_FONT_SCALES.length) v = 1;
+        return v;
+    }
+
+    public static void putMpvFontScaleIndex(int index) {
+        if (index < 0) index = 0;
+        if (index >= MPV_FONT_SCALES.length) index = MPV_FONT_SCALES.length - 1;
+        Prefers.put("mpv_font_scale_index", index);
+    }
+
+    public static void cycleMpvFontScale() {
+        putMpvFontScaleIndex((getMpvFontScaleIndex() + 1) % MPV_FONT_SCALES.length);
+    }
+
+    public static float getMpvFontScaleFactor() {
+        return MPV_FONT_SCALES[getMpvFontScaleIndex()];
+    }
+
+    public static String getMpvFontScaleLabel() {
+        return MPV_FONT_SCALE_LABELS[getMpvFontScaleIndex()];
+    }
+
     public static boolean isKaiTiLikeSubtitleFont() {
         try {
             String id = getSubtitleFontId();

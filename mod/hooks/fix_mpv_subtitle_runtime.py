@@ -41,6 +41,7 @@ RELOAD_STATE = """    // MPV_SUB_RELOAD_STATE_V1 (MPV-BRANCH-ONLY): 只在字体
     private static volatile String sModLastFont = "";
     private static volatile String sModLastColor = "";
     private static volatile String sModLastStyle = "";
+    private static volatile String sModLastScale = "";
     // 每个播放器实例首次应用样式时校正一次字幕轨（EXO<->MPV 切换后仍生效）
     private volatile boolean sModLangApplied = false;
 
@@ -460,11 +461,13 @@ def patch_mpv_player(path: Path) -> None:
                 '            String modFont = font == null ? "" : font;\n'
                 '            String modColor = color == null ? "" : color;\n'
                 '            String modStyle = forceStyle == null ? "" : forceStyle;\n'
+                "            String modScale = String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor());\n"
                 "            if (!modFont.equals(sModLastFont) || !modColor.equals(sModLastColor)\n"
-                "                    || !modStyle.equals(sModLastStyle)) {\n"
+                "                    || !modStyle.equals(sModLastStyle) || !modScale.equals(sModLastScale)) {\n"
                 "                sModLastFont = modFont;\n"
                 "                sModLastColor = modColor;\n"
                 "                sModLastStyle = modStyle;\n"
+                "                sModLastScale = modScale;\n"
                 '                String modSid = propertyStringOrInt("sid");\n'
                 '                String modSeeking = stringProperty("seeking", "no");\n'
                 '                if ("yes".equals(modSeeking)) {\n'
@@ -1116,6 +1119,62 @@ def patch_mpv_track_ready(path: Path) -> None:
         ERR.append("track-ready hook not applied")
 
 
+def patch_mpv_sub_scale(path: Path) -> None:
+    """MPV_SUB_SCALE_V1：把所有 mpv 字幕按用户选的倍率整体放大。
+
+    mpv 的 sub-scale 是渲染层全局缩放，对 ASS / 内封 / 外挂都生效，
+    且与 sub-ass-style-overrides 不冲突，属于「只加一个属性」的最小改动。
+    """
+    if not path.is_file():
+        ERR.append(f"MpvPlayer.java not found: {path}")
+        return
+    text = read(path)
+    if "MPV_SUB_SCALE_V1" in text:
+        OK.append("mpv sub-scale already injected")
+        return
+    span = find_method(
+        text,
+        r"^[ \t]*public\s+boolean\s+modApplySubtitleStyleRuntime\s*\(\s*String\s+\w+\s*,\s*String\s+\w+\s*,\s*String\s+\w+\s*,\s*String\s+\w+\s*\)\s*\{",
+    )
+    if span is None:
+        ERR.append("modApplySubtitleStyleRuntime not found (sub-scale)")
+        return
+    _, b0, e0 = span
+    body = text[b0:e0]
+    m = re.search(r"(?m)^([ \t]*)boolean ok = true;", body)
+    if not m:
+        ERR.append("modApplySubtitleStyleRuntime ok flag not found (sub-scale)")
+        return
+    indent = m.group(1)
+    ins = (
+        indent + "// MPV_SUB_SCALE_V1 (MPV-BRANCH-ONLY): 字体默认放大，mpv 下所有字幕都吃这个倍率\n"
+        + indent + "try {\n"
+        + indent + "    ok &= modSetRuntimeProperty(\"sub-scale\", String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor()));\n"
+        + indent + "} catch (Throwable ignored) {\n"
+        + indent + "}\n"
+    )
+    pos = b0 + m.end()
+    text = text[:pos] + "\n" + ins + text[pos:]
+
+    # 初始化选项也带一份，保证首帧字幕就是目标倍率（不至于先 1.0 再跳一下）
+    init_anchor = 'if (fontFamily != null && !fontFamily.isEmpty()) modSetInitOption("sub-font", fontFamily);'
+    if text.count(init_anchor) == 1:
+        init_block = (init_anchor
+                      + '\n                try {\n'
+                      + '                    modSetInitOption("sub-scale", String.valueOf(com.fongmi.android.tv.setting.Setting.getMpvFontScaleFactor()));\n'
+                      + '                } catch (Throwable ignored) {\n'
+                      + '                }')
+        text = text.replace(init_anchor, init_block, 1)
+    else:
+        print("[mod] WARN init option anchor count=%d (sub-scale 仅运行时生效)" % text.count(init_anchor))
+
+    write(path, text)
+    if "MPV_SUB_SCALE_V1" in read(path):
+        OK.append("inject mpv sub-scale (default 1.15)")
+    else:
+        ERR.append("sub-scale patch not applied")
+
+
 def main() -> int:
     allow = os.environ.get("MOD_ALLOW_NON_MPV", "") == "1"
     ok_branch, why = branch_allowed(ROOT)
@@ -1142,6 +1201,7 @@ def main() -> int:
     patch_exo_prefer_cn(ROOT / "app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java")
     patch_mpv_sub_add_lang(player)
     patch_mpv_track_ready(player)
+    patch_mpv_sub_scale(player)
     patch_updater_filter(ROOT / "app/src/main/java/com/fongmi/android/tv/Updater.java")
 
     for x in OK:

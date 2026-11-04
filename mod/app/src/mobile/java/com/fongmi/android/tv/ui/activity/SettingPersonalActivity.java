@@ -80,6 +80,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.mpvScreenshotBtn.setOnClickListener(this::setMpvScreenshotBtn); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBrightnessBoost.setOnClickListener(this::setMpvScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
+        try { mBinding.mpvFontScale.setOnClickListener(this::setMpvFontScale); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
     }
@@ -132,6 +133,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.mpvScreenshotBtnText.setText(Setting.getMpvScreenshotModeLabel()); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBrightnessBoostText.setText(Setting.getMpvScreenshotBrightnessBoostLabel()); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
+        try { mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel()); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
@@ -408,6 +410,23 @@ public class SettingPersonalActivity extends BaseActivity {
         }
     }
 
+
+    /** MPV-BRANCH-ONLY: 点一下切下一个倍率（1.00 / 1.15 / 1.20 / 1.30），立即作用于 mpv 字幕 */
+    private void setMpvFontScale(View view) {
+        try {
+            Setting.cycleMpvFontScale();
+        } catch (Throwable ignored) {
+        }
+        try {
+            mBinding.mpvFontScaleText.setText(Setting.getMpvFontScaleLabel());
+        } catch (Throwable ignored) {
+        }
+        try {
+            com.fongmi.android.tv.player.mpv.MpvSubtitleStylePolicy.applyRuntimeToActive();
+        } catch (Throwable ignored) {
+        }
+        refreshTexts();
+    }
 
     private void setKaiTiScale(View view) {
         Setting.cycleKaiTiScale();
