@@ -53,8 +53,11 @@ import java.util.concurrent.TimeoutException;
 public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
-    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
+    // MAIN_SUB_UPD_SELFBASE_V1: 本仓库 MPV 分支 release 的 tag/资产名标记，main 版要跳过它们
+    private static final String MOD_EXCLUDE_TAG_MARK = "-mpv";
+
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(16);
+    private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(8);
     private static final Map<String, String> GITHUB_DOWNLOAD_HEADERS = createGithubDownloadHeaders();
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
@@ -179,8 +182,86 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        // 不走 api.github.com：用户选的加速镜像 → 直连 → 其它内置镜像
+        // MAIN_SUB_UPD_SELFBASE_V1:
+        // 不能用「谁发布得晚」判断最新版 —— MPV 分支一发包，latest 就变成它的，
+        // main 版请求 <name>.json 会 404 → main 版永远检测失败。
+        // 正确做法：只在「与本版同类的 release」里找最新的，即 tag 不含 -mpv 的那些。
+        //   1) 先试 releases/latest/download（快；latest 恰好是 main 的包时一次命中）
+        //   2) 否则用 releases.atom（github.com 域，不依赖 api.github.com）
+        //      按时间倒序取最近 tag，挑第一个不含 -mpv 的
+        Update latest = modTryLatest(channel);
+        if (latest != null && latest.hasManifest()) return latest;
+        Update sameBase = modTrySameBranchFeed(channel);
+        if (sameBase != null && sameBase.hasManifest()) return sameBase;
+        Update failed = latest != null ? latest : Update.empty(channel);
+        if (!failed.hasManifest() && TextUtils.isEmpty(failed.error)) {
+            failed.error = "no matching release for " + getName();
+        }
+        return failed;
+    }
+
+    /** 1) releases/latest/download/<name>.json，多镜像轮询 */
+    private Update modTryLatest(String channel) {
         String direct = Github.getJson(getName());
+        java.util.LinkedHashSet<String> urls = modRouteUrls(direct);
+        Update last = null;
+        for (String url : urls) {
+            try {
+                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
+                if (update.hasManifest()) return update;
+                last = update;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return last;
+    }
+
+    /** 2) 在同类 release 里找最新：releases.atom 的 tag 列表 → 跳过 -mpv 的 */
+    private Update modTrySameBranchFeed(String channel) {
+        java.util.LinkedHashSet<String> urls = modRouteUrls(modAtomUrl());
+        for (String url : urls) {
+            try {
+                String xml = UpdateHttp.string(url, GITHUB_DOWNLOAD_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
+                if (TextUtils.isEmpty(xml)) continue;
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("releases/tag/([^\"'<>\s]+)").matcher(xml);
+                int picked = 0;
+                while (m.find()) {
+                    String tag = m.group(1).trim();
+                    if (tag.contains(MOD_EXCLUDE_TAG_MARK)) continue;
+                    if (picked >= 3) break;
+                    picked++;
+                    try {
+                        Update update = readUpdate(Update.CHANNEL_STABLE,
+                                modReleaseDownloadUrl(tag), GITHUB_DOWNLOAD_HEADERS, "");
+                        if (update.hasManifest()) return update;
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (picked > 0) return null;
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String modRepoBase() {
+        String probe = Github.getCnbAsset("probe");
+        int idx = probe.indexOf("/releases/latest/download/");
+        return idx > 0 ? probe.substring(0, idx) : "https://github.com/klcb2010/webhtv";
+    }
+
+    private String modAtomUrl() {
+        return modRepoBase() + "/releases.atom";
+    }
+
+    private String modReleaseDownloadUrl(String tag) {
+        return modRepoBase() + "/releases/download/" + tag + "/" + getName() + ".json";
+    }
+
+    /** 路由顺序：用户选的加速源 → 直连 → 内置镜像 */
+    private java.util.LinkedHashSet<String> modRouteUrls(String directUrl) {
         java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         try {
             String selected = Setting.getUpdateGithubProxy();
@@ -189,39 +270,26 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
                     Setting.getUpdateGithubProxyUrl(),
                     Setting.getUpdateGithubProxyMode());
             if (github != null && !GithubProxy.DIRECT.equals(github.id)) {
-                String rewritten = github.rewrite(direct);
+                String rewritten = github.rewrite(directUrl);
                 if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
             }
         } catch (Throwable ignored) {
         }
-        urls.add(direct);
+        urls.add(directUrl);
         try {
             for (GithubProxy.Preset preset : GithubProxy.presets()) {
                 if (GithubProxy.DIRECT.equals(preset.id) || GithubProxy.CUSTOM.equals(preset.id)) continue;
                 if (TextUtils.isEmpty(preset.baseUrl)) continue;
                 try {
                     GithubProxy.Config cfg = GithubProxy.resolve(preset.id, "", GithubProxy.MODE_FULL_URL);
-                    String rewritten = cfg.rewrite(direct);
+                    String rewritten = cfg.rewrite(directUrl);
                     if (!TextUtils.isEmpty(rewritten)) urls.add(rewritten);
                 } catch (Throwable ignored) {
                 }
             }
         } catch (Throwable ignored) {
         }
-        String lastError = "";
-        for (String url : urls) {
-            try {
-                Update update = readUpdate(Update.CHANNEL_STABLE, url, GITHUB_DOWNLOAD_HEADERS, "");
-                if (update.hasManifest()) return update;
-                if (!TextUtils.isEmpty(update.error)) lastError = update.error;
-            } catch (Exception e) {
-                e.printStackTrace();
-                lastError = e.getMessage();
-            }
-        }
-        Update empty = Update.empty(Update.CHANNEL_STABLE);
-        empty.error = lastError;
-        return empty;
+        return urls;
     }
 
     private boolean isBetaRelease(JSONObject release) {
