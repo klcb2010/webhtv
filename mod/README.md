@@ -1,17 +1,18 @@
-# MOD_FAST_KERNEL_SWITCH_V1 — 播放器内核秒切
+# MOD_FAST_KERNEL_SWITCH_V1 完整包
 
-## 改动说明
-- 仅 MPV 分支
-- `VideoActivity.refreshAndSwitchPlayerKernel`：
-  - 非解析源 + 已有有效播放 URL → 直接 return false，走本地 `player().switchPlayer(type)`（秒切）
-  - 解析源仍走原来的 `SiteApi.playerContent` 重取链，功能不变
+## 用法（覆盖复制，不用手改）
 
-## 文件清单
-- `app/src/mobile/.../VideoActivity.java` （已打补丁）
-- `app/src/leanback/.../VideoActivity.java` （已打补丁）
-- `hooks/inject_fast_kernel_switch.py` （幂等注入脚本）
-- `apply.sh` （已加入对上述 hook 的调用）
+```bash
+# 仓库根目录
+unzip -o mod-mpv-fast-kernel-switch-v4-20261104.zip
+# 合并覆盖（不要先删整个 mod，否则其它 hooks 会丢）
+cp -a mod/. 你的仓库路径/mod/
+# 照常跑 apply-mod-and-build
+```
 
-## 使用
-直接把本包 `mod/` 目录内容覆盖到仓库的 `mod/` 即可，然后照常跑你的 apply-mod-and-build。
-无需再手工改任何东西。
+## 包含
+- 已打补丁的 TV / 手机 VideoActivity
+- hooks/inject_fast_kernel_switch.py
+- 已加入调用的 apply.sh
+
+非解析源切换内核秒切；解析源逻辑不变。
