@@ -1390,10 +1390,9 @@ public class Setting {
 
     /**
      * 最终应用到 SubtitleView 的倍率（EXO 侧）。
-     * = 楷体系 ? 楷体档位 : 1.0
      *
-     * 只按楷体系档位缩放，**不乘**「MPV字体默认放大」倍率。
-     * 那个倍率是 mpv 侧的全局字号开关；乘进 EXO 会把所有字体一起放大（连调到最小也偏大一档）。
+     * EXO 只管自己：只认楷体档位，不参与「MPV字体默认放大」那一套。
+     * 楷体系 → 楷体档位；非楷体系 → 1.0（绝不放大）。
      */
     public static float getEffectiveSubtitleFontScale() {
         return isKaiTiLikeSubtitleFont() ? getKaiTiScaleFactor() : 1.0f;

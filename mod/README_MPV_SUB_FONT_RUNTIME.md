@@ -217,6 +217,14 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v36 变更（EXO 只认楷体档位 / 截图日志进文件）
+
+1. **EXO 与 MPV 彻底解耦**：`getEffectiveSubtitleFontScale()` = `楷体系 ? 楷体档位 : 1.0`，
+   **不吃**「MPV字体默认放大」倍率。EXO 只认楷体档位，MPV 才吃倍率（且不分字体）。
+2. **截图诊断日志改为写 `ModDebugLog` 文件**（不再只进 logcat），并新增帧内容统计：
+   `savePng bitmap=WxH stats=3840x2160 avg=... BLACK`。`BLACK` 表示解出来的就是黑帧
+   （多为 HDR/10bit 源），据此判断是取帧失败还是回退 Surface。
+
 ## v33 变更（字号放大只对楷体生效 / 日志开关即时生效）
 
 1. **回退 v30 的「EXO 也乘倍率」**：`Setting.getEffectiveSubtitleFontScale()` 恢复成

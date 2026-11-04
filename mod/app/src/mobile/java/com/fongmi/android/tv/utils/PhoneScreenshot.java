@@ -62,6 +62,27 @@ public final class PhoneScreenshot {
         }
     }
 
+    /** 采样平均亮度（0~255）。用于判断解出来的是不是黑帧。 */
+    private static String frameStats(Bitmap b) {
+        try {
+            if (b == null) return "null";
+            int w = b.getWidth(), h = b.getHeight();
+            long sum = 0;
+            int cnt = 0;
+            for (int gy = 1; gy <= 8; gy++) {
+                for (int gx = 1; gx <= 8; gx++) {
+                    int px = b.getPixel(w * gx / 9, h * gy / 9);
+                    sum += ((px >> 16) & 0xFF) + ((px >> 8) & 0xFF) + (px & 0xFF);
+                    cnt++;
+                }
+            }
+            int avg = cnt == 0 ? 0 : (int) (sum / (cnt * 3));
+            return w + "x" + h + " avg=" + avg + (avg < 6 ? " BLACK" : "");
+        } catch (Throwable t) {
+            return "statsErr=" + t;
+        }
+    }
+
     public interface Callback {
         void onSuccess(Uri uri);
 
@@ -123,7 +144,7 @@ public final class PhoneScreenshot {
             }
             final Snapshot snap = snapshotPlayer(playerView);
             if (diag()) try {
-                Log.i(TAG, "snapshot uri=" + (snap == null ? "null" : String.valueOf(snap.uri))
+                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "snapshot uri=" + (snap == null ? "null" : String.valueOf(snap.uri))
                         + " posMs=" + (snap == null ? -1 : snap.posMs)
                         + " video=" + (snap == null ? "?" : (snap.videoW + "x" + snap.videoH)));
             } catch (Throwable ignored) {
@@ -142,10 +163,10 @@ public final class PhoneScreenshot {
                         frame = decodeFromSnapshot(snap);
                     }
                 } catch (Throwable e) {
-                    if (diag()) try { Log.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
+                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "decode err=" + e); } catch (Throwable ignored) {}
                 }
                 if (diag()) try {
-                    Log.i(TAG, "decode costMs=" + (android.os.SystemClock.elapsedRealtime() - t0)
+                    com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "decode costMs=" + (android.os.SystemClock.elapsedRealtime() - t0)
                             + " frame=" + (frame == null ? "null" : (frame.getWidth() + "x" + frame.getHeight())));
                 } catch (Throwable ignored) {
                 }
@@ -157,7 +178,7 @@ public final class PhoneScreenshot {
                     saveAsync(activity, out, callback);
                     return;
                 }
-                if (diag()) try { Log.i(TAG, "path=SURFACE_FALLBACK decodeFrame=null"); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "path=SURFACE_FALLBACK decodeFrame=null"); } catch (Throwable ignored) {}
                 main.post(() -> captureSurface(activity, playerView, main, callback));
             });
         };
@@ -203,7 +224,7 @@ public final class PhoneScreenshot {
             }
             return new Snapshot(uri, posMs, headers, vw, vh);
         } catch (Throwable e) {
-            if (diag()) try { Log.i(TAG, "snapshotPlayer err=" + e); } catch (Throwable ignored) {}
+            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "snapshotPlayer err=" + e); } catch (Throwable ignored) {}
             return null;
         }
     }
@@ -214,7 +235,7 @@ public final class PhoneScreenshot {
         long posUs = Math.max(0L, snap.posMs) * 1000L;
         Bitmap b = tryRetrieverUri(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
         if (b != null) return b;
-        if (diag()) try { Log.i(TAG, "retriever failed, trying MediaCodec uri=" + snap.uri); } catch (Throwable ignored) {}
+        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever failed, trying MediaCodec uri=" + snap.uri); } catch (Throwable ignored) {}
         return tryMediaCodecFrame(snap.uri, snap.headers, posUs, snap.videoW, snap.videoH);
     }
 
@@ -222,7 +243,7 @@ public final class PhoneScreenshot {
     private static Bitmap tryRetrieverUri(Uri uri, Map<String, String> headers, long posUs, int playW, int playH) {
         if (uri == null) return null;
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.US);
-        if (diag()) try { Log.i(TAG, "retriever scheme=" + scheme + " posUs=" + posUs); } catch (Throwable ignored) {}
+        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever scheme=" + scheme + " posUs=" + posUs); } catch (Throwable ignored) {}
 
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
@@ -232,7 +253,7 @@ public final class PhoneScreenshot {
                 Map<String, String> hdr = headers == null ? Collections.emptyMap() : headers;
                 retriever.setDataSource(uri.toString(), hdr);
             } else {
-                if (diag()) try { Log.i(TAG, "retriever skip scheme=" + scheme); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever skip scheme=" + scheme); } catch (Throwable ignored) {}
                 return null;
             }
 
@@ -268,37 +289,37 @@ public final class PhoneScreenshot {
                 dstH = fitted[1];
             }
             if (diag()) try {
-                Log.i(TAG, "meta=" + metaW + "x" + metaH + " playVideoSize=" + playW + "x" + playH + " dst=" + dstW + "x" + dstH);
+                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "meta=" + metaW + "x" + metaH + " playVideoSize=" + playW + "x" + playH + " dst=" + dstW + "x" + dstH);
             } catch (Throwable ignored) {}
 
             Bitmap bitmap = null;
             if (dstW > 0 && dstH > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 try {
                     bitmap = retriever.getScaledFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST, dstW, dstH);
-                    if (diag()) try { Log.i(TAG, "getScaledFrameAtTime CLOSEST " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
+                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
                 } catch (Throwable e) {
-                    if (diag()) try { Log.i(TAG, "getScaledFrameAtTime CLOSEST err=" + e); } catch (Throwable ignored) {}
+                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST err=" + e); } catch (Throwable ignored) {}
                 }
                 if (bitmap == null) {
                     try {
                         bitmap = retriever.getScaledFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dstW, dstH);
-                        if (diag()) try { Log.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
+                        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
                     } catch (Throwable e) {
-                        if (diag()) try { Log.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC err=" + e); } catch (Throwable ignored) {}
+                        if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getScaledFrameAtTime CLOSEST_SYNC err=" + e); } catch (Throwable ignored) {}
                     }
                 }
             }
             if (bitmap == null) {
                 try {
                     bitmap = retriever.getFrameAtTime(posUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-                    if (diag()) try { Log.i(TAG, "getFrameAtTime " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
+                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getFrameAtTime " + (bitmap == null ? "null" : (bitmap.getWidth() + "x" + bitmap.getHeight()))); } catch (Throwable ignored) {}
                 } catch (Throwable e) {
-                    if (diag()) try { Log.i(TAG, "getFrameAtTime err=" + e); } catch (Throwable ignored) {}
+                    if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "getFrameAtTime err=" + e); } catch (Throwable ignored) {}
                 }
             }
             return bitmap;
         } catch (Throwable e) {
-            if (diag()) try { Log.i(TAG, "retriever exception: " + e); } catch (Throwable ignored) {}
+            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "retriever exception: " + e); } catch (Throwable ignored) {}
             return null;
         } finally {
             try { retriever.release(); } catch (Throwable ignored) {}
@@ -363,7 +384,7 @@ public final class PhoneScreenshot {
         // 固定最高可用分辨率，不因失败降档重试
         int[] full = fit(srcW, srcH, MAX_EDGE);
         if (diag()) try {
-            Log.i(TAG, "surface surf=" + surfW + "x" + surfH
+            com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "surface surf=" + surfW + "x" + surfH
                     + " video=" + (video != null ? video[0] + "x" + video[1] : "null")
                     + " target=" + srcW + "x" + srcH
                     + " pixelCopy=" + full[0] + "x" + full[1]);
@@ -690,7 +711,7 @@ public final class PhoneScreenshot {
                     }
                     toSave = bright;
                 }
-                if (diag()) try { Log.i(TAG, "savePng bitmap=" + toSave.getWidth() + "x" + toSave.getHeight()); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "savePng bitmap=" + toSave.getWidth() + "x" + toSave.getHeight() + " stats=" + frameStats(toSave)); } catch (Throwable ignored) {}
                 uri = savePng(activity, toSave);
             } catch (Throwable e) {
                 err = e.getMessage();
@@ -876,7 +897,7 @@ public final class PhoneScreenshot {
             } else if ("http".equals(scheme) || "https".equals(scheme)) {
                 extractor.setDataSource(uri.toString(), hdr);
             } else {
-                if (diag()) try { Log.i(TAG, "codec skip scheme=" + scheme); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec skip scheme=" + scheme); } catch (Throwable ignored) {}
                 return null;
             }
 
@@ -892,7 +913,7 @@ public final class PhoneScreenshot {
                 }
             }
             if (videoTrack < 0 || format == null) {
-                if (diag()) try { Log.i(TAG, "codec no video track"); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec no video track"); } catch (Throwable ignored) {}
                 return null;
             }
             extractor.selectTrack(videoTrack);
@@ -908,7 +929,7 @@ public final class PhoneScreenshot {
                 height = playH;
             }
             if (width <= 0 || height <= 0) {
-                if (diag()) try { Log.i(TAG, "codec unknown size"); } catch (Throwable ignored) {}
+                if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec unknown size"); } catch (Throwable ignored) {}
                 return null;
             }
             int[] fitted = fit(width, height, MAX_EDGE);
@@ -917,7 +938,7 @@ public final class PhoneScreenshot {
             String mime = format.getString(MediaFormat.KEY_MIME);
             if (mime == null) return null;
             if (diag()) try {
-                Log.i(TAG, "codec track=" + width + "x" + height + " out=" + outW + "x" + outH + " mime=" + mime);
+                com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec track=" + width + "x" + height + " out=" + outW + "x" + outH + " mime=" + mime);
             } catch (Throwable ignored) {}
 
             reader = ImageReader.newInstance(outW, outH, ImageFormat.YUV_420_888, 2);
@@ -974,7 +995,7 @@ public final class PhoneScreenshot {
                             if (image != null) {
                                 result = yuv420ToBitmap(image);
                                 if (diag()) try {
-                                    Log.i(TAG, "codec frame=" + (result == null ? "null" : (result.getWidth() + "x" + result.getHeight())));
+                                    com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec frame=" + (result == null ? "null" : (result.getWidth() + "x" + result.getHeight())));
                                 } catch (Throwable ignored) {}
                                 if (result != null) gotFrame = true;
                             }
@@ -989,7 +1010,7 @@ public final class PhoneScreenshot {
             }
             return result;
         } catch (Throwable e) {
-            if (diag()) try { Log.i(TAG, "codec error: " + e); } catch (Throwable ignored) {}
+            if (diag()) try { com.fongmi.android.tv.utils.ModDebugLog.i(TAG, "codec error: " + e); } catch (Throwable ignored) {}
             return null;
         } finally {
             try { if (codec != null) { codec.stop(); codec.release(); } } catch (Throwable ignored) {}
