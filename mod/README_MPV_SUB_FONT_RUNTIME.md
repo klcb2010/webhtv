@@ -217,6 +217,45 @@ exoForceCn(v11) select index=2 score=100 label=中文，Simplified，SRT
 ```
 看到 `(v11)` 才是新包；仍打 `forceCnTrack skip:`（无版本号）说明包没换成功。
 
+## v44 变更（hook 锚点改按方法名定位 / TV 只加字体项 / 日志默认关）
+
+### 1. 修 CI 报错 `anchor for applyActionButtonVisibility not found`
+
+V43 用整段文本做锚点，但 `inject_player_buttons_fix.py` 会先改写
+`applyActionButtonVisibility()`（在花括号后插入 OP/ED 隐藏逻辑），文本锚点因此失配。
+
+V44 改成**按方法名定位、插到花括号内**：
+
+```python
+i = t.find("private void %s(" % name)
+b = t.find("{", i)
+t = t[:b+1] + "\n        updateScreenshotAction();" + t[b+1:]
+```
+
+依次尝试 `updateCustomButtonVisibility` → `applyActionButtonVisibility` →
+`forceHideConfiguredActionButtons`，命中即止。
+
+### 2. TV 个性设置只加「MPV字体默认放大」
+
+TV 上不再加「播放器临时调试日志」—— TV 遥控器不好操作，日志也不好捞。
+
+### 3. 日志默认关闭
+
+`ModDebugLog`：
+
+```java
+public static boolean isRuntimeOverrideOn() { return runtimeOverride != null && runtimeOverride; }
+public static boolean isEnabled() {
+    if (!LOG_ACTIVE) return false;
+    return runtimeOverride != null && runtimeOverride;   // 默认 null → false → 不打日志
+}
+```
+
+- 默认：**不打日志**
+- 手机端点「播放器临时调试日志」→ 打开（内存态，重启恢复关闭）
+- TV 端没有开关，想抓 TV 日志就临时把 `LOG_ACTIVE` 改 false→true 出包
+- `PhoneScreenshot.diag()` 同样跟随，默认静默
+
 ## v43 变更（截图按钮只在「MPV + 截图未关」时出现）
 
 V42 只做到「EXO 点截图报不支持」，按钮仍然一直显示。V43 把显隐规则做成统一的一处：

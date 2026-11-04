@@ -16,8 +16,9 @@ import java.util.Locale;
 public final class ModDebugLog {
 
     // ============================================================
-    // 日志总开关（编译期）：V30 起默认 true；想彻底不打日志就改成 false
-    // 运行期可在「个性设置 → 播放器临时调试日志」里随时开关，点一下立即生效
+    // 日志总开关（编译期）：V44 起默认 false = 默认不打日志
+    // 手机端可在「个性设置 → 播放器临时调试日志」里打开（内存态，重启恢复关闭）
+    // TV 端不提供这个开关（不好操作也不好读），想抓 TV 日志就把它临时改成 true 出包
     // ============================================================
     private static final boolean LOG_ACTIVE = true;
 
@@ -40,15 +41,15 @@ public final class ModDebugLog {
         runtimeOverride = on;
     }
 
-    /** 当前是否在打日志（含临时开关） */
+    /** 运行期开关的当前值（默认关闭） */
     public static boolean isRuntimeOverrideOn() {
-        return runtimeOverride != null ? runtimeOverride : LOG_ACTIVE;
+        return runtimeOverride != null && runtimeOverride;
     }
 
+    /** 当前是否在打日志：默认关闭，只有运行期开关被打开才打 */
     public static boolean isEnabled() {
         if (!LOG_ACTIVE) return false;
-        if (runtimeOverride != null) return runtimeOverride;
-        return true;
+        return runtimeOverride != null && runtimeOverride;
     }
 
     public static void init(Context context) {
