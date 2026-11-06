@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_playback_screenshot_btn">Player control screenshot</string>
+    <string name="setting_screenshot_brightness">Screenshot brightness boost</string>
+    <string name="play_screenshot">Screenshot</string>
+    <string name="screenshot_ok">Saved to Pictures/WEBHTV</string>
+    <string name="screenshot_fail">Screenshot failed</string>
+    <string name="screenshot_unavailable">Video surface unavailable</string>
+    <string name="setting_hdr_to_sdr">HDR to SDR</string>
+</resources>

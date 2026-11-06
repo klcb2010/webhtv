@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingLeft="22dp"
+    android:paddingRight="22dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="16dp"
+    android:background="@drawable/shape_child_lock_dialog">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/child_lock_gate_message"
+        android:textColor="#FF263238"
+        android:textSize="15sp"
+        android:paddingBottom="16dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="18dp">
+
+        <EditText
+            android:id="@+id/childLockGatePassword"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:hint="@string/child_lock_password_hint"
+            android:textColor="#FF263238"
+            android:textColorHint="#99263238"
+            android:textSize="15sp"
+            android:background="@drawable/selector_child_lock_edit"
+            android:nextFocusDown="@+id/childLockGateUnlock" />
+
+        <ImageButton
+            android:id="@+id/childLockGatePasswordToggle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/selector_child_lock_focus"
+            android:contentDescription="@string/child_lock_toggle_password"
+            android:src="@drawable/ic_child_lock_eye_closed"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/childLockGateExit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="64dp"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:layout_marginEnd="4dp"
+            android:text="@string/child_lock_exit"
+            android:textColor="#FF1E88E5"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:background="@drawable/selector_child_lock_focus"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true" />
+
+        <TextView
+            android:id="@+id/childLockGateUnlock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="64dp"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/child_lock_unlock"
+            android:textColor="#FF1E88E5"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:background="@drawable/selector_child_lock_focus"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true" />
+    </LinearLayout>
+</LinearLayout>

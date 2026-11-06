@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_home_buttons">Home function buttons</string>
+    <string name="home_buttons_reset">Reset</string>
+    <string name="home_buttons_selected">%1$d/%2$d enabled</string>
+    <string name="setting_control_transparent">Transparent playback controls</string>
+</resources>

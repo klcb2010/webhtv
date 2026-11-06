@@ -1,0 +1,56 @@
+
+name: Delete Old Commits
+
+on:
+  schedule:
+    - cron: '0 18 * * 5'  # 北京时间周六凌晨 2 点
+  workflow_dispatch:     # 允许手动触发
+
+jobs:
+  delete-old-commits:
+    runs-on: ubuntu-latest
+    env:
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史记录
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Debug worktree
+        run: |
+          echo "当前目录:"
+          pwd
+          echo "文件列表:"
+          ls -la
+          echo "Git 状态:"
+          git status
+          echo "最近提交:"
+          git log --oneline -n 5
+          echo "提交总数:"
+          git rev-list --count HEAD
+
+      - name: Run clear.py
+        run: python clear.py
+
+      - name: Debug output
+        run: |
+          git status
+          git log --oneline -n 5
+          echo "Commits found before 2 days ago: $(git log --before=$(date -d '2 days ago' --iso-8601) --format=%H | wc -l)"
+          echo "提交总数:"
+          git rev-list --count HEAD
+          git branch -a
+          echo "Remote branches:"
+          git ls-remote --heads origin
