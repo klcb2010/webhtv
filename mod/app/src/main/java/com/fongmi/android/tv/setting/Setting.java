@@ -1508,4 +1508,13 @@ public class Setting {
         return saved.equalsIgnoreCase(h);
     }
 
+    /** 本地 SMB 播放入口，默认关闭。 */
+    public static boolean isSmbEntryEnabled() {
+        return Prefers.getBoolean("smb_entry_enabled", false);
+    }
+
+    public static void putSmbEntryEnabled(boolean enabled) {
+        Prefers.put("smb_entry_enabled", enabled);
+    }
+
 }
