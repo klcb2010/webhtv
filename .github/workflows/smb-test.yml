@@ -37,7 +37,9 @@ jobs:
           sdkmanager \
             "platform-tools" \
             "platforms;android-37.0" \
-            "build-tools;37.0.0"
+            "build-tools;37.0.0" \
+            "ndk;29.0.14206865" \
+            "cmake;3.22.1"
 
       - name: Apply project modifications
         run: |
@@ -50,3 +52,18 @@ jobs:
             :app:compileMobileArm64_v8aDebugJavaWithJavac \
             :app:compileLeanbackArm64_v8aDebugJavaWithJavac \
             --no-daemon
+
+      - name: Assemble SMB test APKs
+        run: |
+          ./gradlew \
+            :app:assembleMobileArm64_v8aDebug \
+            :app:assembleLeanbackArm64_v8aDebug \
+            --no-daemon
+
+      - name: Upload SMB test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: webhtv-smb-test
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
