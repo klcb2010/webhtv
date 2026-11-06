@@ -19,11 +19,12 @@ import java.util.Map;
 /** TV 首页功能区。id 7=设置 始终启用。 */
 public class HomeButton implements Diffable<HomeButton> {
 
+    public static final int ID_SMB = 5;
     public static final int ID_SETTING = 7;
 
     private static final String KEY_BUTTON = "home_button";
     private static final String KEY_SORTED = "home_button_sorted";
-    private static final String ALL = "6,0,1,2,3,4,7";
+    private static final String ALL = "6,0,1,2,3,4,5,7";
     private static List<HomeButton> buttons;
 
     private final int id;
@@ -37,6 +38,7 @@ public class HomeButton implements Diffable<HomeButton> {
         buttons.add(new HomeButton(2, R.string.home_search));
         buttons.add(new HomeButton(3, R.string.home_keep));
         buttons.add(new HomeButton(4, R.string.home_push));
+        buttons.add(new HomeButton(ID_SMB, R.string.home_smb));
         buttons.add(new HomeButton(6, R.string.home_history_button));
         buttons.add(new HomeButton(ID_SETTING, R.string.home_setting));
         return buttons;
@@ -51,7 +53,21 @@ public class HomeButton implements Diffable<HomeButton> {
         List<HomeButton> items = new ArrayList<>();
         for (HomeButton button : getButtons()) {
             if (button.getResId() == R.string.home_live && !LiveConfig.hasUrl()) continue;
+            if (button.getId() == ID_SMB && !Setting.isSmbEntryEnabled()) continue;
             items.add(button);
+        }
+        if (Setting.isSmbEntryEnabled()) {
+            boolean found = false;
+            for (HomeButton button : items) if (button.getId() == ID_SMB) found = true;
+            if (!found) {
+                HomeButton smb = null;
+                for (HomeButton button : all()) if (button.getId() == ID_SMB) smb = button;
+                if (smb != null) {
+                    int settingIndex = items.size();
+                    for (int i = 0; i < items.size(); i++) if (isSetting(items.get(i))) { settingIndex = i; break; }
+                    items.add(settingIndex, smb);
+                }
+            }
         }
         return items;
     }
