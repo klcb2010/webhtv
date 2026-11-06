@@ -9,6 +9,7 @@ ACTIVITIES = [
     "SettingAiActivity",
     "SettingAssrtActivity",
     "SettingGithubProxyActivity",
+    "SmbBrowserActivity",
 ]
 
 
