@@ -183,6 +183,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void connectHost(String value, boolean withCredentials) {
         host = value;
+        loginAttempted = false;
         setStatus("正在连接 " + value + " …");
         worker.execute(() -> {
             try {
