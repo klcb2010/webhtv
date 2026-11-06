@@ -53,6 +53,7 @@ rtmpClient = "v3.2.0.m2"
 sardine = "0.9"
 simpleXml = "2.7.1"
 smbj = "0.14.0"
+dcerpc = "0.12.13"
 textdrawable = "1.0.3"
 tensorflowLite = "2.17.0"
 zxingAndroidEmbedded = "4.3.0"
@@ -135,6 +136,7 @@ quickjs-java = { group = "wang.harlon.quickjs", name = "wrapper-java", version.r
 sardine = { group = "com.github.thegrizzlylabs", name = "sardine-android", version.ref = "sardine" }
 simple-xml = { group = "org.simpleframework", name = "simple-xml", version.ref = "simpleXml" }
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
+dcerpc = { group = "com.rapid7.client", name = "dcerpc", version.ref = "dcerpc" }
 textdrawable = { group = "com.github.jahirfiquitiva", name = "TextDrawable", version.ref = "textdrawable" }
 tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tensorflowLite" }
 zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
