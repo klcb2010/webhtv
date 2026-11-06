@@ -3,6 +3,7 @@ package com.fongmi.android.tv.smb;
 import com.hierynomus.msdtyp.AccessMask;
 import com.hierynomus.msfscc.FileAttributes;
 import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation;
+import com.hierynomus.msfscc.fileinformation.FileStandardInformation;
 import com.hierynomus.mssmb2.SMB2CreateDisposition;
 import com.hierynomus.mssmb2.SMB2ShareAccess;
 import com.hierynomus.smbj.SMBClient;
@@ -66,7 +67,7 @@ public final class SmbClient {
                 for (FileIdBothDirectoryInformation item : share.list(directory)) {
                     String name = item.getFileName();
                     if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
-                    boolean isDirectory = item.getFileAttributes().contains(FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+                    boolean isDirectory = (item.getFileAttributes() & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
                     result.add(new Entry(name, isDirectory));
                 }
             }
@@ -146,7 +147,7 @@ public final class SmbClient {
         }
 
         public long length() throws Exception {
-            return file.getLength();
+            return file.getFileInformation(FileStandardInformation.class).getEndOfFile();
         }
 
         public int read(byte[] buffer, long fileOffset, int offset, int length) {
