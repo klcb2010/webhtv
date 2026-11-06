@@ -87,10 +87,11 @@ public final class SmbPlaybackProxy {
                     return head;
                 }
                 final SmbClient.RemoteFile streamFile = remote;
+                final long streamStart = start;
                 final long streamEnd = end;
                 final long contentLength = end - start + 1;
                 final InputStream input = new InputStream() {
-                    private long position = start;
+                    private long position = streamStart;
 
                     @Override
                     public int read() throws IOException {
