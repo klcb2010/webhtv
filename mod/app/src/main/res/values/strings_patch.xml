@@ -148,4 +148,22 @@
     <string name="setting_hide_home_type_more">Hide home more button</string>
     <string name="setting_hdr_to_sdr">HDR to SDR</string>
     <string name="play_screenshot">Screenshot</string>
+    <string name="setting_smb_entry">Local SMB playback entry</string>
+    <string name="home_smb">SMB playback</string>
+    <string name="smb_browser_title">LAN SMB playback</string>
+    <string name="smb_scan">Scan local network</string>
+    <string name="smb_scanning">Scanning for SMB devices…</string>
+    <string name="smb_no_servers">No SMB devices found. Check that devices are on the same LAN.</string>
+    <string name="smb_auth_title">SMB sign in</string>
+    <string name="smb_username">Username</string>
+    <string name="smb_password">Password</string>
+    <string name="smb_domain">Domain (optional)</string>
+    <string name="smb_login">Connect</string>
+    <string name="smb_auth_failed">Sign-in failed. Check credentials or share permissions.</string>
+    <string name="smb_connect_failed">Could not connect to SMB device</string>
+    <string name="smb_no_shares">No accessible shares found</string>
+    <string name="smb_no_files">This folder is empty</string>
+    <string name="smb_play_video_only">This file type cannot be played</string>
+    <string name="smb_parent">Parent folder</string>
+    <string name="smb_server_count">Found %1$d SMB device(s)</string>
 </resources>
