@@ -79,6 +79,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
+        try { mBinding.smbEntry.setOnClickListener(this::setSmbEntry); } catch (Throwable ignored) {}
     }
 
     private void refreshTexts() {
@@ -129,6 +130,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        try { mBinding.smbEntryText.setText(getSwitch(Setting.isSmbEntryEnabled())); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
             boolean tv = false;
@@ -416,6 +418,12 @@ public class SettingPersonalActivity extends BaseActivity {
             mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled()));
         } catch (Throwable ignored) {
         }
+    }
+
+    private void setSmbEntry(View view) {
+        Setting.putSmbEntryEnabled(!Setting.isSmbEntryEnabled());
+        refreshTexts();
+        try { RefreshEvent.home(); } catch (Throwable ignored) {}
     }
 
 }
