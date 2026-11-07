@@ -50,7 +50,7 @@ public final class SmbClient {
         List<String> result = new ArrayList<>();
         try (SMBClient client = new SMBClient();
              Connection connection = client.connect(host);
-             Session session = connection.authenticate(auth(username, password, domain))) {
+             Session session = authenticate(connection, username, password, domain)) {
             RPCTransport transport = SMBTransportFactories.SRVSVC.getTransport(session);
             ServerService service = new ServerService(transport);
             for (NetShareInfo0 item : service.getShares0()) {
@@ -71,7 +71,7 @@ public final class SmbClient {
         List<Entry> result = new ArrayList<>();
         try (SMBClient client = new SMBClient();
              Connection connection = client.connect(host);
-             Session session = connection.authenticate(auth(username, password, domain))) {
+             Session session = authenticate(connection, username, password, domain)) {
             Share remote = session.connectShare(shareName);
             if (!(remote instanceof DiskShare)) {
                 remote.close();
@@ -106,7 +106,7 @@ public final class SmbClient {
         com.hierynomus.smbj.share.File file = null;
         try {
             connection = client.connect(host);
-            session = connection.authenticate(auth(username, password, domain));
+            session = authenticate(connection, username, password, domain);
             Share remote = session.connectShare(shareName);
             if (!(remote instanceof DiskShare)) throw new IllegalStateException("Not a disk share");
             share = (DiskShare) remote;
