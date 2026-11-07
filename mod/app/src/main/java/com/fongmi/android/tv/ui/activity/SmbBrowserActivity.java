@@ -17,6 +17,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.smb.SmbClient;
 import com.fongmi.android.tv.smb.SmbNetworkScanner;
 import com.fongmi.android.tv.smb.SmbPlaybackProxy;
@@ -249,7 +250,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
                                 title.setText(host);
                                 setItems(found);
                                 setStatus(found.isEmpty() ? getString(R.string.smb_no_shares) : "选择共享目录");
-                                if (found.isEmpty()) Toast.makeText(this, R.string.smb_auth_failed, Toast.LENGTH_LONG).show();
+                                if (found.isEmpty()) {
+                                    Toast.makeText(this, R.string.smb_auth_failed, Toast.LENGTH_LONG).show();
+                                    showManualShareDialog();
+                                }
                             });
                         } catch (Exception e) {
                             runOnUiThread(() -> {
@@ -258,6 +262,19 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             });
                         }
                     });
+                })
+                .show();
+    }
+
+    private void showManualShareDialog() {
+        EditText input = field(getString(R.string.smb_share_name), InputType.TYPE_CLASS_TEXT);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.smb_manual_share)
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.smb_open_share, (dialog, which) -> {
+                    String value = input.getText().toString().trim();
+                    if (!value.isEmpty()) openShare(value);
                 })
                 .show();
     }
@@ -304,7 +321,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void play(String remotePath) {
         try {
             String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
-            VideoActivity.push(this, url);
+            String name = remotePath.substring(remotePath.lastIndexOf('\\\\') + 1);
+            VideoActivity.start(this, SiteApi.PUSH, url, name);
             finish();
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
