@@ -14,15 +14,15 @@
         android:visible="false" />
 
     <item
-        android:id="@+id/setting"
-        android:icon="@drawable/ic_nav_setting"
-        android:title="@string/nav_setting"
-        android:visible="false" />
-
-    <item
         android:id="@+id/smb"
         android:icon="@drawable/ic_nav_smb"
         android:title="@string/home_smb"
+        android:visible="false" />
+
+    <item
+        android:id="@+id/setting"
+        android:icon="@drawable/ic_nav_setting"
+        android:title="@string/nav_setting"
         android:visible="false" />
 
 </menu>
