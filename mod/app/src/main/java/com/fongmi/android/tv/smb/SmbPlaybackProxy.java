@@ -91,7 +91,10 @@ public final class SmbPlaybackProxy {
                 final long streamEnd = end;
                 final long contentLength = end - start + 1;
                 final InputStream input = new InputStream() {
-                    private long position = streamStart;
+                    private final byte[] cache = new byte[64 * 1024];
+                    private long remotePosition = streamStart;
+                    private int cachePosition;
+                    private int cacheLength;
 
                     @Override
                     public int read() throws IOException {
@@ -103,16 +106,24 @@ public final class SmbPlaybackProxy {
                     @Override
                     public int read(byte[] buffer, int offset, int length) throws IOException {
                         if (length == 0) return 0;
-                        if (position > streamEnd) return -1;
-                        int wanted = (int) Math.min((long) length, streamEnd - position + 1);
-                        try {
-                            int count = streamFile.read(buffer, position, offset, wanted);
-                            if (count <= 0) return -1;
-                            position += count;
-                            return count;
-                        } catch (RuntimeException e) {
-                            throw new IOException(e);
+                        if (cachePosition >= cacheLength) {
+                            long remaining = streamEnd - remotePosition + 1;
+                            if (remaining <= 0) return -1;
+                            int wanted = (int) Math.min((long) cache.length, remaining);
+                            try {
+                                int count = streamFile.read(cache, remotePosition, 0, wanted);
+                                if (count <= 0) return -1;
+                                remotePosition += count;
+                                cachePosition = 0;
+                                cacheLength = count;
+                            } catch (RuntimeException e) {
+                                throw new IOException(e);
+                            }
                         }
+                        int count = Math.min(length, cacheLength - cachePosition);
+                        System.arraycopy(cache, cachePosition, buffer, offset, count);
+                        cachePosition += count;
+                        return count;
                     }
 
                     @Override
