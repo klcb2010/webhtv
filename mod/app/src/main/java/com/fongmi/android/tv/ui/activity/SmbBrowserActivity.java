@@ -336,7 +336,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void play(String remotePath) {
         try {
             String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
-            String name = remotePath.substring(remotePath.lastIndexOf('\\\\') + 1);
+            String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
             VideoActivity.start(this, SiteApi.PUSH, url, name);
             finish();
         } catch (Exception e) {
