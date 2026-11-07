@@ -38,6 +38,7 @@ public final class SmbNetworkScanner {
                 byte[] bytes = address.getAddress();
                 int ip = ((bytes[0] & 255) << 24) | ((bytes[1] & 255) << 16)
                         | ((bytes[2] & 255) << 8) | (bytes[3] & 255);
+                if (!isPrivate(ip)) continue;
                 int prefix = item.getNetworkPrefixLength();
                 if (prefix < 1 || prefix > 30) continue;
                 // Avoid sweeping huge routed networks; SMB discovery is scoped to the local /24.
@@ -90,6 +91,13 @@ public final class SmbNetworkScanner {
         for (String part : parts) result = (result << 8) | Integer.parseInt(part);
         return result;
     }
+
+    private static boolean isPrivate(int ip) {
+        int a = (ip >>> 24) & 255;
+        int b = (ip >>> 16) & 255;
+        return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
+    }
+
 
     private static String toIp(int value) {
         return ((value >>> 24) & 255) + "." + ((value >>> 16) & 255) + "."
