@@ -313,8 +313,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private String normalizeSmbPath(String value) {
         if (value == null) return "";
-        String normalized = value.trim().replace('/', '\\\\');
-        while (normalized.endsWith("\\\\") && !normalized.isEmpty()) {
+        String normalized = value.trim().replace('/', '\\');
+        while (normalized.endsWith("\\") && !normalized.isEmpty()) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized.toLowerCase(java.util.Locale.ROOT);
