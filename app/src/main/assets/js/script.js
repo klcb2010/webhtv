@@ -19,6 +19,8 @@ function push() {
     doAction('push', { url: $('#push_url').val() });
 }
 
+
+
 function setting() {
     doAction('setting', { text: $('#setting_text').val(), name: $('#setting_name').val() });
 }

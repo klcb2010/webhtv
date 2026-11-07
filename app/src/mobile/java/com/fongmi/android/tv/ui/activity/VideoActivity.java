@@ -405,6 +405,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         start(activity, SiteApi.PUSH, url, url);
     }
 
+
     public static void start(Activity activity, String key, String id, String name) {
         start(activity, key, id, name, null);
     }

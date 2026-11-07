@@ -146,4 +146,27 @@
     <string name="setting_search_pan_first">搜索结果排序优先</string>
     <string name="setting_play_direct_pan_prefer">直达播放网盘优先</string>
     <string name="setting_hide_home_type_more">隐藏首页更多按钮</string>
+
+    <string name="setting_smb_entry">本地SMB播放入口</string>
+    <string name="home_smb">播放</string>
+    <string name="smb_browser_title">局域网 SMB 播放</string>
+    <string name="smb_scan">扫描局域网</string>
+    <string name="smb_scanning">正在扫描局域网 SMB 设备…</string>
+    <string name="smb_no_servers">未发现 SMB 设备，请确认设备在同一局域网</string>
+    <string name="smb_auth_title">SMB 登录</string>
+    <string name="smb_username">用户名</string>
+    <string name="smb_password">密码</string>
+    <string name="smb_domain">域（可留空）</string>
+    <string name="smb_login">连接</string>
+    <string name="smb_auth_failed">登录失败，请检查账号密码或共享权限</string>
+    <string name="smb_connect_failed">连接 SMB 设备失败</string>
+    <string name="smb_no_shares">没有发现可访问的共享目录</string>
+    <string name="smb_no_files">此目录为空</string>
+    <string name="smb_play_video_only">暂不支持播放此文件类型</string>
+    <string name="smb_parent">返回上级</string>
+    <string name="smb_server_count">发现 %1$d 台 SMB 设备</string>
+    <string name="smb_manual_share">未列出共享？手动输入共享名</string>
+    <string name="smb_share_name">共享名称</string>
+    <string name="smb_open_share">打开共享</string>
+    <string name="smb_local_network_permission">SMB播放需要本地网络访问权限，请允许后重试</string>
 </resources>
