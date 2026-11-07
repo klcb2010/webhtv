@@ -83,6 +83,7 @@ public final class SmbClient {
                     String name = item.getFileName();
                     if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
                     boolean isDirectory = (item.getFileAttributes() & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
+                    if (!isDirectory && !isVideo(name)) continue;
                     result.add(new Entry(name, isDirectory));
                 }
             }
@@ -97,7 +98,18 @@ public final class SmbClient {
         return result;
     }
 
-    public static RemoteFile openFile(String host, String shareName, String path,
+
+    public static boolean isVideo(String name) {
+        if (name == null) return false;
+        String value = name.toLowerCase(java.util.Locale.ROOT);
+        return value.endsWith(".mp4") || value.endsWith(".mkv") || value.endsWith(".avi")
+                || value.endsWith(".mov") || value.endsWith(".m4v") || value.endsWith(".ts")
+                || value.endsWith(".m2ts") || value.endsWith(".wmv") || value.endsWith(".flv")
+                || value.endsWith(".webm") || value.endsWith(".mpg") || value.endsWith(".mpeg")
+                || value.endsWith(".vob") || value.endsWith(".3gp") || value.endsWith(".3g2")
+                || value.endsWith(".mts") || value.endsWith(".mxf") || value.endsWith(".ogv");
+    }
+\n    public static RemoteFile openFile(String host, String shareName, String path,
                                       String username, String password, String domain) throws Exception {
         SMBClient client = new SMBClient();
         Connection connection = null;
