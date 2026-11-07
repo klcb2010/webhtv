@@ -285,6 +285,41 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return host + "\n" + shareName + "\n";
     }
 
+    private boolean isHiddenShare(String shareName) {
+        String expectedHost = normalizeSmbPath(host);
+        String expectedShare = normalizeSmbPath(shareName);
+        for (String value : hiddenFolders) {
+            String[] parts = value.split("\\n", 3);
+            if (parts.length == 3 && parts[2].isEmpty()
+                    && normalizeSmbPath(parts[0]).equals(expectedHost)
+                    && normalizeSmbPath(parts[1]).equals(expectedShare)) return true;
+        }
+        return false;
+    }
+
+    private boolean isHiddenFolder(String folderPath) {
+        String expectedHost = normalizeSmbPath(host);
+        String expectedShare = normalizeSmbPath(share);
+        String expectedPath = normalizeSmbPath(folderPath);
+        for (String value : hiddenFolders) {
+            String[] parts = value.split("\\n", 3);
+            if (parts.length == 3 && !parts[2].isEmpty()
+                    && normalizeSmbPath(parts[0]).equals(expectedHost)
+                    && normalizeSmbPath(parts[1]).equals(expectedShare)
+                    && normalizeSmbPath(parts[2]).equals(expectedPath)) return true;
+        }
+        return false;
+    }
+
+    private String normalizeSmbPath(String value) {
+        if (value == null) return "";
+        String normalized = value.trim().replace('/', '\\\\');
+        while (normalized.endsWith("\\\\") && !normalized.isEmpty()) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.toLowerCase(java.util.Locale.ROOT);
+    }
+
     private void showHiddenFolders() {
         showingHiddenHosts = false;
         showingHiddenFolders = true;
@@ -529,7 +564,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     if (isFinishing()) return;
                     shares.clear();
                     for (String shareName : found) {
-                        if (!hiddenFolders.contains(shareKey(shareName))) shares.add(shareName);
+                        if (!isHiddenShare(shareName)) shares.add(shareName);
                     }
                     mode = Mode.SHARES;
                     path = "";
@@ -583,7 +618,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 shares.clear();
                                 for (String shareName : found) {
-                                    if (!hiddenFolders.contains(shareKey(shareName))) shares.add(shareName);
+                                    if (!isHiddenShare(shareName)) shares.add(shareName);
                                 }
                                 mode = Mode.SHARES;
                                 path = "";
@@ -648,7 +683,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     if (!path.isEmpty()) labels.add("..  " + getString(R.string.smb_parent));
                     for (SmbClient.Entry entry : found) {
                         String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
-                        if (entry.directory && hiddenFolders.contains(folderKey(remotePath))) continue;
+                        if (entry.directory && isHiddenFolder(remotePath)) continue;
                         visibleFiles.add(entry);
                         labels.add((entry.directory ? "📁  " : "▶  ") + entry.name);
                     }
