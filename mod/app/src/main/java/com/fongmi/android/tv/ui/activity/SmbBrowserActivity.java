@@ -187,7 +187,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (int i = 0; i < buttons.length; i++) {
             MaterialButton button = buttons[i];
             button.setFocusable(true);
-            button.setFocusableInTouchMode(true);
+            button.setFocusableInTouchMode(false);
             button.setNextFocusDownId(list.getId());
             if (i > 0) button.setNextFocusLeftId(buttons[i - 1].getId());
             if (i < buttons.length - 1) button.setNextFocusRightId(buttons[i + 1].getId());
@@ -197,7 +197,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void addToolbarButton(LinearLayout toolbar, MaterialButton button) {
         button.setFocusable(true);
-        button.setFocusableInTouchMode(true);
+        button.setFocusableInTouchMode(false);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setMinHeight(0);
