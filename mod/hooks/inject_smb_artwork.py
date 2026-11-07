@@ -5,7 +5,9 @@ import shutil
 import sys
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-source = ROOT / "mod/SMB.png"
+source = ROOT / "mod/smb.png"
+if not source.is_file():
+    source = ROOT / "mod/SMB.png"
 if not source.is_file():
     raise SystemExit("[mod] ERROR: mod/SMB.png is missing")
 

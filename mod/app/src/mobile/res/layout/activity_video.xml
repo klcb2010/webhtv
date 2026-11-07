@@ -641,7 +641,6 @@
                             style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="32dp"
-                            android:layout_marginEnd="16dp"
                             android:background="@drawable/shape_video_item"
                             android:clickable="true"
                             android:focusable="true"
