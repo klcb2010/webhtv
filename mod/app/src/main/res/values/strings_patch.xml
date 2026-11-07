@@ -169,4 +169,5 @@
     <string name="smb_manual_share">Share not listed? Enter its name</string>
     <string name="smb_share_name">Share name</string>
     <string name="smb_open_share">Open share</string>
+    <string name="smb_local_network_permission">SMB playback needs local network access. Allow the permission and try again.</string>
 </resources>
