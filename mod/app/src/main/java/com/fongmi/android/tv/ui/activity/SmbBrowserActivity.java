@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.text.InputType;
 import android.view.Gravity;
+import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -165,13 +166,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void addToolbarButton(LinearLayout toolbar, MaterialButton button) {
         button.setMinWidth(0);
         button.setMinimumWidth(0);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
         button.setSingleLine(true);
-        int horizontalPadding = button.getText().toString().equals("返回") ? 2 : 6;
-        button.setPadding(dp(horizontalPadding), button.getPaddingTop(), dp(horizontalPadding), button.getPaddingBottom());
-        button.setTextSize(14);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
-        params.leftMargin = dp(4);
-        params.rightMargin = dp(4);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(2), button.getPaddingTop(), dp(2), button.getPaddingBottom());
+        button.setTextSize(18);
+        button.setAutoSizeTextTypeUniformWithConfiguration(12, 18, 1, TypedValue.COMPLEX_UNIT_SP);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        params.leftMargin = dp(3);
+        params.rightMargin = dp(3);
         toolbar.addView(button, params);
     }
 
@@ -247,8 +251,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
         List<String> labels = new ArrayList<>();
         for (String value : hiddenFolders) {
             String[] parts = value.split("\\n", 3);
-            if (parts.length == 3) labels.add(parts[0] + " / " + parts[1] + " / " + parts[2]);
-            else labels.add(value);
+            if (parts.length == 3) {
+                labels.add(parts[2].isEmpty() ? parts[0] + " / " + parts[1]
+                        : parts[0] + " / " + parts[1] + " / " + parts[2]);
+            } else labels.add(value);
         }
         setItems(labels);
         setStatus(hiddenFolders.isEmpty() ? "没有隐藏的文件夹"
@@ -480,13 +486,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     shares.clear();
-                    for (String value : found) {
-                        if (!hiddenFolders.contains(shareKey(value))) shares.add(value);
+                    for (String shareName : found) {
+                        if (!hiddenFolders.contains(shareKey(shareName))) shares.add(shareName);
                     }
                     mode = Mode.SHARES;
                     path = "";
                     title.setText(host);
-                    setItems(found);
+                    setItems(shares);
                     if (found.isEmpty()) {
                         setStatus(getString(R.string.smb_no_shares));
                         if (!loginAttempted) showAuthDialog();
@@ -534,13 +540,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             List<String> found = SmbClient.listShares(host, username, password, domain);
                             runOnUiThread(() -> {
                                 shares.clear();
-                                for (String value : found) {
-                                    if (!hiddenFolders.contains(shareKey(value))) shares.add(value);
+                                for (String shareName : found) {
+                                    if (!hiddenFolders.contains(shareKey(shareName))) shares.add(shareName);
                                 }
                                 mode = Mode.SHARES;
                                 path = "";
                                 title.setText(host);
-                                setItems(found);
+                                setItems(shares);
                                 setStatus(found.isEmpty() ? getString(R.string.smb_no_shares) : "选择共享目录");
                                 if (found.isEmpty()) {
                                     setStatus(getString(R.string.smb_no_shares));
