@@ -107,6 +107,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mBinding.navigation.setOnItemSelectedListener(this);
         PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
         initFragment(savedInstanceState);
+        setNavigation();
         initConfig();
         scheduleAutoCheckUpdate();
     }
@@ -243,6 +244,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.live).setVisible(LiveConfig.hasUrl());
+        mBinding.navigation.getMenu().findItem(R.id.smb).setVisible(Setting.isSmbEntryEnabled());
         syncNavigationSelection();
     }
 
@@ -295,6 +297,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onRefreshEvent(RefreshEvent event) {
+        setNavigation();
         if (event.getType() == RefreshEvent.Type.THEME) recreate();
     }
 
@@ -311,6 +314,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         if (item.getItemId() == R.id.setting) return changeFragment(1);
         if (item.getItemId() == R.id.vod) return changeFragment(0);
         if (item.getItemId() == R.id.live) return openLive();
+        if (item.getItemId() == R.id.smb) {
+            SmbBrowserActivity.start(this);
+            syncNavigationSelection();
+            return false;
+        }
         return false;
     }
 
