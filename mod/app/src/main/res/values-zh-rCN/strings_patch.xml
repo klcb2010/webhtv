@@ -166,4 +166,7 @@
     <string name="smb_play_video_only">暂不支持播放此文件类型</string>
     <string name="smb_parent">返回上级</string>
     <string name="smb_server_count">发现 %1$d 台 SMB 设备</string>
+    <string name="smb_manual_share">未列出共享？手动输入共享名</string>
+    <string name="smb_share_name">共享名称</string>
+    <string name="smb_open_share">打开共享</string>
 </resources>
