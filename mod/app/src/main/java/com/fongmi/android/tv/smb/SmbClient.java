@@ -35,6 +35,17 @@ public final class SmbClient {
                 domain == null || domain.isEmpty() ? null : domain);
     }
 
+    private static Session authenticate(Connection connection, String username, String password, String domain) throws Exception {
+        if (username == null || username.trim().isEmpty()) {
+            try {
+                return connection.authenticate(AuthenticationContext.anonymous());
+            } catch (Exception anonymousError) {
+                return connection.authenticate(AuthenticationContext.guest());
+            }
+        }
+        return connection.authenticate(auth(username, password, domain));
+    }
+
     public static List<String> listShares(String host, String username, String password, String domain) throws Exception {
         List<String> result = new ArrayList<>();
         try (SMBClient client = new SMBClient();
