@@ -913,8 +913,7 @@
             android:background="@drawable/shape_item"
             android:focusable="true"
             android:orientation="horizontal"
-            android:padding="8dp"
-            android:layout_marginBottom="24dp">
+            android:padding="8dp">
 
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="0dp"
