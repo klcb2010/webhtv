@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
@@ -140,11 +141,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 if (!isTvDevice()) restoreHiddenFolder(position);
                 return true;
             }
+            if (mode == Mode.SHARES && position >= 0 && position < shares.size()) {
+                showShareActions(shares.get(position));
+                return true;
+            }
             if (mode == Mode.FILES) {
                 int filePosition = position - (path.isEmpty() ? 0 : 1);
                 if (filePosition >= 0 && filePosition < visibleFiles.size() && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name : path + "\\" + visibleFiles.get(filePosition).name;
-                    showFolderActions(folderPath, false);
+                    showFolderActions(folderPath);
                     return true;
                 }
             }
@@ -230,6 +235,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return host + "\n" + share + "\n" + folderPath;
     }
 
+    private String shareKey(String shareName) {
+        return host + "\n" + shareName + "\n";
+    }
+
     private void showHiddenFolders() {
         showingHiddenHosts = false;
         showingHiddenFolders = true;
@@ -246,26 +255,29 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 : (isTvDevice() ? "选择文件夹即可恢复显示" : "长按文件夹可恢复显示"));
     }
 
-    private void showFolderActions(String folderPath, boolean tv) {
+    private void showFolderActions(String folderPath) {
         if (folderPath == null || folderPath.isEmpty()) return;
-        if (tv) {
-            new MaterialAlertDialogBuilder(this)
-                    .setTitle(folderPath)
-                    .setItems(new String[]{"打开文件夹", "隐藏此文件夹"}, (dialog, which) -> {
-                        if (which == 0) {
-                            path = folderPath;
-                            loadDirectory();
-                        } else {
-                            hideFolder(folderPath);
-                        }
-                    })
-                    .show();
-        } else {
-            new MaterialAlertDialogBuilder(this)
-                    .setTitle(folderPath)
-                    .setItems(new String[]{"隐藏此文件夹"}, (dialog, which) -> hideFolder(folderPath))
-                    .show();
-        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(folderPath)
+                .setItems(new String[]{"隐藏此文件夹"}, (dialog, which) -> hideFolder(folderPath))
+                .show();
+    }
+
+    private void showShareActions(String shareName) {
+        if (shareName == null || shareName.isEmpty()) return;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(shareName)
+                .setItems(new String[]{"隐藏此路径"}, (dialog, which) -> hideShare(shareName))
+                .show();
+    }
+
+    private void hideShare(String shareName) {
+        if (host == null || shareName == null || shareName.isEmpty()) return;
+        hiddenFolders.add(shareKey(shareName));
+        persistHiddenFolders();
+        shares.remove(shareName);
+        setItems(shares);
+        setStatus("已隐藏路径：" + host + " / " + shareName);
     }
 
     private void hideFolder(String folderPath) {
@@ -448,12 +460,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
             SmbClient.Entry entry = visibleFiles.get(position);
             String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
             if (entry.directory) {
-                if (isTvDevice()) {
-                    showFolderActions(remotePath, true);
-                } else {
-                    path = remotePath;
-                    loadDirectory();
-                }
+                path = remotePath;
+                loadDirectory();
             } else if (isVideo(entry.name)) {
                 play(remotePath);
             } else {
@@ -472,7 +480,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     shares.clear();
-                    shares.addAll(found);
+                    for (String value : found) {
+                        if (!hiddenFolders.contains(shareKey(value))) shares.add(value);
+                    }
                     mode = Mode.SHARES;
                     path = "";
                     title.setText(host);
@@ -524,7 +534,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             List<String> found = SmbClient.listShares(host, username, password, domain);
                             runOnUiThread(() -> {
                                 shares.clear();
-                                shares.addAll(found);
+                                for (String value : found) {
+                                    if (!hiddenFolders.contains(shareKey(value))) shares.add(value);
+                                }
                                 mode = Mode.SHARES;
                                 path = "";
                                 title.setText(host);
@@ -673,6 +685,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 setStatus(getString(R.string.smb_local_network_permission));
             }
         }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (isTvDevice() && (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_MODE)) {
+            int position = list == null ? ListView.INVALID_POSITION : list.getSelectedItemPosition();
+            if (mode == Mode.SHARES && position >= 0 && position < shares.size()) {
+                showShareActions(shares.get(position));
+                return true;
+            }
+            if (mode == Mode.FILES) {
+                int filePosition = position - (path.isEmpty() ? 0 : 1);
+                if (filePosition >= 0 && filePosition < visibleFiles.size()
+                        && visibleFiles.get(filePosition).directory) {
+                    String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name
+                            : path + "\\" + visibleFiles.get(filePosition).name;
+                    showFolderActions(folderPath);
+                    return true;
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
