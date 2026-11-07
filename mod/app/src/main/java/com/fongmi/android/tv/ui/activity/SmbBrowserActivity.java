@@ -290,7 +290,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String expectedShare = normalizeSmbPath(shareName);
         for (String value : hiddenFolders) {
             String[] parts = value.split("\\n", 3);
-            if (parts.length == 3 && parts[2].isEmpty()
+            if (parts.length == 3 && normalizeSmbPath(parts[2]).isEmpty()
                     && normalizeSmbPath(parts[0]).equals(expectedHost)
                     && normalizeSmbPath(parts[1]).equals(expectedShare)) return true;
         }
@@ -303,7 +303,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String expectedPath = normalizeSmbPath(folderPath);
         for (String value : hiddenFolders) {
             String[] parts = value.split("\\n", 3);
-            if (parts.length == 3 && !parts[2].isEmpty()
+            if (parts.length == 3 && !normalizeSmbPath(parts[2]).isEmpty()
                     && normalizeSmbPath(parts[0]).equals(expectedHost)
                     && normalizeSmbPath(parts[1]).equals(expectedShare)
                     && normalizeSmbPath(parts[2]).equals(expectedPath)) return true;
@@ -329,7 +329,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (String value : hiddenFolders) {
             String[] parts = value.split("\\n", 3);
             if (parts.length == 3) {
-                labels.add(parts[2].isEmpty() ? parts[0] + " / " + parts[1]
+                labels.add(normalizeSmbPath(parts[2]).isEmpty() ? parts[0] + " / " + parts[1]
                         : parts[0] + " / " + parts[1] + " / " + parts[2]);
             } else labels.add(value);
         }
