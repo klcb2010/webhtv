@@ -631,27 +631,6 @@
                             android:textColor="@color/white"
                             android:textSize="16sp" />
 
-                        <View
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_weight="1" />
-
-                        <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/smbReturn"
-                            style="@style/Video.ContextText"
-                            android:layout_width="wrap_content"
-                            android:layout_height="32dp"
-                            android:background="@drawable/shape_video_item"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingStart="12dp"
-                            android:paddingEnd="12dp"
-                            android:text="返回SMB"
-                            android:textColor="@color/selector_video_text"
-                            android:textSize="14sp"
-                            android:visibility="gone" />
-
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
                     <androidx.appcompat.widget.LinearLayoutCompat
@@ -672,6 +651,23 @@
                             android:paddingStart="16dp"
                             android:paddingEnd="8dp"
                             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/smbReturn"
+                            style="@style/Video.ContextText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@drawable/shape_video_item"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="返回SMB"
+                            android:textColor="@color/selector_video_text"
+                            android:textSize="14sp"
+                            android:visibility="gone" />
 
 
 
