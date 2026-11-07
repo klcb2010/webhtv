@@ -437,8 +437,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         try {
             String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
             String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
-            VideoActivity.start(this, SiteApi.PUSH, url, name);
-            finish();
+            VideoActivity.startSmb(this, SiteApi.PUSH, url, name);
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
         }
