@@ -103,6 +103,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".smbtest"
+        }
         release {
             minifyEnabled = !fastRelease
             shrinkResources = !fastRelease
@@ -186,6 +189,8 @@ dependencies {
     implementation libs.material
     implementation libs.materialdesigncolors
     implementation libs.nanohttpd
+    implementation libs.smbj
+    implementation(libs.dcerpc) { exclude group: 'com.hierynomus', module: 'smbj' }
     implementation libs.newpipeextractor
     implementation libs.permissionx
     implementation libs.simple.xml

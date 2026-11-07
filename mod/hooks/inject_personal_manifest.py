@@ -9,6 +9,7 @@ ACTIVITIES = [
     "SettingAiActivity",
     "SettingAssrtActivity",
     "SettingGithubProxyActivity",
+    "SmbBrowserActivity",
 ]
 
 
@@ -45,5 +46,21 @@ def ensure(path: pathlib.Path, landscape: bool = False):
         path.write_text(t, encoding="utf-8")
 
 
+
+def ensure_local_network_permission():
+    path = ROOT / "app/src/main/AndroidManifest.xml"
+    if not path.exists():
+        return
+    t = path.read_text(encoding="utf-8")
+    permission = 'android.permission.ACCESS_LOCAL_NETWORK'
+    if permission in t:
+        return
+    block = '    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />\n\n'
+    t = t.replace("<application", block + "    <application", 1)
+    path.write_text(t, encoding="utf-8")
+    print("[mod] registered ACCESS_LOCAL_NETWORK permission")
+
+
 ensure(ROOT / "app/src/mobile/AndroidManifest.xml", False)
 ensure(ROOT / "app/src/leanback/AndroidManifest.xml", True)
+ensure_local_network_permission()

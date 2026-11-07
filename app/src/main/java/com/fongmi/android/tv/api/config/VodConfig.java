@@ -221,7 +221,17 @@ public class VodConfig extends BaseConfig {
 
     private void setParses(List<Parse> parses) {
         if (!parses.isEmpty()) parses.add(0, Parse.god());
+        parses.sort((first, second) -> Integer.compare(getParseOrder(first), getParseOrder(second)));
         this.parses = parses;
+    }
+
+    private int getParseOrder(Parse parse) {
+        return switch (parse.getName()) {
+            case "直连" -> 0;
+            case "解析" -> 1;
+            case "嗅探" -> 2;
+            default -> 3;
+        };
     }
 
     public List<Doh> getDoh() {
