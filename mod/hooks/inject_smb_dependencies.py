@@ -10,7 +10,7 @@ def inject(path, anchor, addition, label):
     if not path.is_file():
         raise SystemExit(f"[mod] ERROR: missing {path.relative_to(ROOT)}")
     text = path.read_text(encoding="utf-8")
-    if addition.strip() in text:
+    if addition.lstrip().splitlines()[0].strip() in text:
         print(f"[mod] {label} already present")
         return
     if anchor not in text:
