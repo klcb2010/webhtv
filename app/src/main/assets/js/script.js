@@ -19,6 +19,99 @@ function push() {
     doAction('push', { url: $('#push_url').val() });
 }
 
+
+let smbHost = '';
+let smbShare = '';
+let smbPath = '';
+let smbMode = 'shares';
+
+function smbParams() {
+    return {
+        host: $('#smb_host').val().trim(),
+        username: $('#smb_username').val().trim(),
+        password: $('#smb_password').val(),
+        domain: $('#smb_domain').val().trim(),
+        share: smbShare,
+        path: smbPath
+    };
+}
+
+function smbConnect() {
+    const params = smbParams();
+    if (!params.host) { warnToast('請輸入 SMB 主機 IP'); return; }
+    smbHost = params.host;
+    smbShare = '';
+    smbPath = '';
+    smbLoad();
+}
+
+function smbLoad() {
+    const params = smbParams();
+    params.host = smbHost;
+    $('#loadingToast').show();
+    $.get('/smb/list', params, function (response) {
+        $('#loadingToast').hide();
+        let data;
+        try { data = JSON.parse(response); } catch (e) { warnToast('SMB 回應格式錯誤'); return; }
+        smbMode = data.mode;
+        const items = data.items || [];
+        const html = [];
+        if (smbMode === 'files' && smbPath) {
+            html.push('<button class="md-btn md-btn-tonal md-btn-full smb-entry" data-dir="2">.. 返回上層</button>');
+        }
+        items.forEach(item => {
+            html.push('<button class="md-btn md-btn-tonal md-btn-full smb-entry" data-dir="' + item.dir + '" data-name="' + escHtml(item.name) + '">' +
+                (item.dir ? '📁 ' : '▶ ') + escHtml(item.name) + '</button>');
+        });
+        $('#smb_file_list').html(html.join(''));
+        $('#smb_path').text(smbHost + (smbShare ? ' / ' + smbShare : '') + (smbPath ? ' / ' + smbPath : ''));
+        if (!items.length) warnToast('沒有可顯示的共享或視頻');
+    }).fail(function (xhr) {
+        $('#loadingToast').hide();
+        warnToast(xhr.responseText || 'SMB 連接失敗');
+    });
+}
+
+function smbEntryClick(button) {
+    const dir = Number(button.getAttribute('data-dir'));
+    const name = button.getAttribute('data-name') || '';
+    if (dir === 2) {
+        const parts = smbPath.split('/').filter(Boolean);
+        parts.pop();
+        smbPath = parts.join('/');
+        smbLoad();
+    } else if (smbMode === 'shares') {
+        smbShare = name;
+        smbPath = '';
+        smbLoad();
+    } else if (dir === 1) {
+        smbPath = smbPath ? smbPath + '/' + name : name;
+        smbLoad();
+    } else {
+        smbPlay(name);
+    }
+}
+
+function smbPlay(name) {
+    const params = smbParams();
+    params.host = smbHost;
+    params.share = smbShare;
+    params.path = smbPath ? smbPath + '/' + name : name;
+    $('#loadingToast').show();
+    $.post('/smb/play', params, function (response) {
+        $('#loadingToast').hide();
+        try {
+            const result = JSON.parse(response);
+            if (!result.url) throw new Error('Missing playback URL');
+            doAction('push', { url: result.url });
+            warnToast('已推送到播放器');
+        } catch (e) { warnToast('生成播放地址失敗'); }
+    }).fail(function (xhr) {
+        $('#loadingToast').hide();
+        warnToast(xhr.responseText || 'SMB 播放失敗');
+    });
+}
+
 function setting() {
     doAction('setting', { text: $('#setting_text').val(), name: $('#setting_name').val() });
 }
@@ -289,6 +382,8 @@ function warnToast(msg) {
     if (warnToastTimer) clearTimeout(warnToastTimer);
     warnToastTimer = setTimeout(() => { $('#warnToast').hide(); warnToastTimer = null; }, 1000);
 }
+
+$(document).on('click', '#smb_file_list .smb-entry', function () { smbEntryClick(this); });
 
 function showPanel(id) {
     for (let i = 1; i <= 5; i++) {
