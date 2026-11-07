@@ -1,8 +1,10 @@
 package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Build;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -31,6 +33,9 @@ import java.util.concurrent.Executors;
 public class SmbBrowserActivity extends AppCompatActivity {
 
     private enum Mode { HOSTS, SHARES, FILES }
+
+    private static final int REQUEST_LOCAL_NETWORK = 7301;
+    private static final String LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<String> displayItems = new ArrayList<>();
@@ -124,6 +129,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void scanNetwork() {
+        if (Build.VERSION.SDK_INT >= 37
+                && checkSelfPermission(LOCAL_NETWORK_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            setStatus(getString(R.string.smb_local_network_permission));
+            requestPermissions(new String[]{LOCAL_NETWORK_PERMISSION}, REQUEST_LOCAL_NETWORK);
+            return;
+        }
+        scanNetworkInternal();
+    }
+
+    private void scanNetworkInternal() {
         mode = Mode.HOSTS;
         host = null;
         share = null;
@@ -363,6 +378,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
             setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers) : getString(R.string.smb_server_count, hosts.size()));
         } else {
             finish();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_LOCAL_NETWORK) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                scanNetworkInternal();
+            } else {
+                setStatus(getString(R.string.smb_local_network_permission));
+            }
         }
     }
 
