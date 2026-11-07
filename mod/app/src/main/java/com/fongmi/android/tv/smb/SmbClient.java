@@ -29,7 +29,8 @@ public final class SmbClient {
     }
 
     private static AuthenticationContext auth(String username, String password, String domain) {
-        if (username == null || username.isEmpty()) return AuthenticationContext.guest();
+        // 空用户名使用真正的 SMB 匿名会话；部分 NAS 会把 Guest 与 Anonymous 区分处理。
+        if (username == null || username.trim().isEmpty()) return AuthenticationContext.anonymous();
         return new AuthenticationContext(username, (password == null ? "" : password).toCharArray(),
                 domain == null || domain.isEmpty() ? null : domain);
     }
