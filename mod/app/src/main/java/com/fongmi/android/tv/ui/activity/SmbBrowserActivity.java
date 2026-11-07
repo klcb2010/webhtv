@@ -4,13 +4,13 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Build;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -25,9 +25,13 @@ import com.fongmi.android.tv.smb.SmbClient;
 import com.fongmi.android.tv.smb.SmbNetworkScanner;
 import com.fongmi.android.tv.smb.SmbPlaybackProxy;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.json.JSONObject;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +48,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private final List<String> hosts = new ArrayList<>();
     private final List<String> shares = new ArrayList<>();
     private final List<SmbClient.Entry> files = new ArrayList<>();
+    private final Map<String, String> savedHosts = new LinkedHashMap<>();
 
     private LinearLayout root;
     private TextView title;
@@ -67,6 +72,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        loadSavedHosts();
         buildUi();
         scanNetwork();
     }
@@ -84,8 +90,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
 
-        Button back = new Button(this);
-        back.setText("返回");
+        MaterialButton back = themedButton("返回");
         back.setOnClickListener(v -> goBack());
         toolbar.addView(back, new LinearLayout.LayoutParams(-2, -2));
 
@@ -97,8 +102,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         title.setPadding(dp(12), 0, dp(8), 0);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
-        Button scan = new Button(this);
-        scan.setText(getString(R.string.smb_scan));
+        MaterialButton scan = themedButton(getString(R.string.smb_scan));
         scan.setOnClickListener(v -> scanNetwork());
         toolbar.addView(scan, new LinearLayout.LayoutParams(-2, -2));
         root.addView(toolbar);
@@ -116,13 +120,97 @@ public class SmbBrowserActivity extends AppCompatActivity {
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, displayItems);
         list.setAdapter(adapter);
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
+        list.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (mode != Mode.HOSTS || position < 0 || position >= hosts.size()) return false;
+            showHostActions(hosts.get(position));
+            return true;
+        });
         root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
 
         setContentView(root);
     }
 
+    private MaterialButton themedButton(String label) {
+        int background = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        int foreground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimaryContainer, 0xFFFFFFFF);
+        MaterialButton button = new MaterialButton(this);
+        button.setText(label);
+        button.setTextColor(foreground);
+        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        button.setCornerRadius(dp(10));
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
+        return button;
+    }
+
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private void loadSavedHosts() {
+        savedHosts.clear();
+        String json = getSharedPreferences("smb_hosts", MODE_PRIVATE).getString("saved", "{}");
+        try {
+            JSONObject object = new JSONObject(json);
+            java.util.Iterator<String> keys = object.keys();
+            while (keys.hasNext()) {
+                String host = keys.next();
+                savedHosts.put(host, object.optString(host, ""));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void persistSavedHosts() {
+        JSONObject object = new JSONObject();
+        try {
+            for (Map.Entry<String, String> entry : savedHosts.entrySet()) {
+                object.put(entry.getKey(), entry.getValue());
+            }
+            getSharedPreferences("smb_hosts", MODE_PRIVATE).edit().putString("saved", object.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private List<String> hostLabels() {
+        List<String> labels = new ArrayList<>();
+        for (String host : hosts) {
+            String note = savedHosts.get(host);
+            labels.add((note == null ? "" : "★ ") + host + (note == null || note.isEmpty() ? "" : "  ·  " + note));
+        }
+        return labels;
+    }
+
+    private void showHostActions(String value) {
+        boolean saved = savedHosts.containsKey(value);
+        String[] actions = saved ? new String[]{"修改备注", "取消保存"} : new String[]{"保存并备注"};
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(value)
+                .setItems(actions, (dialog, which) -> {
+                    if (saved && which == 1) {
+                        savedHosts.remove(value);
+                        persistSavedHosts();
+                        setItems(hostLabels());
+                    } else {
+                        showHostNoteDialog(value);
+                    }
+                })
+                .show();
+    }
+
+    private void showHostNoteDialog(String value) {
+        EditText note = field("备注（可留空）", InputType.TYPE_CLASS_TEXT);
+        note.setText(savedHosts.getOrDefault(value, ""));
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("保存 SMB 主机")
+                .setView(note)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    savedHosts.put(value, note.getText().toString().trim());
+                    persistSavedHosts();
+                    setItems(hostLabels());
+                })
+                .show();
     }
 
     private void setStatus(String value) {
@@ -160,8 +248,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     if (isFinishing()) return;
                     hosts.clear();
                     hosts.addAll(found);
-                    List<String> labels = new ArrayList<>(found);
-                    setItems(labels);
+                    for (String saved : savedHosts.keySet()) if (!hosts.contains(saved)) hosts.add(saved);
+                    setItems(hostLabels());
                     setStatus(found.isEmpty() ? getString(R.string.smb_no_servers)
                             : getString(R.string.smb_server_count, found.size()));
                 });
