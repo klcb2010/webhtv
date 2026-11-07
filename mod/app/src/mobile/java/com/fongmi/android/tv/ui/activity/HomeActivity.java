@@ -244,7 +244,9 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.live).setVisible(LiveConfig.hasUrl());
-        mBinding.navigation.getMenu().findItem(R.id.smb).setVisible(Setting.isSmbEntryEnabled());
+        MenuItem smbItem = mBinding.navigation.getMenu().findItem(R.id.smb);
+        androidx.core.view.MenuItemCompat.setIconTintList(smbItem, null);
+        smbItem.setVisible(Setting.isSmbEntryEnabled());
         syncNavigationSelection();
     }
 
