@@ -103,6 +103,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".smbtest"
+        }
         release {
             minifyEnabled = !fastRelease
             shrinkResources = !fastRelease
