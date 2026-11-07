@@ -57,15 +57,12 @@ public class HomeButton implements Diffable<HomeButton> {
             items.add(button);
         }
         if (Setting.isSmbEntryEnabled()) {
-            boolean found = false;
-            for (HomeButton button : items) if (button.getId() == ID_SMB) found = true;
-            if (!found) {
-                HomeButton smb = null;
-                for (HomeButton button : all()) if (button.getId() == ID_SMB) smb = button;
-                if (smb != null) {
-                    // SMB 追加到功能栏末尾，不改变直播/搜索等原有入口的位置。
-                    items.add(smb);
-                }
+            HomeButton smb = null;
+            for (HomeButton button : all()) if (button.getId() == ID_SMB) smb = button;
+            if (smb != null) {
+                // SMB 固定追加到最后，不占用直播/搜索等原有入口的位置。
+                items.remove(smb);
+                items.add(smb);
             }
         }
         return items;
