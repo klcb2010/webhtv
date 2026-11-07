@@ -169,4 +169,5 @@
     <string name="smb_manual_share">未列出共享？手动输入共享名</string>
     <string name="smb_share_name">共享名称</string>
     <string name="smb_open_share">打开共享</string>
+    <string name="smb_local_network_permission">SMB播放需要本地网络访问权限，请允许后重试</string>
 </resources>
