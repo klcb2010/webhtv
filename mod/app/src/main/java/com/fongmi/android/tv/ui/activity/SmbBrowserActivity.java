@@ -567,7 +567,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (mode == Mode.HOSTS) super.onBackPressed();
+        if (mode == Mode.HOSTS && !showingHiddenHosts) super.onBackPressed();
         else goBack();
     }
 
