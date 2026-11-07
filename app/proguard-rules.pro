@@ -88,9 +88,6 @@
 -dontwarn javax.script.**
 -dontwarn jdk.dynalink.**
 
-# SMBJ / Rapid7 DCERPC
-# Android has no java.rmi; Rapid7 only references this exception for malformed RPC responses.
--dontwarn java.rmi.UnmarshalException
 
 # Sardine
 -keep class com.thegrizzlylabs.sardineandroid.** { *; }
