@@ -2,7 +2,8 @@ package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;\nimport android.graphics.drawable.ColorDrawable;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Build;
 import android.text.InputType;
@@ -23,7 +24,8 @@ import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.smb.SmbClient;
 import com.fongmi.android.tv.smb.SmbNetworkScanner;
 import com.fongmi.android.tv.smb.SmbPlaybackProxy;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;\nimport com.google.android.material.color.MaterialColors;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.color.MaterialColors;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,7 +75,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(16), dp(20), dp(12));
-        int surface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, 0xFF10131B);\n        int onSurface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFFFFFFF);\n        int onSurfaceVariant = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFFB8C4D8);\n        root.setBackgroundColor(surface);
+        int surface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, 0xFF10131B);
+        int onSurface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFFFFFFF);
+        int onSurfaceVariant = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFFB8C4D8);
+        root.setBackgroundColor(surface);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
@@ -105,7 +110,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         root.addView(status, new LinearLayout.LayoutParams(-1, -2));
 
         list = new ListView(this);
-        list.setDividerHeight(dp(1));\n        list.setDivider(new ColorDrawable(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0x334F5B6B)));\n        list.setBackgroundColor(surface);
+        list.setDividerHeight(dp(1));
+        list.setDivider(new ColorDrawable(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0x334F5B6B)));
+        list.setBackgroundColor(surface);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, displayItems);
         list.setAdapter(adapter);
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
