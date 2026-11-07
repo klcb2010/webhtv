@@ -144,7 +144,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 int filePosition = position - (path.isEmpty() ? 0 : 1);
                 if (filePosition >= 0 && filePosition < visibleFiles.size() && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name : path + "\\" + visibleFiles.get(filePosition).name;
-                    hideFolder(folderPath);
+                    showFolderActions(folderPath, false);
                     return true;
                 }
             }
@@ -161,8 +161,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setSingleLine(true);
-        button.setPadding(dp(6), button.getPaddingTop(), dp(6), button.getPaddingBottom());
-        button.setTextSize(11);
+        int horizontalPadding = button.getText().toString().equals("返回") ? 2 : 6;
+        button.setPadding(dp(horizontalPadding), button.getPaddingTop(), dp(horizontalPadding), button.getPaddingBottom());
+        button.setTextSize(14);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
         params.leftMargin = dp(4);
         params.rightMargin = dp(4);
@@ -243,6 +244,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
         setItems(labels);
         setStatus(hiddenFolders.isEmpty() ? "没有隐藏的文件夹"
                 : (isTvDevice() ? "选择文件夹即可恢复显示" : "长按文件夹可恢复显示"));
+    }
+
+    private void showFolderActions(String folderPath, boolean tv) {
+        if (folderPath == null || folderPath.isEmpty()) return;
+        if (tv) {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(folderPath)
+                    .setItems(new String[]{"打开文件夹", "隐藏此文件夹"}, (dialog, which) -> {
+                        if (which == 0) {
+                            path = folderPath;
+                            loadDirectory();
+                        } else {
+                            hideFolder(folderPath);
+                        }
+                    })
+                    .show();
+        } else {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle(folderPath)
+                    .setItems(new String[]{"隐藏此文件夹"}, (dialog, which) -> hideFolder(folderPath))
+                    .show();
+        }
     }
 
     private void hideFolder(String folderPath) {
@@ -425,8 +448,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
             SmbClient.Entry entry = visibleFiles.get(position);
             String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
             if (entry.directory) {
-                path = remotePath;
-                loadDirectory();
+                if (isTvDevice()) {
+                    showFolderActions(remotePath, true);
+                } else {
+                    path = remotePath;
+                    loadDirectory();
+                }
             } else if (isVideo(entry.name)) {
                 play(remotePath);
             } else {
