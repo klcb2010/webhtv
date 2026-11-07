@@ -108,7 +108,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         MaterialButton hidden = themedButton("显示隐藏IP");
         hidden.setOnClickListener(v -> showHiddenHosts());
 
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(0, -2, 1);
         toolbar.addView(back, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(0, -2, 1);
         scanParams.leftMargin = dp(6);
