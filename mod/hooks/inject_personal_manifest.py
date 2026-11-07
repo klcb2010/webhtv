@@ -55,7 +55,7 @@ def ensure_local_network_permission():
     permission = 'android.permission.ACCESS_LOCAL_NETWORK'
     if permission in t:
         return
-    block = '    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />\\n\\n'
+    block = '    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />\n\n'
     t = t.replace("<application", block + "    <application", 1)
     path.write_text(t, encoding="utf-8")
     print("[mod] registered ACCESS_LOCAL_NETWORK permission")
