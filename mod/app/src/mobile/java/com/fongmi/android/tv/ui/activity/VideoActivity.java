@@ -617,7 +617,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         super.initView(savedInstanceState);
         mRestoringConfigurationPlayback = savedInstanceState != null;
         boolean smbPlayback = Setting.isSmbEntryEnabled() && getIntent().getBooleanExtra("smb_source", false);
-        mBinding.smbReturn.setVisibility(smbPlayback ? View.VISIBLE : View.GONE);
+        mBinding.smbReturn.setVisibility(View.GONE);
         mBinding.smbReturn.setOnClickListener(view -> {
             if (smbPlayback && Setting.isSmbEntryEnabled()) finish();
         });
