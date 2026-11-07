@@ -242,7 +242,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(value)
                 .setItems(actions, (dialog, which) -> {
-                    if (saved && which == 0) {
+                    if ((!saved && which == 0) || (saved && which == 0)) {
                         showHostNoteDialog(value);
                     } else if (saved && which == 1) {
                         savedHosts.remove(value);
