@@ -51,6 +51,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private final List<String> hosts = new ArrayList<>();
     private final List<String> shares = new ArrayList<>();
     private final List<SmbClient.Entry> files = new ArrayList<>();
+    private final List<SmbClient.Entry> visibleFiles = new ArrayList<>();
     private final Map<String, String> savedHosts = new LinkedHashMap<>();
     private final Set<String> hiddenHosts = new LinkedHashSet<>();
     private final Set<String> hiddenFolders = new LinkedHashSet<>();
@@ -105,8 +106,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
         MaterialButton back = themedButton("返回");
         back.setOnClickListener(v -> goBack());
-        MaterialButton scan = themedButton(getString(R.string.smb_scan));
-        scan.setOnClickListener(v -> scanNetwork());
         MaterialButton hidden = themedButton("显示隐藏IP");
         hidden.setOnClickListener(v -> showHiddenHosts());
         MaterialButton hiddenFoldersButton = themedButton("显示隐藏文件夹");
@@ -143,8 +142,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
             if (mode == Mode.FILES) {
                 int filePosition = position - (path.isEmpty() ? 0 : 1);
-                if (filePosition >= 0 && filePosition < files.size() && files.get(filePosition).directory) {
-                    String folderPath = path.isEmpty() ? files.get(filePosition).name : path + "\\\\" + files.get(filePosition).name;
+                if (filePosition >= 0 && filePosition < visibleFiles.size() && visibleFiles.get(filePosition).directory) {
+                    String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name : path + "\\" + visibleFiles.get(filePosition).name;
                     hideFolder(folderPath);
                     return true;
                 }
@@ -160,8 +159,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void addToolbarButton(LinearLayout toolbar, MaterialButton button) {
         button.setMinWidth(0);
-        button.setPadding(dp(8), button.getPaddingTop(), dp(8), button.getPaddingBottom());
-        button.setTextSize(12);
+        button.setMinimumWidth(0);
+        button.setSingleLine(true);
+        button.setPadding(dp(6), button.getPaddingTop(), dp(6), button.getPaddingBottom());
+        button.setTextSize(11);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
         params.leftMargin = dp(4);
         params.rightMargin = dp(4);
@@ -358,6 +359,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void scanNetworkInternal() {
         showingHiddenHosts = false;
+        showingHiddenFolders = false;
         mode = Mode.HOSTS;
         host = null;
         share = null;
@@ -419,8 +421,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 }
                 position--;
             }
-            if (position < 0 || position >= files.size()) return;
-            SmbClient.Entry entry = files.get(position);
+            if (position < 0 || position >= visibleFiles.size()) return;
+            SmbClient.Entry entry = visibleFiles.get(position);
             String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
             if (entry.directory) {
                 path = remotePath;
@@ -554,11 +556,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     files.clear();
                     files.addAll(found);
+                    visibleFiles.clear();
                     List<String> labels = new ArrayList<>();
                     if (!path.isEmpty()) labels.add("..  " + getString(R.string.smb_parent));
                     for (SmbClient.Entry entry : found) {
-                        String remotePath = path.isEmpty() ? entry.name : path + "\\\\" + entry.name;
+                        String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
                         if (entry.directory && hiddenFolders.contains(folderKey(remotePath))) continue;
+                        visibleFiles.add(entry);
                         labels.add((entry.directory ? "📁  " : "▶  ") + entry.name);
                     }
                     setItems(labels);
