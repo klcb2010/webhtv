@@ -68,10 +68,10 @@ required = {
     "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java": "startSmb",
     "app/src/leanback/java/com/fongmi/android/tv/ui/activity/HomeActivity.java": "SmbBrowserActivity.start",
     "app/src/leanback/java/com/fongmi/android/tv/bean/HomeButton.java": "ID_SMB",
+    "app/src/leanback/java/com/fongmi/android/tv/ui/presenter/FuncPresenter.java": "setImageTintList(null)",
     "app/src/mobile/res/menu/menu_nav.xml": 'android:id="@+id/smb"',
     "app/src/mobile/res/layout/activity_setting_personal.xml": 'android:id="@+id/smbEntry"',
     "app/src/mobile/res/drawable-nodpi/ic_nav_smb.png": None,
-    "app/src/leanback/res/drawable-nodpi/ic_nav_smb.png": None,
 }
 for relative, marker in required.items():
     path = ROOT / relative
@@ -83,3 +83,13 @@ menu = (ROOT / "app/src/mobile/res/menu/menu_nav.xml").read_text(encoding="utf-8
 if menu.index('android:id="@+id/smb"') > menu.index('android:id="@+id/setting"'):
     raise SystemExit("[mod] ERROR: mobile SMB menu must be before Settings")
 print(f"[mod] SMB packaging verified ({len(required)} files)")
+
+func_source = (ROOT / "app/src/leanback/java/com/fongmi/android/tv/bean/Func.java").read_text(encoding="utf-8")
+if "R.drawable.ic_nav_smb" in func_source:
+    tv_icon = ROOT / "app/src/leanback/res/drawable-nodpi/ic_nav_smb.png"
+elif "R.drawable.ic_home_smb" in func_source:
+    tv_icon = ROOT / "app/src/leanback/res/drawable-nodpi/ic_home_smb.png"
+else:
+    raise SystemExit("[mod] ERROR: TV SMB icon mapping missing")
+if not tv_icon.is_file():
+    raise SystemExit(f"[mod] ERROR: TV SMB icon resource missing: {tv_icon.relative_to(ROOT)}")
