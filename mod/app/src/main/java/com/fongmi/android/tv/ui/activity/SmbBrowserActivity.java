@@ -95,33 +95,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
 
-        MaterialButton back = themedButton("返回");
-        back.setOnClickListener(v -> goBack());
-        toolbar.addView(back, new LinearLayout.LayoutParams(-2, -2));
-
         title = new TextView(this);
         title.setText(getString(R.string.smb_browser_title));
         title.setTextColor(onSurface);
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        title.setPadding(dp(12), 0, dp(8), 0);
-        toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
+        MaterialButton back = themedButton("返回");
+        back.setOnClickListener(v -> goBack());
         MaterialButton scan = themedButton(getString(R.string.smb_scan));
         scan.setOnClickListener(v -> scanNetwork());
-        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-2, -2);
-        scanParams.leftMargin = dp(6);
-        toolbar.addView(scan, scanParams);
-        root.addView(toolbar);
-
-        LinearLayout hiddenRow = new LinearLayout(this);
-        hiddenRow.setOrientation(LinearLayout.HORIZONTAL);
-        hiddenRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        hiddenRow.setPadding(0, dp(6), 0, 0);
         MaterialButton hidden = themedButton("显示隐藏IP");
         hidden.setOnClickListener(v -> showHiddenHosts());
-        hiddenRow.addView(hidden, new LinearLayout.LayoutParams(-2, -2));
-        root.addView(hiddenRow, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(0, -2, 1);
+        toolbar.addView(back, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(0, -2, 1);
+        scanParams.leftMargin = dp(6);
+        toolbar.addView(scan, scanParams);
+        LinearLayout.LayoutParams hiddenParams = new LinearLayout.LayoutParams(0, -2, 1);
+        hiddenParams.leftMargin = dp(6);
+        toolbar.addView(hidden, hiddenParams);
+        root.addView(toolbar);
 
         status = new TextView(this);
         status.setTextColor(onSurfaceVariant);
