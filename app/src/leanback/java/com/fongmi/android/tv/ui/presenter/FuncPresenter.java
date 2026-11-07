@@ -8,7 +8,6 @@ import androidx.annotation.NonNull;
 import androidx.leanback.widget.Presenter;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Func;
 import com.fongmi.android.tv.databinding.AdapterFuncBinding;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -38,9 +37,6 @@ public class FuncPresenter extends Presenter {
         Func item = (Func) object;
         ViewHolder holder = (ViewHolder) viewHolder;
         holder.binding.text.setText(item.getText());
-        if (item.getResId() == R.string.home_smb) {
-            holder.binding.icon.setImageTintList(null);
-        }
         holder.binding.icon.setImageResource(item.getDrawable());
         setOnClickListener(holder, view -> listener.onItemClick(item));
         holder.view.setOnLongClickListener(view -> listener.onLongClick(item));
