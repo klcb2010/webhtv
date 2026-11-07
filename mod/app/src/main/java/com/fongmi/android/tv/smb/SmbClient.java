@@ -109,7 +109,8 @@ public final class SmbClient {
                 || value.endsWith(".vob") || value.endsWith(".3gp") || value.endsWith(".3g2")
                 || value.endsWith(".mts") || value.endsWith(".mxf") || value.endsWith(".ogv");
     }
-\n    public static RemoteFile openFile(String host, String shareName, String path,
+
+    public static RemoteFile openFile(String host, String shareName, String path,
                                       String username, String password, String domain) throws Exception {
         SMBClient client = new SMBClient();
         Connection connection = null;
