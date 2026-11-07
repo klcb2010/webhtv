@@ -63,9 +63,8 @@ public class HomeButton implements Diffable<HomeButton> {
                 HomeButton smb = null;
                 for (HomeButton button : all()) if (button.getId() == ID_SMB) smb = button;
                 if (smb != null) {
-                    int settingIndex = items.size();
-                    for (int i = 0; i < items.size(); i++) if (isSetting(items.get(i))) { settingIndex = i; break; }
-                    items.add(settingIndex, smb);
+                    // SMB 追加到功能栏末尾，不改变直播/搜索等原有入口的位置。
+                    items.add(smb);
                 }
             }
         }
