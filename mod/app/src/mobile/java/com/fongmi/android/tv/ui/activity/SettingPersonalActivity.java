@@ -85,7 +85,10 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.debugLog.setOnClickListener(this::setDebugLog); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
-        try { mBinding.smbEntry.setOnClickListener(this::setSmbEntry); } catch (Throwable ignored) {}
+        try {
+            mBinding.smbEntry.setFocusableInTouchMode(false);
+            mBinding.smbEntry.setOnClickListener(this::setSmbEntry);
+        } catch (Throwable ignored) {}
     }
 
     private void refreshTexts() {
