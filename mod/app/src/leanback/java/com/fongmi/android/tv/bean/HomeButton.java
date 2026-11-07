@@ -19,7 +19,8 @@ import java.util.Map;
 /** TV 首页功能区。id 7=设置 始终启用。 */
 public class HomeButton implements Diffable<HomeButton> {
 
-    public static final int ID_LIVE = 1;\n    public static final int ID_SMB = 5;
+    public static final int ID_LIVE = 1;
+    public static final int ID_SMB = 5;
     public static final int ID_SETTING = 7;
 
     private static final String KEY_BUTTON = "home_button";
