@@ -164,6 +164,7 @@ run_hook() {
 run_hook "$MOD/hooks/inject_subtitle.py"
 run_hook "$MOD/hooks/inject_video_ai.py"
 run_hook "$MOD/hooks/inject_personal_manifest.py"
+run_hook "$MOD/hooks/inject_smb_artwork.py"
 run_hook "$MOD/hooks/fix_exo_dv5.py"
 run_hook "$MOD/hooks/fix_migrations_keep.py"
 run_hook "$MOD/hooks/fix_db_history_schema.py"
