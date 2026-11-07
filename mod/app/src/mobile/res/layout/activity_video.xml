@@ -637,6 +637,12 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
+                        android:orientation="vertical">
+
+                    <androidx.appcompat.widget.LinearLayoutCompat
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -651,13 +657,20 @@
                             android:paddingEnd="0dp"
                             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
+                        <androidx.appcompat.widget.LinearLayoutCompat
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="start|center_vertical"
+                            android:orientation="horizontal">
+
                         <com.google.android.material.textview.MaterialTextView
                             android:id="@+id/smbReturn"
                             style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="32dp"
-                            android:layout_marginStart="8dp"
-                            android:layout_marginEnd="12dp"
+                            android:layout_marginStart="16dp"
+                            
                             android:background="@drawable/shape_video_item"
                             android:clickable="true"
                             android:focusable="true"
@@ -668,9 +681,7 @@
                             android:textColor="@color/selector_video_text"
                             android:textSize="14sp"
                             android:visibility="gone" />
-
-
-
+                        </androidx.appcompat.widget.LinearLayoutCompat>
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
                     <com.google.android.material.textview.MaterialTextView

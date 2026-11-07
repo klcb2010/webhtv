@@ -107,16 +107,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
         title.setPadding(dp(12), 0, dp(8), 0);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
-        MaterialButton hidden = themedButton("显示隐藏IP");
-        hidden.setOnClickListener(v -> showHiddenHosts());
-        toolbar.addView(hidden, new LinearLayout.LayoutParams(-2, -2));
-
         MaterialButton scan = themedButton(getString(R.string.smb_scan));
         scan.setOnClickListener(v -> scanNetwork());
         LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-2, -2);
         scanParams.leftMargin = dp(6);
         toolbar.addView(scan, scanParams);
         root.addView(toolbar);
+
+        LinearLayout hiddenRow = new LinearLayout(this);
+        hiddenRow.setOrientation(LinearLayout.HORIZONTAL);
+        hiddenRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        hiddenRow.setPadding(0, dp(6), 0, 0);
+        MaterialButton hidden = themedButton("显示隐藏IP");
+        hidden.setOnClickListener(v -> showHiddenHosts());
+        hiddenRow.addView(hidden, new LinearLayout.LayoutParams(-2, -2));
+        root.addView(hiddenRow, new LinearLayout.LayoutParams(-1, -2));
 
         status = new TextView(this);
         status.setTextColor(onSurfaceVariant);
