@@ -642,14 +642,13 @@
 
                         <androidx.recyclerview.widget.RecyclerView
                             android:id="@+id/flag"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:clipChildren="false"
                             android:clipToPadding="false"
                             android:orientation="horizontal"
                             android:paddingStart="16dp"
-                            android:paddingEnd="8dp"
+                            android:paddingEnd="0dp"
                             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
                         <com.google.android.material.textview.MaterialTextView
@@ -657,6 +656,7 @@
                             style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="32dp"
+                            android:layout_marginStart="8dp"
                             android:layout_marginEnd="12dp"
                             android:background="@drawable/shape_video_item"
                             android:clickable="true"

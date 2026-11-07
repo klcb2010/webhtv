@@ -29,8 +29,11 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import org.json.JSONObject;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -49,6 +52,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private final List<String> shares = new ArrayList<>();
     private final List<SmbClient.Entry> files = new ArrayList<>();
     private final Map<String, String> savedHosts = new LinkedHashMap<>();
+    private final Set<String> hiddenHosts = new LinkedHashSet<>();
 
     private LinearLayout root;
     private TextView title;
@@ -64,6 +68,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private String password = "";
     private String domain = "";
     private boolean loginAttempted;
+    private boolean showingHiddenHosts;
 
     public static void start(Activity activity) {
         activity.startActivity(new android.content.Intent(activity, SmbBrowserActivity.class));
@@ -102,9 +107,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
         title.setPadding(dp(12), 0, dp(8), 0);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
+        MaterialButton hidden = themedButton("显示隐藏IP");
+        hidden.setOnClickListener(v -> showHiddenHosts());
+        toolbar.addView(hidden, new LinearLayout.LayoutParams(-2, -2));
+
         MaterialButton scan = themedButton(getString(R.string.smb_scan));
         scan.setOnClickListener(v -> scanNetwork());
-        toolbar.addView(scan, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-2, -2);
+        scanParams.leftMargin = dp(6);
+        toolbar.addView(scan, scanParams);
         root.addView(toolbar);
 
         status = new TextView(this);
@@ -121,6 +132,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
         list.setAdapter(adapter);
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
         list.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (showingHiddenHosts) {
+                if (position < 0 || position >= hiddenHosts.size()) return false;
+                if (!isTvDevice()) restoreHiddenHost(new ArrayList<>(hiddenHosts).get(position));
+                return true;
+            }
             if (mode != Mode.HOSTS || position < 0 || position >= hosts.size()) return false;
             showHostActions(hosts.get(position));
             return true;
@@ -149,6 +165,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void loadSavedHosts() {
         savedHosts.clear();
+        hiddenHosts.clear();
+        hiddenHosts.addAll(getSharedPreferences("smb_hosts", MODE_PRIVATE).getStringSet("hidden", new HashSet<>()));
         String json = getSharedPreferences("smb_hosts", MODE_PRIVATE).getString("saved", "{}");
         try {
             JSONObject object = new JSONObject(json);
@@ -172,6 +190,41 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
+    private void persistHiddenHosts() {
+        getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
+                .putStringSet("hidden", new HashSet<>(hiddenHosts)).apply();
+    }
+
+    private boolean isTvDevice() {
+        return getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+    }
+
+    private void showHiddenHosts() {
+        showingHiddenHosts = true;
+        title.setText("已隐藏的 SMB 地址");
+        setItems(new ArrayList<>(hiddenHosts));
+        setStatus(hiddenHosts.isEmpty() ? "没有隐藏的地址"
+                : (isTvDevice() ? "选择地址即可恢复显示" : "长按地址可恢复显示"));
+    }
+
+    private void restoreHiddenHost(String value) {
+        if (value == null || !hiddenHosts.remove(value)) return;
+        persistHiddenHosts();
+        if (!hosts.contains(value)) hosts.add(value);
+        if (showingHiddenHosts) showHiddenHosts();
+        else setItems(hostLabels());
+        Toast.makeText(this, "已恢复显示：" + value, Toast.LENGTH_SHORT).show();
+    }
+
+    private void hideHost(String value) {
+        if (value == null || value.isEmpty()) return;
+        hiddenHosts.add(value);
+        persistHiddenHosts();
+        hosts.remove(value);
+        setItems(hostLabels());
+        setStatus("已隐藏地址：" + value);
+    }
+
     private List<String> hostLabels() {
         List<String> labels = new ArrayList<>();
         for (String host : hosts) {
@@ -183,16 +236,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void showHostActions(String value) {
         boolean saved = savedHosts.containsKey(value);
-        String[] actions = saved ? new String[]{"修改备注", "取消保存"} : new String[]{"保存并备注"};
+        String[] actions = saved
+                ? new String[]{"修改备注", "取消保存", "隐藏此地址"}
+                : new String[]{"保存并备注", "隐藏此地址"};
         new MaterialAlertDialogBuilder(this)
                 .setTitle(value)
                 .setItems(actions, (dialog, which) -> {
-                    if (saved && which == 1) {
+                    if (saved && which == 0) {
+                        showHostNoteDialog(value);
+                    } else if (saved && which == 1) {
                         savedHosts.remove(value);
                         persistSavedHosts();
                         setItems(hostLabels());
                     } else {
-                        showHostNoteDialog(value);
+                        hideHost(value);
                     }
                 })
                 .show();
@@ -234,6 +291,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void scanNetworkInternal() {
+        showingHiddenHosts = false;
         mode = Mode.HOSTS;
         host = null;
         share = null;
@@ -247,16 +305,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     hosts.clear();
-                    hosts.addAll(found);
-                    for (String saved : savedHosts.keySet()) if (!hosts.contains(saved)) hosts.add(saved);
+                    for (String value : found) if (!hiddenHosts.contains(value)) hosts.add(value);
+                    for (String saved : savedHosts.keySet()) {
+                        if (!hiddenHosts.contains(saved) && !hosts.contains(saved)) hosts.add(saved);
+                    }
                     setItems(hostLabels());
-                    setStatus(found.isEmpty() ? getString(R.string.smb_no_servers)
-                            : getString(R.string.smb_server_count, found.size()));
+                    setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers)
+                            : getString(R.string.smb_server_count, hosts.size()));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     hosts.clear();
-                    hosts.addAll(savedHosts.keySet());
+                    for (String saved : savedHosts.keySet()) if (!hiddenHosts.contains(saved)) hosts.add(saved);
                     setItems(hostLabels());
                     setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers) : getString(R.string.smb_server_count, hosts.size()));
                 });
@@ -265,6 +325,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void onItemClick(int position) {
+        if (showingHiddenHosts) {
+            if (isTvDevice() && position >= 0 && position < hiddenHosts.size()) {
+                restoreHiddenHost(new ArrayList<>(hiddenHosts).get(position));
+            }
+            return;
+        }
         if (mode == Mode.HOSTS) {
             if (position < hosts.size()) connectHost(hosts.get(position), false);
             return;
@@ -459,7 +525,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void goBack() {
-        if (mode == Mode.FILES) {
+        if (showingHiddenHosts) {
+            showingHiddenHosts = false;
+            mode = Mode.HOSTS;
+            title.setText(getString(R.string.smb_browser_title));
+            setItems(hostLabels());
+            setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers)
+                    : getString(R.string.smb_server_count, hosts.size()));
+        } else if (mode == Mode.FILES) {
             if (!path.isEmpty()) {
                 int cut = path.lastIndexOf('\\');
                 path = cut < 0 ? "" : path.substring(0, cut);
