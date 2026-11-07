@@ -19,7 +19,7 @@ import java.util.Map;
 /** TV 首页功能区。id 7=设置 始终启用。 */
 public class HomeButton implements Diffable<HomeButton> {
 
-    public static final int ID_SMB = 5;
+    public static final int ID_LIVE = 1;\n    public static final int ID_SMB = 5;
     public static final int ID_SETTING = 7;
 
     private static final String KEY_BUTTON = "home_button";
@@ -55,6 +55,20 @@ public class HomeButton implements Diffable<HomeButton> {
             if (button.getResId() == R.string.home_live && !LiveConfig.hasUrl()) continue;
             if (button.getId() == ID_SMB && !Setting.isSmbEntryEnabled()) continue;
             items.add(button);
+        }
+        // 直播源存在时，始终保留直播入口；避免旧的按钮排序偏好把它隐藏。
+        if (LiveConfig.hasUrl()) {
+            boolean hasLive = false;
+            for (HomeButton button : items) if (button.getId() == ID_LIVE) hasLive = true;
+            if (!hasLive) {
+                HomeButton live = null;
+                for (HomeButton button : all()) if (button.getId() == ID_LIVE) live = button;
+                if (live != null) {
+                    int index = items.size();
+                    if (!items.isEmpty() && isSetting(items.get(items.size() - 1))) index--;
+                    items.add(Math.max(0, index), live);
+                }
+            }
         }
         if (Setting.isSmbEntryEnabled()) {
             HomeButton smb = null;
