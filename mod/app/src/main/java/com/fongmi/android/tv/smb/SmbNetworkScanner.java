@@ -52,7 +52,7 @@ public final class SmbNetworkScanner {
             }
         }
 
-        ExecutorService pool = Executors.newFixedThreadPool(48);
+        ExecutorService pool = Executors.newFixedThreadPool(96);
         try {
             List<Callable<String>> tasks = new ArrayList<>();
             for (final String host : targets) {
@@ -60,7 +60,7 @@ public final class SmbNetworkScanner {
                     @Override
                     public String call() {
                         try (Socket socket = new Socket()) {
-                            socket.connect(new InetSocketAddress(host, 445), 350);
+                            socket.setTcpNoDelay(true);\n                            socket.connect(new InetSocketAddress(host, 445), 180);
                             return host;
                         } catch (Exception ignored) {
                             return null;
@@ -68,7 +68,7 @@ public final class SmbNetworkScanner {
                     }
                 });
             }
-            List<Future<String>> futures = pool.invokeAll(tasks, 8, TimeUnit.SECONDS);
+            List<Future<String>> futures = pool.invokeAll(tasks, 3, TimeUnit.SECONDS);
             List<String> found = new ArrayList<>();
             for (Future<String> future : futures) {
                 if (future.isCancelled()) continue;
