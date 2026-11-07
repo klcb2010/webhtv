@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
-"""Install the repository's original SMB.png artwork into Android drawable resources."""
+"""Install the original mod/smbicon.png artwork into Android drawable resources."""
 from pathlib import Path
 import shutil
 import sys
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-source = ROOT / "mod/SMB.png"
+source = ROOT / "mod/smbicon.png"
 if not source.is_file():
-    source = ROOT / "mod/smbicon.png"
-if not source.is_file():
-    source = ROOT / "mod/smb.png"
-if not source.is_file():
-    raise SystemExit("[mod] ERROR: mod/SMB.png is missing")
+    raise SystemExit("[mod] ERROR: mod/smbicon.png is missing")
 
 targets = [
     ROOT / "app/src/leanback/res/drawable-nodpi/ic_home_smb.png",
