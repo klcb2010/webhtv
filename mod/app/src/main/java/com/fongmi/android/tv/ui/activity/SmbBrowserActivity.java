@@ -12,6 +12,7 @@ import android.view.Gravity;
 import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -99,6 +100,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setFocusable(false);
+        toolbar.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
 
         title = new TextView(this);
         title.setText(getString(R.string.smb_browser_title));
@@ -112,6 +115,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         hidden.setOnClickListener(v -> showHiddenHosts());
         MaterialButton hiddenFoldersButton = themedButton("显示隐藏文件夹");
         hiddenFoldersButton.setOnClickListener(v -> showHiddenFolders());
+        back.setId(View.generateViewId());
+        hidden.setId(View.generateViewId());
+        hiddenFoldersButton.setId(View.generateViewId());
 
         addToolbarButton(toolbar, back);
         addToolbarButton(toolbar, hidden);
@@ -125,11 +131,24 @@ public class SmbBrowserActivity extends AppCompatActivity {
         root.addView(status, new LinearLayout.LayoutParams(-1, -2));
 
         list = new ListView(this);
+        list.setId(View.generateViewId());
+        list.setFocusable(true);
+        list.setFocusableInTouchMode(true);
         list.setDividerHeight(dp(1));
         list.setDivider(new ColorDrawable(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0x334F5B6B)));
         list.setBackgroundColor(surface);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, displayItems);
         list.setAdapter(adapter);
+        configureToolbarFocus(back, hidden, hiddenFoldersButton);
+        list.setOnKeyListener((view, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && keyCode == KeyEvent.KEYCODE_DPAD_UP
+                    && list.getSelectedItemPosition() <= 0) {
+                back.requestFocus();
+                return true;
+            }
+            return false;
+        });
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
         list.setOnItemLongClickListener((parent, view, position, id) -> {
             if (showingHiddenHosts) {
@@ -163,7 +182,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         setContentView(root);
     }
 
+    private void configureToolbarFocus(MaterialButton back, MaterialButton hidden, MaterialButton hiddenFoldersButton) {
+        MaterialButton[] buttons = new MaterialButton[]{back, hidden, hiddenFoldersButton};
+        for (int i = 0; i < buttons.length; i++) {
+            MaterialButton button = buttons[i];
+            button.setFocusable(true);
+            button.setFocusableInTouchMode(true);
+            button.setNextFocusDownId(list.getId());
+            if (i > 0) button.setNextFocusLeftId(buttons[i - 1].getId());
+            if (i < buttons.length - 1) button.setNextFocusRightId(buttons[i + 1].getId());
+        }
+        list.setNextFocusUpId(back.getId());
+    }
+
     private void addToolbarButton(LinearLayout toolbar, MaterialButton button) {
+        button.setFocusable(true);
+        button.setFocusableInTouchMode(true);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setMinHeight(0);
@@ -185,7 +219,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
         MaterialButton button = new MaterialButton(this);
         button.setText(label);
         button.setTextColor(foreground);
-        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        int focusedBackground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSecondaryContainer, 0xFF536A88);
+        button.setBackgroundTintList(new ColorStateList(
+                new int[][]{
+                        new int[]{android.R.attr.state_focused},
+                        new int[]{android.R.attr.state_pressed},
+                        new int[]{}
+                },
+                new int[]{focusedBackground, focusedBackground, background}
+        ));
         button.setCornerRadius(dp(10));
         button.setInsetTop(0);
         button.setInsetBottom(0);
