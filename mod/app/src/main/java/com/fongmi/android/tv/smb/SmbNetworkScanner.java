@@ -64,7 +64,8 @@ public final class SmbNetworkScanner {
                     @Override
                     public String call() {
                         try (Socket socket = new Socket()) {
-                            socket.setTcpNoDelay(true);\n                            socket.connect(new InetSocketAddress(host, 445), 180);
+                            socket.setTcpNoDelay(true);
+                            socket.connect(new InetSocketAddress(host, 445), 180);
                             return host;
                         } catch (Exception ignored) {
                             return null;
