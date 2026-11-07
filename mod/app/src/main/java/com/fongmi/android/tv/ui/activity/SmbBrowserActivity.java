@@ -266,14 +266,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
                                 setItems(found);
                                 setStatus(found.isEmpty() ? getString(R.string.smb_no_shares) : "选择共享目录");
                                 if (found.isEmpty()) {
-                                    Toast.makeText(this, R.string.smb_auth_failed, Toast.LENGTH_LONG).show();
+                                    setStatus(getString(R.string.smb_no_shares));
                                     showManualShareDialog();
                                 }
                             });
                         } catch (Exception e) {
                             runOnUiThread(() -> {
-                                setStatus(getString(R.string.smb_auth_failed) + "：" + shortError(e));
-                                Toast.makeText(this, R.string.smb_auth_failed, Toast.LENGTH_LONG).show();
+                                setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e));
+                                showManualShareDialog();
                             });
                         }
                     });
