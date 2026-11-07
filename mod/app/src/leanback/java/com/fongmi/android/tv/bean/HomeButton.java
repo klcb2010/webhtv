@@ -58,7 +58,7 @@ public class HomeButton implements Diffable<HomeButton> {
             items.add(button);
         }
         // 直播源存在时，始终保留直播入口；避免旧的按钮排序偏好把它隐藏。
-        if (LiveConfig.hasUrl()) {
+        if (Setting.isSmbEntryEnabled()) {
             boolean hasLive = false;
             for (HomeButton button : items) if (button.getId() == ID_LIVE) hasLive = true;
             if (!hasLive) {
