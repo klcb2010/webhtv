@@ -254,7 +254,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             : getString(R.string.smb_server_count, found.size()));
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> setStatus(getString(R.string.smb_no_servers)));
+                runOnUiThread(() -> {
+                    hosts.clear();
+                    hosts.addAll(savedHosts.keySet());
+                    setItems(hostLabels());
+                    setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers) : getString(R.string.smb_server_count, hosts.size()));
+                });
             }
         });
     }
