@@ -405,19 +405,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         start(activity, SiteApi.PUSH, url, url);
     }
 
-    public static void startSmb(Activity activity, String key, String id, String name) {
-        Intent intent = new Intent(activity, VideoActivity.class);
-        intent.putExtra("collect", false);
-        intent.putExtra("mark", (String) null);
-        intent.putExtra("name", name);
-        intent.putExtra("pic", (String) null);
-        intent.putExtra("wallPic", (String) null);
-        intent.putExtra("content", (String) null);
-        intent.putExtra("key", key);
-        intent.putExtra("id", id);
-        intent.putExtra("smb_source", true);
-        activity.startActivity(intent);
-    }
 
     public static void start(Activity activity, String key, String id, String name) {
         start(activity, key, id, name, null);
@@ -627,11 +614,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     protected void initView(Bundle savedInstanceState) {
         super.initView(savedInstanceState);
         mRestoringConfigurationPlayback = savedInstanceState != null;
-        boolean smbPlayback = Setting.isSmbEntryEnabled() && getIntent().getBooleanExtra("smb_source", false);
-        mBinding.smbReturn.setVisibility(smbPlayback ? View.VISIBLE : View.GONE);
-        mBinding.smbReturn.setOnClickListener(view -> {
-            if (smbPlayback && Setting.isSmbEntryEnabled()) finish();
-        });
         ViewCompat.setOnApplyWindowInsetsListener(mBinding.getRoot(), (v, insets) -> setStatusBar(insets));
         mKeyDown = CustomKeyDown.create(this, mBinding.exo);
         mFrameParams = mBinding.video.getLayoutParams();
