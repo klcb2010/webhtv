@@ -29,6 +29,10 @@ public final class SmbNetworkScanner {
             NetworkInterface network = interfaces.nextElement();
             try {
                 if (!network.isUp() || network.isLoopback() || network.isVirtual()) continue;
+                String interfaceName = network.getName().toLowerCase(java.util.Locale.ROOT);
+                // VPN/蜂窝隧道不是 SMB 所在的物理局域网，跳过以免重复扫描无关网段。
+                if (interfaceName.startsWith("tun") || interfaceName.startsWith("ppp")
+                        || interfaceName.startsWith("rmnet") || interfaceName.startsWith("dummy")) continue;
             } catch (Exception ignored) {
                 continue;
             }
