@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.Color;
@@ -14,6 +15,8 @@ import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -718,13 +721,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
         try {
             String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
             String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
-            ImageView image = new ImageView(this);
-            image.setBackgroundColor(Color.BLACK);
-            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            image.setAdjustViewBounds(true);
-            image.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    (int) (getResources().getDisplayMetrics().heightPixels * 0.62f)));
+
+            LinearLayout content = new LinearLayout(this);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setBackgroundColor(Color.BLACK);
+
             TextView imageTitle = new TextView(this);
             imageTitle.setText(name);
             imageTitle.setTextColor(MaterialColors.getColor(this,
@@ -735,17 +736,44 @@ public class SmbBrowserActivity extends AppCompatActivity {
             imageTitle.setPadding(dp(20), dp(12), dp(20), dp(12));
             imageTitle.setBackgroundColor(MaterialColors.getColor(this,
                     com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63));
+            content.addView(imageTitle, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
-            AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                    .setCustomTitle(imageTitle)
-                    .setView(image)
-                    .create();
+            ImageView image = new ImageView(this);
+            image.setBackgroundColor(Color.BLACK);
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            image.setAdjustViewBounds(true);
+            image.setFocusable(true);
+            image.setFocusableInTouchMode(false);
+            content.addView(image, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+            Dialog dialog = new Dialog(this);
+            dialog.setContentView(content);
+            dialog.setCanceledOnTouchOutside(false);
+            dialog.setOnKeyListener((dialogInterface, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() > 0) return false;
+                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                        || keyCode == KeyEvent.KEYCODE_ENTER
+                        || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                    toggleImageFullscreen(dialog, imageTitle);
+                    return true;
+                }
+                return false;
+            });
+            image.setOnClickListener(v -> toggleImageFullscreen(dialog, imageTitle));
+            dialog.setOnShowListener(ignored -> {
+                Window window = dialog.getWindow();
+                if (window != null) {
+                    window.setBackgroundDrawableResource(android.R.color.transparent);
+                    window.setLayout(
+                            (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                            (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+                }
+                image.requestFocus();
+            });
             dialog.show();
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setLayout(
-                        (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
-                        (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
-            }
+
             Glide.with(this)
                     .load(url)
                     .placeholder(android.R.drawable.ic_menu_gallery)
@@ -754,6 +782,26 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     .into(image);
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        boolean fullscreen = imageTitle.getVisibility() == View.VISIBLE;
+        if (fullscreen) {
+            imageTitle.setVisibility(View.GONE);
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            imageTitle.setVisibility(View.VISIBLE);
+            window.setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                    (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+            window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
     }
 
