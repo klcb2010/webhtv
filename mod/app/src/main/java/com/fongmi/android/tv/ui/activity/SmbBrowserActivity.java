@@ -693,12 +693,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         if (entry.directory && isHiddenFolder(remotePath)) continue;
                         visibleFiles.add(entry);
                         String icon = entry.directory ? "📁  " : SmbClient.isImage(entry.name) ? "🖼️  "
-                                : SmbClient.isAudio(entry.name) ? "♫  " : "▶  ";
+                                : SmbClient.isAudio(entry.name) ? "♫  " : SmbClient.isVideo(entry.name) ? "▶  " : "📄  ";
                         labels.add(icon + entry.name);
                     }
                     setItems(labels);
                     title.setText(host + " / " + share + (path.isEmpty() ? "" : " / " + path));
-                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "选择视频/音乐播放，图片可直接查看");
+                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "视频/音乐可播放，图片可查看；其他文件不受支持");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e)));
