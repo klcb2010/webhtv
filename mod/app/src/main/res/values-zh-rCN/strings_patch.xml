@@ -149,6 +149,7 @@
 
     <string name="setting_smb_entry">本地SMB播放入口</string>
     <string name="home_smb">播放</string>
+    <string name="home_smb_order">SMB播放</string>
     <string name="smb_browser_title">局域网 SMB 播放</string>
     <string name="smb_scan">扫描局域网</string>
     <string name="smb_scanning">正在扫描局域网 SMB 设备…</string>
