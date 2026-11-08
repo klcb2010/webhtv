@@ -23,6 +23,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
@@ -90,6 +91,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         loadSavedHosts();
         buildUi();
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (mode == Mode.HOSTS && !showingHiddenHosts && !showingHiddenFolders) finish();
+                else goBack();
+            }
+        });
         scanNetwork();
     }
 
@@ -171,7 +179,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return true;
             }
             if (mode == Mode.FILES) {
-                int filePosition = position - (path.isEmpty() ? 0 : 1);
+                int filePosition = position;
                 if (filePosition >= 0 && filePosition < visibleFiles.size() && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name : path + "\\" + visibleFiles.get(filePosition).name;
                     showFolderActions(folderPath);
@@ -535,15 +543,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             return;
         }
         if (mode == Mode.FILES) {
-            if (!path.isEmpty()) {
-                if (position == 0) {
-                    int cut = path.lastIndexOf('\\');
-                    path = cut < 0 ? "" : path.substring(0, cut);
-                    loadDirectory();
-                    return;
-                }
-                position--;
-            }
             if (position < 0 || position >= visibleFiles.size()) return;
             SmbClient.Entry entry = visibleFiles.get(position);
             String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
@@ -687,7 +686,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     files.addAll(found);
                     visibleFiles.clear();
                     List<String> labels = new ArrayList<>();
-                    if (!path.isEmpty()) labels.add("..  " + getString(R.string.smb_parent));
                     for (SmbClient.Entry entry : found) {
                         String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
                         if (entry.directory && isHiddenFolder(remotePath)) continue;
@@ -812,7 +810,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return true;
             }
             if (mode == Mode.FILES) {
-                int filePosition = position - (path.isEmpty() ? 0 : 1);
+                int filePosition = position;
                 if (filePosition >= 0 && filePosition < visibleFiles.size()
                         && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name
@@ -823,12 +821,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         }
         return super.onKeyDown(keyCode, event);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (mode == Mode.HOSTS && !showingHiddenHosts) super.onBackPressed();
-        else goBack();
     }
 
     @Override
