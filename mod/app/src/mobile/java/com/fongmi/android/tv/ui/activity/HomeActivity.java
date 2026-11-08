@@ -247,7 +247,30 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         MenuItem smbItem = mBinding.navigation.getMenu().findItem(R.id.smb);
         androidx.core.view.MenuItemCompat.setIconTintList(smbItem, null);
         smbItem.setVisible(Setting.isSmbEntryEnabled());
+        resizeSmbNavigationIcon();
         syncNavigationSelection();
+    }
+
+    /**
+     * 仅放大手机底栏 SMB 图标，不影响其他导航图标。
+     * 使用 post 等待 BottomNavigationView 完成菜单项布局。
+     */
+    private void resizeSmbNavigationIcon() {
+        mBinding.navigation.post(() -> {
+            View item = mBinding.navigation.findViewById(R.id.smb);
+            if (item == null) return;
+            int iconId = getResources().getIdentifier(
+                    "navigation_bar_item_icon_view", "id", getPackageName());
+            if (iconId == 0) return;
+            View icon = item.findViewById(iconId);
+            if (icon == null) return;
+            int size = (int) (32f * getResources().getDisplayMetrics().density + 0.5f);
+            android.view.ViewGroup.LayoutParams params = icon.getLayoutParams();
+            if (params == null) return;
+            params.width = size;
+            params.height = size;
+            icon.setLayoutParams(params);
+        });
     }
 
     private boolean openLive() {
