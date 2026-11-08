@@ -83,7 +83,7 @@ public final class SmbClient {
                     String name = item.getFileName();
                     if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
                     boolean isDirectory = (item.getFileAttributes() & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
-                    if (!isDirectory && !isVideo(name) && !isAudio(name) && !isImage(name)) continue;
+                    // SMB 目录枚举不再按扩展名提前丢弃文件；避免 NAS 的未知/大小写/特殊媒体扩展名被漏掉。
                     result.add(new Entry(name, isDirectory));
                 }
             }
