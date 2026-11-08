@@ -167,7 +167,9 @@ public class HomeButton implements Diffable<HomeButton> {
 
     public int getId() { return id; }
     public int getResId() { return resId; }
-    public String getName() { return ResUtil.getString(resId); }
+    public String getName() {
+        return getId() == ID_SMB ? ResUtil.getString(R.string.home_smb_order) : ResUtil.getString(resId);
+    }
 
     @Override
     public boolean equals(@Nullable Object obj) {
