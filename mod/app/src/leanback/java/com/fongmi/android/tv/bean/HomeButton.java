@@ -54,7 +54,6 @@ public class HomeButton implements Diffable<HomeButton> {
         List<HomeButton> items = new ArrayList<>();
         for (HomeButton button : getButtons()) {
             if (button.getResId() == R.string.home_live && !LiveConfig.hasUrl()) continue;
-            if (button.getId() == ID_SMB && !Setting.isSmbEntryEnabled()) continue;
             items.add(button);
         }
         // 直播源存在时，始终保留直播入口；避免旧的按钮排序偏好把它隐藏。
@@ -69,15 +68,6 @@ public class HomeButton implements Diffable<HomeButton> {
                     if (!items.isEmpty() && isSetting(items.get(items.size() - 1))) index--;
                     items.add(Math.max(0, index), live);
                 }
-            }
-        }
-        if (Setting.isSmbEntryEnabled()) {
-            HomeButton smb = null;
-            for (HomeButton button : all()) if (button.getId() == ID_SMB) smb = button;
-            if (smb != null) {
-                // SMB 固定追加到最后，不占用直播/搜索等原有入口的位置。
-                items.remove(smb);
-                items.add(smb);
             }
         }
         return items;
