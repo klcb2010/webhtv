@@ -725,10 +725,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
             image.setLayoutParams(new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     (int) (getResources().getDisplayMetrics().heightPixels * 0.62f)));
+            TextView imageTitle = new TextView(this);
+            imageTitle.setText(name);
+            imageTitle.setTextColor(MaterialColors.getColor(this,
+                    com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+            imageTitle.setTextSize(18);
+            imageTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            imageTitle.setGravity(Gravity.CENTER_VERTICAL);
+            imageTitle.setPadding(dp(20), dp(12), dp(20), dp(12));
+            imageTitle.setBackgroundColor(MaterialColors.getColor(this,
+                    com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63));
+
             AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                    .setTitle(name)
+                    .setCustomTitle(imageTitle)
                     .setView(image)
-                    .setPositiveButton("关闭", null)
                     .create();
             dialog.show();
             if (dialog.getWindow() != null) {
