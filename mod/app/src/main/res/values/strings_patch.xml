@@ -149,7 +149,7 @@
     <string name="setting_hdr_to_sdr">HDR to SDR</string>
     <string name="play_screenshot">Screenshot</string>
     <string name="setting_smb_entry">Local SMB playback entry</string>
-    <string name="home_smb">SMB playback</string>
+    <string name="home_smb">Play</string>
     <string name="smb_browser_title">LAN SMB playback</string>
     <string name="smb_scan">Scan local network</string>
     <string name="smb_scanning">Scanning for SMB devices…</string>
