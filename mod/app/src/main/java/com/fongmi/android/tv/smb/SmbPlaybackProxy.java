@@ -155,6 +155,32 @@ public final class SmbPlaybackProxy {
         if (value.endsWith(".webm")) return "video/webm";
         if (value.endsWith(".mov")) return "video/quicktime";
         if (value.endsWith(".mpg") || value.endsWith(".mpeg")) return "video/mpeg";
+        if (value.endsWith(".3gp") || value.endsWith(".3g2")) return "video/3gpp";
+        if (value.endsWith(".mxf")) return "application/mxf";
+        if (value.endsWith(".ogv")) return "video/ogg";
+        if (value.endsWith(".mp3")) return "audio/mpeg";
+        if (value.endsWith(".flac")) return "audio/flac";
+        if (value.endsWith(".m4a") || value.endsWith(".m4b")) return "audio/mp4";
+        if (value.endsWith(".aac")) return "audio/aac";
+        if (value.endsWith(".wav")) return "audio/wav";
+        if (value.endsWith(".ogg") || value.endsWith(".opus")) return "audio/ogg";
+        if (value.endsWith(".wma")) return "audio/x-ms-wma";
+        if (value.endsWith(".ape")) return "audio/x-ape";
+        if (value.endsWith(".aiff") || value.endsWith(".aif")) return "audio/aiff";
+        if (value.endsWith(".amr")) return "audio/amr";
+        if (value.endsWith(".mid") || value.endsWith(".midi")) return "audio/midi";
+        if (value.endsWith(".mka")) return "audio/x-matroska";
+        if (value.endsWith(".ac3")) return "audio/ac3";
+        if (value.endsWith(".dts")) return "audio/vnd.dts";
+        if (value.endsWith(".jpg") || value.endsWith(".jpeg") || value.endsWith(".jpe")) return "image/jpeg";
+        if (value.endsWith(".png")) return "image/png";
+        if (value.endsWith(".gif")) return "image/gif";
+        if (value.endsWith(".bmp")) return "image/bmp";
+        if (value.endsWith(".webp")) return "image/webp";
+        if (value.endsWith(".heic")) return "image/heic";
+        if (value.endsWith(".heif")) return "image/heif";
+        if (value.endsWith(".avif")) return "image/avif";
+        if (value.endsWith(".tif") || value.endsWith(".tiff")) return "image/tiff";
         return "application/octet-stream";
     }
 
