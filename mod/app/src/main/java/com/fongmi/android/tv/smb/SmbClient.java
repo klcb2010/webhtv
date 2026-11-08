@@ -83,7 +83,7 @@ public final class SmbClient {
                     String name = item.getFileName();
                     if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
                     boolean isDirectory = (item.getFileAttributes() & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
-                    if (!isDirectory && !isVideo(name)) continue;
+                    if (!isDirectory && !isVideo(name) && !isAudio(name) && !isImage(name)) continue;
                     result.add(new Entry(name, isDirectory));
                 }
             }
@@ -108,6 +108,26 @@ public final class SmbClient {
                 || value.endsWith(".webm") || value.endsWith(".mpg") || value.endsWith(".mpeg")
                 || value.endsWith(".vob") || value.endsWith(".3gp") || value.endsWith(".3g2")
                 || value.endsWith(".mts") || value.endsWith(".mxf") || value.endsWith(".ogv");
+    }
+
+    public static boolean isAudio(String name) {
+        if (name == null) return false;
+        String value = name.toLowerCase(java.util.Locale.ROOT);
+        return value.endsWith(".mp3") || value.endsWith(".flac") || value.endsWith(".m4a")
+                || value.endsWith(".m4b") || value.endsWith(".aac") || value.endsWith(".wav")
+                || value.endsWith(".ogg") || value.endsWith(".opus") || value.endsWith(".wma")
+                || value.endsWith(".ape") || value.endsWith(".aiff") || value.endsWith(".aif")
+                || value.endsWith(".amr") || value.endsWith(".mid") || value.endsWith(".midi")
+                || value.endsWith(".mka") || value.endsWith(".ac3") || value.endsWith(".dts");
+    }
+
+    public static boolean isImage(String name) {
+        if (name == null) return false;
+        String value = name.toLowerCase(java.util.Locale.ROOT);
+        return value.endsWith(".jpg") || value.endsWith(".jpeg") || value.endsWith(".jpe")
+                || value.endsWith(".png") || value.endsWith(".gif") || value.endsWith(".bmp")
+                || value.endsWith(".webp") || value.endsWith(".heic") || value.endsWith(".heif")
+                || value.endsWith(".avif") || value.endsWith(".tif") || value.endsWith(".tiff");
     }
 
     public static RemoteFile openFile(String host, String shareName, String path,
