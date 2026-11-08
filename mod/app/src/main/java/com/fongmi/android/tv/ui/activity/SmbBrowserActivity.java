@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
@@ -15,12 +16,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
+
+import com.bumptech.glide.Glide;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.SiteApi;
@@ -545,8 +550,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
             if (entry.directory) {
                 path = remotePath;
                 loadDirectory();
-            } else if (isVideo(entry.name)) {
+            } else if (SmbClient.isVideo(entry.name) || SmbClient.isAudio(entry.name)) {
                 play(remotePath);
+            } else if (SmbClient.isImage(entry.name)) {
+                showImage(remotePath);
             } else {
                 Toast.makeText(this, R.string.smb_play_video_only, Toast.LENGTH_SHORT).show();
             }
@@ -685,11 +692,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
                         if (entry.directory && isHiddenFolder(remotePath)) continue;
                         visibleFiles.add(entry);
-                        labels.add((entry.directory ? "📁  " : "▶  ") + entry.name);
+                        String icon = entry.directory ? "📁  " : SmbClient.isImage(entry.name) ? "🖼️  "
+                                : SmbClient.isAudio(entry.name) ? "♫  " : "▶  ";
+                        labels.add(icon + entry.name);
                     }
                     setItems(labels);
                     title.setText(host + " / " + share + (path.isEmpty() ? "" : " / " + path));
-                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "选择视频文件播放");
+                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "选择视频/音乐播放，图片可直接查看");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e)));
@@ -707,13 +716,37 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private boolean isVideo(String name) {
-        String value = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
-        return value.endsWith(".mp4") || value.endsWith(".mkv") || value.endsWith(".avi")
-                || value.endsWith(".mov") || value.endsWith(".m4v") || value.endsWith(".ts")
-                || value.endsWith(".m2ts") || value.endsWith(".wmv") || value.endsWith(".flv")
-                || value.endsWith(".webm") || value.endsWith(".mpg") || value.endsWith(".mpeg")
-                || value.endsWith(".vob");
+    private void showImage(String remotePath) {
+        try {
+            String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
+            String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
+            ImageView image = new ImageView(this);
+            image.setBackgroundColor(Color.BLACK);
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            image.setAdjustViewBounds(true);
+            image.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    (int) (getResources().getDisplayMetrics().heightPixels * 0.62f)));
+            AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                    .setTitle(name)
+                    .setView(image)
+                    .setPositiveButton("关闭", null)
+                    .create();
+            dialog.show();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setLayout(
+                        (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                        (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+            }
+            Glide.with(this)
+                    .load(url)
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_menu_report_image)
+                    .fitCenter()
+                    .into(image);
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
+        }
     }
 
     private String shortError(Exception error) {
