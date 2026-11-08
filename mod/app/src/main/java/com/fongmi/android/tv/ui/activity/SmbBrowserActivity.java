@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.Color;
@@ -14,6 +15,8 @@ import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -23,9 +26,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.SiteApi;
@@ -90,6 +95,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         loadSavedHosts();
         buildUi();
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (mode == Mode.HOSTS && !showingHiddenHosts && !showingHiddenFolders) finish();
+                else goBack();
+            }
+        });
         scanNetwork();
     }
 
@@ -114,8 +126,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
 
-        MaterialButton back = themedButton("返回");
-        back.setOnClickListener(v -> goBack());
+        MaterialButton back = themedButton("关闭");
+        back.setOnClickListener(v -> finish());
         MaterialButton hidden = themedButton("显示隐藏IP");
         hidden.setOnClickListener(v -> showHiddenHosts());
         MaterialButton hiddenFoldersButton = themedButton("显示隐藏文件夹");
@@ -171,7 +183,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return true;
             }
             if (mode == Mode.FILES) {
-                int filePosition = position - (path.isEmpty() ? 0 : 1);
+                int filePosition = position;
                 if (filePosition >= 0 && filePosition < visibleFiles.size() && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name : path + "\\" + visibleFiles.get(filePosition).name;
                     showFolderActions(folderPath);
@@ -535,15 +547,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             return;
         }
         if (mode == Mode.FILES) {
-            if (!path.isEmpty()) {
-                if (position == 0) {
-                    int cut = path.lastIndexOf('\\');
-                    path = cut < 0 ? "" : path.substring(0, cut);
-                    loadDirectory();
-                    return;
-                }
-                position--;
-            }
             if (position < 0 || position >= visibleFiles.size()) return;
             SmbClient.Entry entry = visibleFiles.get(position);
             String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
@@ -687,18 +690,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     files.addAll(found);
                     visibleFiles.clear();
                     List<String> labels = new ArrayList<>();
-                    if (!path.isEmpty()) labels.add("..  " + getString(R.string.smb_parent));
                     for (SmbClient.Entry entry : found) {
                         String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
                         if (entry.directory && isHiddenFolder(remotePath)) continue;
                         visibleFiles.add(entry);
                         String icon = entry.directory ? "📁  " : SmbClient.isImage(entry.name) ? "🖼️  "
-                                : SmbClient.isAudio(entry.name) ? "♫  " : "▶  ";
+                                : SmbClient.isAudio(entry.name) ? "♫  " : SmbClient.isVideo(entry.name) ? "▶  " : "📄  ";
                         labels.add(icon + entry.name);
                     }
                     setItems(labels);
                     title.setText(host + " / " + share + (path.isEmpty() ? "" : " / " + path));
-                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "选择视频/音乐播放，图片可直接查看");
+                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "视频/音乐可播放，图片可查看；其他文件不受支持");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e)));
@@ -720,32 +722,90 @@ public class SmbBrowserActivity extends AppCompatActivity {
         try {
             String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
             String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
+
+            LinearLayout content = new LinearLayout(this);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setBackgroundColor(Color.BLACK);
+
+            TextView imageTitle = new TextView(this);
+            imageTitle.setText(name);
+            imageTitle.setTextColor(MaterialColors.getColor(this,
+                    com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+            imageTitle.setTextSize(18);
+            imageTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            imageTitle.setGravity(Gravity.CENTER_VERTICAL);
+            imageTitle.setPadding(dp(20), dp(12), dp(20), dp(12));
+            imageTitle.setBackgroundColor(MaterialColors.getColor(this,
+                    com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63));
+            content.addView(imageTitle, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+
             ImageView image = new ImageView(this);
             image.setBackgroundColor(Color.BLACK);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
             image.setAdjustViewBounds(true);
-            image.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    (int) (getResources().getDisplayMetrics().heightPixels * 0.62f)));
-            AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                    .setTitle(name)
-                    .setView(image)
-                    .setPositiveButton("关闭", null)
-                    .create();
+            image.setFocusable(true);
+            image.setFocusableInTouchMode(false);
+            content.addView(image, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+            Dialog dialog = new Dialog(this);
+            dialog.setContentView(content);
+            dialog.setCanceledOnTouchOutside(false);
+            dialog.setOnKeyListener((dialogInterface, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() > 0) return false;
+                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                        || keyCode == KeyEvent.KEYCODE_ENTER
+                        || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                    toggleImageFullscreen(dialog, imageTitle);
+                    return true;
+                }
+                return false;
+            });
+            image.setOnClickListener(v -> toggleImageFullscreen(dialog, imageTitle));
+            dialog.setOnShowListener(ignored -> {
+                Window window = dialog.getWindow();
+                if (window != null) {
+                    window.setBackgroundDrawableResource(android.R.color.transparent);
+                    window.setLayout(
+                            (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                            (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+                }
+                image.requestFocus();
+            });
             dialog.show();
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setLayout(
-                        (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
-                        (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
-            }
+
             Glide.with(this)
                     .load(url)
+                    .override(getResources().getDisplayMetrics().widthPixels,
+                            getResources().getDisplayMetrics().heightPixels)
+                    .downsample(DownsampleStrategy.AT_MOST)
                     .placeholder(android.R.drawable.ic_menu_gallery)
                     .error(android.R.drawable.ic_menu_report_image)
                     .fitCenter()
                     .into(image);
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        boolean fullscreen = imageTitle.getVisibility() == View.VISIBLE;
+        if (fullscreen) {
+            imageTitle.setVisibility(View.GONE);
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            imageTitle.setVisibility(View.VISIBLE);
+            window.setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                    (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+            window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
         }
     }
 
@@ -812,7 +872,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return true;
             }
             if (mode == Mode.FILES) {
-                int filePosition = position - (path.isEmpty() ? 0 : 1);
+                int filePosition = position;
                 if (filePosition >= 0 && filePosition < visibleFiles.size()
                         && visibleFiles.get(filePosition).directory) {
                     String folderPath = path.isEmpty() ? visibleFiles.get(filePosition).name
@@ -823,12 +883,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         }
         return super.onKeyDown(keyCode, event);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (mode == Mode.HOSTS && !showingHiddenHosts) super.onBackPressed();
-        else goBack();
     }
 
     @Override
