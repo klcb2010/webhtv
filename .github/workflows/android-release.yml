@@ -28,7 +28,7 @@ env:
 jobs:
   release:
     name: Build and publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 90
 
     steps:
@@ -555,7 +555,7 @@ jobs:
       # ============================================================
       - name: Verify runner Python
         if: steps.should_build.outputs.build == 'true'
-        run: python3 --version
+        run: python3.10 --version
 
       # ============================================================
       # MPV Native
