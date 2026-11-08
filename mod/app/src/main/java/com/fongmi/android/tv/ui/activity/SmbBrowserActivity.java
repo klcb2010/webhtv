@@ -125,8 +125,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
 
-        MaterialButton back = themedButton("返回");
-        back.setOnClickListener(v -> goBack());
+        MaterialButton back = themedButton("关闭");
+        back.setOnClickListener(v -> finish());
         MaterialButton hidden = themedButton("显示隐藏IP");
         hidden.setOnClickListener(v -> showHiddenHosts());
         MaterialButton hiddenFoldersButton = themedButton("显示隐藏文件夹");
