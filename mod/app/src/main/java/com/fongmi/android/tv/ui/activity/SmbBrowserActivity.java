@@ -30,6 +30,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.SiteApi;
@@ -776,6 +777,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
             Glide.with(this)
                     .load(url)
+                    .override(getResources().getDisplayMetrics().widthPixels,
+                            getResources().getDisplayMetrics().heightPixels)
+                    .downsample(DownsampleStrategy.AT_MOST)
                     .placeholder(android.R.drawable.ic_menu_gallery)
                     .error(android.R.drawable.ic_menu_report_image)
                     .fitCenter()
