@@ -19,6 +19,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -740,14 +741,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
             content.addView(imageTitle, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
+            FrameLayout imageContainer = new FrameLayout(this);
+            imageContainer.setClipChildren(false);
+            imageContainer.setClipToPadding(false);
+            content.addView(imageContainer, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
             ImageView image = new ImageView(this);
             image.setBackgroundColor(Color.BLACK);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
             image.setAdjustViewBounds(true);
             image.setFocusable(true);
             image.setFocusableInTouchMode(false);
-            content.addView(image, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+            imageContainer.addView(image, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER));
 
             Dialog dialog = new Dialog(this);
             dialog.setContentView(content);
@@ -762,7 +770,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 }
                 return false;
             });
-            image.setOnClickListener(v -> toggleImageFullscreen(dialog, imageTitle));
+            image.setOnClickListener(v -> {
+                if (isTvDevice() || getResources().getDisplayMetrics().widthPixels
+                        >= getResources().getDisplayMetrics().heightPixels) {
+                    toggleImageFullscreen(dialog, imageTitle);
+                } else {
+                    toggleImageRotation(image, imageContainer);
+                }
+            });
             dialog.setOnShowListener(ignored -> {
                 Window window = dialog.getWindow();
                 if (window != null) {
@@ -787,6 +802,24 @@ public class SmbBrowserActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void toggleImageRotation(ImageView image, FrameLayout container) {
+        boolean rotated = image.getRotation() != 0f;
+        FrameLayout.LayoutParams params;
+        if (rotated) {
+            image.setRotation(0f);
+            params = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER);
+        } else {
+            int width = container.getWidth();
+            int height = container.getHeight();
+            if (width <= 0 || height <= 0) return;
+            image.setRotation(90f);
+            params = new FrameLayout.LayoutParams(height, width, Gravity.CENTER);
+        }
+        image.setLayoutParams(params);
     }
 
     private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
