@@ -771,11 +771,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return false;
             });
             image.setOnClickListener(v -> {
-                if (isTvDevice() || getResources().getDisplayMetrics().widthPixels
+                if (isTvDevice()) {
+                    toggleImageFullscreen(dialog, imageTitle);
+                } else if (getResources().getDisplayMetrics().widthPixels
                         >= getResources().getDisplayMetrics().heightPixels) {
                     toggleImageFullscreen(dialog, imageTitle);
                 } else {
-                    toggleImageRotation(image, imageContainer);
+                    togglePhoneImageRotation(dialog, imageTitle, image, imageContainer);
                 }
             });
             dialog.setOnShowListener(ignored -> {
@@ -804,22 +806,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private void toggleImageRotation(ImageView image, FrameLayout container) {
-        boolean rotated = image.getRotation() != 0f;
-        FrameLayout.LayoutParams params;
-        if (rotated) {
+    private void togglePhoneImageRotation(Dialog dialog, TextView imageTitle,
+                                          ImageView image, FrameLayout container) {
+        if (image.getRotation() != 0f) {
             image.setRotation(0f);
-            params = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
-                    Gravity.CENTER);
-        } else {
+            image.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER));
+            toggleImageFullscreen(dialog, imageTitle);
+            return;
+        }
+
+        // 竖屏点击旋转时同步进入全屏，第二次点击恢复原图并退出全屏。
+        toggleImageFullscreen(dialog, imageTitle);
+        image.setRotation(90f);
+        container.post(() -> {
+            if (!dialog.isShowing() || image.getRotation() == 0f) return;
             int width = container.getWidth();
             int height = container.getHeight();
             if (width <= 0 || height <= 0) return;
-            image.setRotation(90f);
-            params = new FrameLayout.LayoutParams(height, width, Gravity.CENTER);
-        }
-        image.setLayoutParams(params);
+            image.setLayoutParams(new FrameLayout.LayoutParams(height, width, Gravity.CENTER));
+        });
     }
 
     private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
