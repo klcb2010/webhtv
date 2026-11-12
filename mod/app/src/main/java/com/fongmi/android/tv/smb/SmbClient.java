@@ -84,7 +84,7 @@ public final class SmbClient {
                     if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
                     boolean isDirectory = (item.getFileAttributes() & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
                     // 只显示目录及支持的媒体文件，其他普通文件在 SMB 列表层过滤。
-                    if (!isDirectory && !isVideo(name) && !isAudio(name) && !isImage(name)) continue;
+                    if (!isDirectory && !isVideo(name) && !isAudio(name) && !isImage(name) && !isApk(name)) continue;
                     result.add(new Entry(name, isDirectory));
                 }
             }
@@ -129,6 +129,10 @@ public final class SmbClient {
                 || value.endsWith(".png") || value.endsWith(".gif") || value.endsWith(".bmp")
                 || value.endsWith(".webp") || value.endsWith(".heic") || value.endsWith(".heif")
                 || value.endsWith(".avif") || value.endsWith(".tif") || value.endsWith(".tiff");
+    }
+
+    public static boolean isApk(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".apk");
     }
 
     public static RemoteFile openFile(String host, String shareName, String path,
