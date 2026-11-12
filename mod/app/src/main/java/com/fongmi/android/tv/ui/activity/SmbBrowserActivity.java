@@ -268,11 +268,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void loadSavedHosts() {
         savedHosts.clear();
-        hiddenHosts.clear();
-        hiddenHosts.addAll(getSharedPreferences("smb_hosts", MODE_PRIVATE).getStringSet("hidden", new HashSet<>()));
-        hiddenFolders.clear();
-        hiddenFolders.addAll(getSharedPreferences("smb_hosts", MODE_PRIVATE).getStringSet("hidden_folders", new HashSet<>()));
-        String json = getSharedPreferences("smb_hosts", MODE_PRIVATE).getString("saved", "{}");
+        android.content.SharedPreferences preferences = getSharedPreferences("smb_hosts", MODE_PRIVATE);
+        loadStringSet(preferences, "hidden", hiddenHosts);
+        loadStringSet(preferences, "hidden_folders", hiddenFolders);
+        String json = preferences.getString("saved", "{}");
         try {
             JSONObject object = new JSONObject(json);
             java.util.Iterator<String> keys = object.keys();
@@ -282,6 +281,26 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    private void loadStringSet(android.content.SharedPreferences preferences, String key, Set<String> target) {
+        try {
+            Object stored = preferences.getAll().get(key);
+            if (!(stored instanceof Set<?>)) return;
+            Set<String> snapshot = new LinkedHashSet<>();
+            for (Object value : (Set<?>) stored) {
+                if (value instanceof String) snapshot.add((String) value);
+            }
+            target.addAll(snapshot);
+        } catch (RuntimeException ignored) {
+            // Keep existing in-memory entries if a stored value cannot be read.
+        }
+    }
+
+    private void persistStringSet(String key, Set<String> values) {
+        boolean saved = getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
+                .putStringSet(key, new HashSet<>(values)).commit();
+        if (!saved) Toast.makeText(this, "隐藏记录保存失败，请重试", Toast.LENGTH_LONG).show();
     }
 
     private void persistSavedHosts() {
@@ -296,13 +315,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void persistHiddenHosts() {
-        getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
-                .putStringSet("hidden", new HashSet<>(hiddenHosts)).apply();
+        persistStringSet("hidden", hiddenHosts);
     }
 
     private void persistHiddenFolders() {
-        getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
-                .putStringSet("hidden_folders", new HashSet<>(hiddenFolders)).apply();
+        persistStringSet("hidden_folders", hiddenFolders);
     }
 
     private String folderKey(String folderPath) {
