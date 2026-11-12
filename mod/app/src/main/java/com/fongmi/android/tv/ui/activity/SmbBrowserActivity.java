@@ -3,6 +3,9 @@ package com.fongmi.android.tv.ui.activity;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 import android.graphics.Typeface;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -27,6 +30,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 
@@ -42,6 +46,9 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -58,6 +65,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private enum Mode { HOSTS, SHARES, FILES, HIDDEN_FOLDERS }
 
     private static final int REQUEST_LOCAL_NETWORK = 7301;
+    private static final int REQUEST_INSTALL_APK_PERMISSION = 7302;
     private static final String LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -86,6 +94,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private boolean loginAttempted;
     private boolean showingHiddenHosts;
     private boolean showingHiddenFolders;
+    private boolean installingApk;
+    private File pendingApkFile;
 
     public static void start(Activity activity) {
         activity.startActivity(new android.content.Intent(activity, SmbBrowserActivity.class));
@@ -558,6 +568,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 play(remotePath);
             } else if (SmbClient.isImage(entry.name)) {
                 showImage(remotePath);
+            } else if (SmbClient.isApk(entry.name)) {
+                installApk(remotePath);
             } else {
                 Toast.makeText(this, R.string.smb_play_video_only, Toast.LENGTH_SHORT).show();
             }
@@ -695,18 +707,124 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         String remotePath = path.isEmpty() ? entry.name : path + "\\" + entry.name;
                         if (entry.directory && isHiddenFolder(remotePath)) continue;
                         visibleFiles.add(entry);
-                        String icon = entry.directory ? "📁  " : SmbClient.isImage(entry.name) ? "🖼️  "
-                                : SmbClient.isAudio(entry.name) ? "♫  " : SmbClient.isVideo(entry.name) ? "▶  " : "📄  ";
+                        String icon = entry.directory ? "📁  " : SmbClient.isApk(entry.name) ? "📦  "
+                                : SmbClient.isImage(entry.name) ? "🖼️  " : SmbClient.isAudio(entry.name) ? "♫  "
+                                : SmbClient.isVideo(entry.name) ? "▶  " : "📄  ";
                         labels.add(icon + entry.name);
                     }
                     setItems(labels);
                     title.setText(host + " / " + share + (path.isEmpty() ? "" : " / " + path));
-                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "视频/音乐可播放，图片可查看；其他文件不受支持");
+                    setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "视频/音乐可播放，图片可查看，APK 可安装");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e)));
             }
         });
+    }
+
+    private void installApk(String remotePath) {
+        if (installingApk) return;
+        installingApk = true;
+        setStatus("正在下载 APK 安装包");
+
+        final String targetHost = host;
+        final String targetShare = share;
+        final String targetUsername = username;
+        final String targetPassword = password;
+        final String targetDomain = domain;
+
+        worker.execute(() -> {
+            File apkFile = null;
+            try {
+                File directory = new File(getCacheDir(), "smb-apk");
+                if (!directory.exists() && !directory.mkdirs()) {
+                    throw new IOException("无法创建 APK 缓存目录");
+                }
+
+                String fileName = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1)
+                        .replaceAll("[^A-Za-z0-9._-]", "_");
+                if (fileName.isEmpty() || !fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".apk")) {
+                    throw new IOException("无效的 APK 文件名");
+                }
+
+                apkFile = new File(directory, fileName);
+                if (apkFile.exists() && !apkFile.delete()) {
+                    throw new IOException("无法覆盖缓存中的同名 APK");
+                }
+
+                try (SmbClient.RemoteFile remote = SmbClient.openFile(
+                        targetHost, targetShare, remotePath,
+                        targetUsername, targetPassword, targetDomain);
+                     FileOutputStream output = new FileOutputStream(apkFile)) {
+                    long size = remote.length();
+                    if (size <= 0) throw new IOException("APK 文件为空");
+
+                    byte[] buffer = new byte[64 * 1024];
+                    long offset = 0;
+                    while (offset < size) {
+                        int count = remote.read(buffer, offset, 0,
+                                (int) Math.min((long) buffer.length, size - offset));
+                        if (count <= 0) throw new IOException("APK 下载不完整");
+                        output.write(buffer, 0, count);
+                        offset += count;
+                    }
+                    output.flush();
+                }
+
+                File readyFile = apkFile;
+                runOnUiThread(() -> {
+                    installingApk = false;
+                    if (isFinishing()) return;
+                    setStatus("APK 下载完成，正在打开安装程序");
+                    launchApkInstaller(readyFile);
+                });
+            } catch (Exception e) {
+                if (apkFile != null && apkFile.exists()) apkFile.delete();
+                runOnUiThread(() -> {
+                    installingApk = false;
+                    if (isFinishing()) return;
+                    setStatus("APK 下载失败：" + shortError(e));
+                    Toast.makeText(this, "APK 下载失败：" + shortError(e), Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void launchApkInstaller(File apkFile) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls()) {
+            pendingApkFile = apkFile;
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("允许安装应用")
+                    .setMessage("需要允许 WebHTV 安装未知来源应用，授权后会继续打开安装程序。")
+                    .setNegativeButton(android.R.string.cancel, (dialog, which) -> pendingApkFile = null)
+                    .setPositiveButton("前往设置", (dialog, which) -> {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:" + getPackageName()));
+                            startActivityForResult(intent, REQUEST_INSTALL_APK_PERMISSION);
+                        } catch (Exception e) {
+                            pendingApkFile = null;
+                            Toast.makeText(this, "无法打开安装权限设置", Toast.LENGTH_LONG).show();
+                        }
+                    })
+                    .show();
+            return;
+        }
+        openApkInstaller(apkFile);
+    }
+
+    private void openApkInstaller(File apkFile) {
+        try {
+            Uri uri = FileProvider.getUriForFile(
+                    this, getPackageName() + ".provider", apkFile);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "无法打开 APK 安装程序：" + shortError(e), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void play(String remotePath) {
@@ -889,6 +1007,23 @@ public class SmbBrowserActivity extends AppCompatActivity {
             setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers) : getString(R.string.smb_server_count, hosts.size()));
         } else {
             finish();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_INSTALL_APK_PERMISSION) return;
+
+        File apkFile = pendingApkFile;
+        pendingApkFile = null;
+        if (apkFile == null) return;
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                || getPackageManager().canRequestPackageInstalls()) {
+            openApkInstaller(apkFile);
+        } else {
+            Toast.makeText(this, "尚未允许 WebHTV 安装未知来源应用", Toast.LENGTH_LONG).show();
         }
     }
 
