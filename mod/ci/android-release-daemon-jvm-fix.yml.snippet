@@ -1,0 +1,19 @@
+# Insert this step AFTER "Apply mod patches" and BEFORE any ./gradlew step
+# (or rely on mod/apply.sh which also removes the file).
+
+      - name: Relax Gradle Daemon JVM lock
+        if: steps.should_build.outputs.build == 'true'
+        run: |
+          # Upstream gradle/gradle-daemon-jvm.properties pins:
+          #   toolchainVendor=JETBRAINS + toolchainVersion=21
+          # and hardcodes Foojay download IDs. CI installs Temurin 21, so Gradle
+          # refuses it and tries Foojay — which currently returns HTTP 400.
+          set -e
+          if [ -f gradle/gradle-daemon-jvm.properties ]; then
+            echo "---- before ----"
+            cat gradle/gradle-daemon-jvm.properties || true
+            rm -f gradle/gradle-daemon-jvm.properties
+            echo "✅ removed gradle/gradle-daemon-jvm.properties"
+          else
+            echo "no gradle-daemon-jvm.properties (ok)"
+          fi

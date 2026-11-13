@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- UiSurface 名单匹配需读 Toast 文本字段；仅放行本检查，不关其它 lint -->
+    <issue id="BlockedPrivateApi">
+        <ignore path="**/UiSurface.java" />
+    </issue>
+    <issue id="PrivateApi">
+        <ignore path="**/UiSurface.java" />
+    </issue>
+    <issue id="DiscouragedPrivateApi">
+        <ignore path="**/UiSurface.java" />
+    </issue>
+</lint>

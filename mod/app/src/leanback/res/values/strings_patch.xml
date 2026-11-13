@@ -1,0 +1,47 @@
+<resources>
+    <string name="home_history_button">历史</string>
+    <string name="dialog_delete_record">删除记录</string>
+    <string name="dialog_delete_history">确定要删除全部历史记录吗？</string>
+    <string name="child_lock_title">Parental Control</string>
+    <string name="child_lock_enable">Enable</string>
+    <string name="child_lock_password">Password</string>
+    <string name="child_lock_password_hint">Enter password</string>
+    <string name="child_lock_password_confirm">Confirm password</string>
+    <string name="child_lock_password_confirm_hint">Enter password again</string>
+    <string name="child_lock_setup_hint">Takes effect on next app launch. Closing requires current password.</string>
+    <string name="child_lock_gate_title">Parental Control</string>
+    <string name="child_lock_gate_message">Enter password to use the app</string>
+    <string name="child_lock_unlock">Unlock</string>
+    <string name="child_lock_save">Save</string>
+    <string name="child_lock_cancel">Cancel</string>
+    <string name="child_lock_error_mismatch">Passwords do not match</string>
+    <string name="child_lock_error_empty">Password cannot be empty</string>
+    <string name="child_lock_error_wrong">Wrong password</string>
+    <string name="child_lock_saved">Saved. Will lock on next launch.</string>
+    <string name="child_lock_disabled">Parental control disabled</string>
+    <string name="setting_child_lock">Parental Control</string>
+    <string name="child_lock_toggle_password">Show / hide password</string>
+    <string name="child_lock_exit">Exit</string>
+    <string name="setting_home_enter_live">Enter live on startup</string>
+    <string name="setting_live_default_fullscreen">Live default fullscreen</string>
+    <string name="setting_webview_live">WebView live</string>
+    <string name="setting_eac3_soft_decode">E-AC3 soft decode</string>
+    <string name="setting_search_pan_first">Search result prefer</string>
+    <string name="setting_play_direct_pan_prefer">Direct play: prefer cloud drive</string>
+    <string name="setting_hide_home_type_more">Hide home more button</string>
+</resources>
+<string-array name="select_global_history_mode">
+        <item>Off</item>
+        <item>Auto</item>
+        <item>Search</item>
+    </string-array>
+    <string-array name="select_subtitle_language">
+        <item>Auto</item>
+        <item>Chinese</item>
+        <item>English</item>
+    </string-array>
+    <string-array name="select_subtitle_language_value">
+        <item>auto</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
