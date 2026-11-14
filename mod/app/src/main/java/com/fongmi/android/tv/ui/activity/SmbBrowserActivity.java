@@ -492,8 +492,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         if (stored == null || !hiddenHosts.remove(stored)) return;
         persistHiddenHosts();
         scanNetworkInternal();
-        if (showingHiddenHosts) showHiddenHosts();
-        else setItems(hostLabels());
+        showHiddenItems();
         Toast.makeText(this, "已恢复显示：" + value, Toast.LENGTH_SHORT).show();
     }
 
