@@ -291,9 +291,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
             for (Object value : (Set<?>) stored) {
                 if (value instanceof String) snapshot.add((String) value);
             }
+            target.clear();
             target.addAll(snapshot);
-        } catch (RuntimeException ignored) {
-            // Keep existing in-memory entries if a stored value cannot be read.
+        } catch (RuntimeException error) {
+            if (logActive()) android.util.Log.d("WebHTV-SMB", "load key=" + key + " failed: " + error.getClass().getSimpleName());
         }
     }
 
@@ -303,13 +304,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
         if (!saved) Toast.makeText(this, "隐藏记录保存失败，请重试", Toast.LENGTH_LONG).show();
     }
 
+    private static boolean logActive() { return false; }
+
     private void persistSavedHosts() {
         JSONObject object = new JSONObject();
         try {
             for (Map.Entry<String, String> entry : savedHosts.entrySet()) {
                 object.put(entry.getKey(), entry.getValue());
             }
-            getSharedPreferences("smb_hosts", MODE_PRIVATE).edit().putString("saved", object.toString()).apply();
+            getSharedPreferences("smb_hosts", MODE_PRIVATE).edit().putString("saved", object.toString()).commit();
         } catch (Exception ignored) {
         }
     }
@@ -330,7 +333,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return host + "\n" + shareName + "\n";
     }
 
+    private boolean isHiddenHost(String value) {
+        String expected = normalizeSmbPath(value);
+        for (String item : hiddenHosts) if (normalizeSmbPath(item).equals(expected)) return true;
+        return false;
+    }
+
     private boolean isHiddenShare(String shareName) {
+        if (host == null || shareName == null) return false;
         String expectedHost = normalizeSmbPath(host);
         String expectedShare = normalizeSmbPath(shareName);
         for (String value : hiddenFolders) {
@@ -343,6 +353,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private boolean isHiddenFolder(String folderPath) {
+        if (host == null || share == null || folderPath == null) return false;
         String expectedHost = normalizeSmbPath(host);
         String expectedShare = normalizeSmbPath(share);
         String expectedPath = normalizeSmbPath(folderPath);
@@ -438,9 +449,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void restoreHiddenHost(String value) {
-        if (value == null || !hiddenHosts.remove(value)) return;
+        if (value == null) return;
+        String stored = null;
+        for (String item : hiddenHosts) if (normalizeSmbPath(item).equals(normalizeSmbPath(value))) { stored = item; break; }
+        if (stored == null || !hiddenHosts.remove(stored)) return;
         persistHiddenHosts();
-        if (!hosts.contains(value)) hosts.add(value);
+        scanNetworkInternal();
         if (showingHiddenHosts) showHiddenHosts();
         else setItems(hostLabels());
         Toast.makeText(this, "已恢复显示：" + value, Toast.LENGTH_SHORT).show();
@@ -536,9 +550,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     hosts.clear();
-                    for (String value : found) if (!hiddenHosts.contains(value)) hosts.add(value);
+                    for (String value : found) if (!isHiddenHost(value)) hosts.add(value);
                     for (String saved : savedHosts.keySet()) {
-                        if (!hiddenHosts.contains(saved) && !hosts.contains(saved)) hosts.add(saved);
+                        if (!isHiddenHost(saved) && !hosts.contains(saved)) hosts.add(saved);
                     }
                     setItems(hostLabels());
                     setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers)
@@ -547,7 +561,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     hosts.clear();
-                    for (String saved : savedHosts.keySet()) if (!hiddenHosts.contains(saved)) hosts.add(saved);
+                    for (String saved : savedHosts.keySet()) if (!isHiddenHost(saved)) hosts.add(saved);
                     setItems(hostLabels());
                     setStatus(hosts.isEmpty() ? getString(R.string.smb_no_servers) : getString(R.string.smb_server_count, hosts.size()));
                 });
