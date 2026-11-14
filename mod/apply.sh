@@ -298,3 +298,9 @@ if [[ -f "$MOD/hooks/fix_mpv_subtitle_runtime.py" ]]; then
   echo "[mod] fix_mpv_subtitle_runtime"
   python3 "$MOD/hooks/fix_mpv_subtitle_runtime.py" "$ROOT" || exit 1
 fi
+
+# MPV 分支：直播期间临时强制 EXO，退出后恢复原播放器偏好
+if [[ -f "$MOD/hooks/inject_live_force_exo.py" ]]; then
+  echo "[mod] inject_live_force_exo"
+  python3 "$MOD/hooks/inject_live_force_exo.py" "$ROOT" || exit 1
+fi

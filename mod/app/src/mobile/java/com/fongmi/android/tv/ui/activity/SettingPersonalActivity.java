@@ -88,6 +88,8 @@ public class SettingPersonalActivity extends BaseActivity {
         try {
             mBinding.smbEntry.setFocusableInTouchMode(false);
             mBinding.smbEntry.setOnClickListener(this::setSmbEntry);
+            mBinding.liveForceExo.setFocusableInTouchMode(false);
+            mBinding.liveForceExo.setOnClickListener(this::setLiveForceExo);
         } catch (Throwable ignored) {}
     }
 
@@ -145,6 +147,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
         try { mBinding.smbEntryText.setText(getSwitch(Setting.isSmbEntryEnabled())); } catch (Throwable ignored) {}
+        try { mBinding.liveForceExoText.setText(getSwitch(Setting.isLiveForceExo())); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
             boolean tv = false;
@@ -536,6 +539,11 @@ public class SettingPersonalActivity extends BaseActivity {
         Setting.putSmbEntryEnabled(!Setting.isSmbEntryEnabled());
         refreshTexts();
         try { RefreshEvent.home(); } catch (Throwable ignored) {}
+    }
+
+    private void setLiveForceExo(View view) {
+        Setting.putLiveForceExo(!Setting.isLiveForceExo());
+        refreshTexts();
     }
 
 }

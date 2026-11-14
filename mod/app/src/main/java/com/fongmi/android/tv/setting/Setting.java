@@ -1685,4 +1685,13 @@ public class Setting {
         Prefers.put("smb_entry_enabled", enabled);
     }
 
+    /** MPV 分支：直播期间临时强制使用 EXO，默认开启。 */
+    public static boolean isLiveForceExo() {
+        return Prefers.getBoolean("live_force_exo", true);
+    }
+
+    public static void putLiveForceExo(boolean enabled) {
+        Prefers.put("live_force_exo", enabled);
+    }
+
 }
