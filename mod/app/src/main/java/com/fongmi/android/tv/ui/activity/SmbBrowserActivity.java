@@ -491,9 +491,26 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (String item : hiddenHosts) if (normalizeSmbPath(item).equals(normalizeSmbPath(value))) { stored = item; break; }
         if (stored == null || !hiddenHosts.remove(stored)) return;
         persistHiddenHosts();
-        scanNetworkInternal();
+        refreshHostsQuietly();
         showHiddenItems();
         Toast.makeText(this, "已恢复显示：" + value, Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshHostsQuietly() {
+        worker.execute(() -> {
+            try {
+                List<String> found = SmbNetworkScanner.scan();
+                runOnUiThread(() -> {
+                    discoveredHosts.clear();
+                    discoveredHosts.addAll(found);
+                    hosts.clear();
+                    for (String item : found) if (!isHiddenHost(item)) hosts.add(item);
+                    for (String saved : savedHosts.keySet())
+                        if (!isHiddenHost(saved) && !hosts.contains(saved)) hosts.add(saved);
+                    if (mode == Mode.HOSTS) setItems(hostLabels());
+                });
+            } catch (Exception ignored) { }
+        });
     }
 
     private void hideHost(String value) {
