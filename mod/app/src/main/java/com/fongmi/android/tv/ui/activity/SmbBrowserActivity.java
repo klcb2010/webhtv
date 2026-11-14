@@ -501,8 +501,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             try {
                 List<String> found = SmbNetworkScanner.scan();
                 runOnUiThread(() -> {
-                    discoveredHosts.clear();
-                    discoveredHosts.addAll(found);
                     hosts.clear();
                     for (String item : found) if (!isHiddenHost(item)) hosts.add(item);
                     for (String saved : savedHosts.keySet())
