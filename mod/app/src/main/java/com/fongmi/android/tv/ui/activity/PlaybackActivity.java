@@ -69,6 +69,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private boolean stop;
     private boolean lock;
     private int render = -1;
+    private boolean forceTextureForVideoRotation;
     private int requestedResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT;
     private ExoOutputModeManager exoOutputModeManager;
     private ExoAssSession attachedAssSession;
@@ -288,6 +289,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void onStateChanged(int state) {
+    }
+
+    protected boolean shouldForceTextureForVideoRotation() {
+        return false;
     }
 
     protected void onSizeChanged(VideoSize size) {
@@ -585,6 +590,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
     private int getRender() {
         if (mService != null && player().isNativePlayer()) return 0;
+        if (forceTextureForVideoRotation) return PlayerSetting.RENDER_TEXTURE;
         if (mService != null && player().requiresTextureRenderForLut()) return PlayerSetting.RENDER_TEXTURE;
         return PlayerSetting.getRender();
     }
@@ -756,7 +762,13 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     @Override
     public void onVideoSizeChanged(@NonNull VideoSize size) {
         if (!isOwner()) return;
-        logSurfaceState("onVideoSizeChanged size=" + size.width + "x" + size.height + " ratio=" + size.pixelWidthHeightRatio);
+        logSurfaceState("onVideoSizeChanged size=" + size.width + "x" + size.height + " ratio=" + size.pixelWidthHeightRatio + " rotation=" + size.unappliedRotationDegrees);
+        boolean forceTexture = shouldForceTextureForVideoRotation() && player().isExo()
+                && size.unappliedRotationDegrees % 180 != 0;
+        if (forceTextureForVideoRotation != forceTexture) {
+            forceTextureForVideoRotation = forceTexture;
+            setRender();
+        }
         publishRenderTarget(getExoView().getVideoSurfaceView());
         syncVideoSurfaceSize(size);
         applyExoOutputMode();
