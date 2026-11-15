@@ -299,6 +299,9 @@ if [[ -f "$MOD/hooks/fix_mpv_subtitle_runtime.py" ]]; then
   python3 "$MOD/hooks/fix_mpv_subtitle_runtime.py" "$ROOT" || exit 1
 fi
 
+# MPV 分支：SMB 播放禁用 mediacodec_embed，使用 GPU 输出保留竖屏旋转元数据
+run_hook "$MOD/hooks/inject_smb_mpv_gpu_output.py"
+
 # MPV 分支：直播期间临时强制 EXO，退出后恢复原播放器偏好
 if [[ -f "$MOD/hooks/inject_live_force_exo.py" ]]; then
   echo "[mod] inject_live_force_exo"
