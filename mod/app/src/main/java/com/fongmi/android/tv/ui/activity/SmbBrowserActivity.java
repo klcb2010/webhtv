@@ -247,14 +247,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
         MaterialButton button = new MaterialButton(this);
         button.setText(label);
         button.setTextColor(foreground);
-        int focusedBackground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSecondaryContainer, 0xFF536A88);
-        button.setBackgroundTintList(new ColorStateList(
+        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        button.setStrokeWidth(dp(2));
+        button.setStrokeColor(new ColorStateList(
                 new int[][]{
                         new int[]{android.R.attr.state_focused},
-                        new int[]{android.R.attr.state_pressed},
                         new int[]{}
                 },
-                new int[]{focusedBackground, focusedBackground, background}
+                new int[]{0xFF8CCBFF, Color.TRANSPARENT}
         ));
         button.setCornerRadius(dp(10));
         button.setInsetTop(0);
