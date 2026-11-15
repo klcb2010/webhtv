@@ -552,6 +552,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     protected void onServiceConnected() {
         SpiderDebug.log("video-flow", "service ready sinceLaunch=%dms key=%s id=%s", getLaunchCost(System.currentTimeMillis()), getKey(), getId());
         player().setDanmakuController(mBinding.exo.getDanmakuController());
+        if (getIntent().getBooleanExtra("smb_source", false)) {
+            player().forceMpvGpuOutputForNextItem();
+        }
         setPlayerKernel();
         setDecode();
         setLut();
