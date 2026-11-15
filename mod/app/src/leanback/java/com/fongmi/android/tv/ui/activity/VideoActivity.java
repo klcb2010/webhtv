@@ -5724,6 +5724,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     @Override
+    protected boolean shouldForceTextureForVideoRotation() {
+        return true;
+    }
+
+    @Override
     protected void onSizeChanged(VideoSize size) {
         applyResizeMode(getScale());
         mBinding.widget.size.setText(player().getSizeText());
