@@ -71,13 +71,17 @@ def patch_player_manager():
     )
     text = text[:prepare_start] + block + text[prepare_end:]
 
+    reset_start = text.index("    private void resetMpvOutputRuntime()")
+    reset_end = text.index("    private void resetMpvOutputEvaluationState()", reset_start)
+    reset_block = text[reset_start:reset_end]
     reset_anchor = """        mpvAutoGpuPinnedForSession = false;
         mpvAutoVulkanPinnedForItem = false;"""
     reset_replacement = """        mpvAutoGpuPinnedForSession = false;
         mpvForceGpuOutputForNextItem = false;
         mpvForceGpuOutputForCurrentItem = false;
         mpvAutoVulkanPinnedForItem = false;"""
-    text = replace_once(text, reset_anchor, reset_replacement, "runtime reset")
+    reset_block = replace_once(reset_block, reset_anchor, reset_replacement, "runtime reset")
+    text = text[:reset_start] + reset_block + text[reset_end:]
 
     rebuild_anchor = "        Boolean effectiveSurfaceDirectOverride = surfaceDirectDirectOverride;"
     if rebuild_anchor in text:
