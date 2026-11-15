@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Temporarily force EXO while LiveActivity is active (MPV branch only)."""
+"""Install in-memory EXO overrides for LiveActivity and SMB VideoActivity (MPV branch only)."""
 from pathlib import Path
 import sys
 
@@ -9,6 +9,7 @@ LIVE_FILES = (
     ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/LiveActivity.java",
     ROOT / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/LiveActivity.java",
 )
+SMB_VIDEO_ACTIVITY = ROOT / "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java"
 
 
 def patch_player_setting():
@@ -111,11 +112,47 @@ def patch_live_activity(path):
     print("[mod] live EXO override patched: " + str(path))
 
 
+def patch_smb_video_activity(path):
+    if not path.is_file():
+        raise SystemExit("[mod] ERROR: SMB VideoActivity not found: " + str(path))
+    text = path.read_text(encoding="utf-8")
+
+    if "MOD_SMB_FORCE_EXO_ACTIVITY" not in text:
+        init_anchor = """    protected void initView(Bundle savedInstanceState) {
+        long start = System.currentTimeMillis();"""
+        init_replacement = """    protected void initView(Bundle savedInstanceState) {
+        // MOD_SMB_FORCE_EXO_ACTIVITY: select EXO before PlaybackActivity binds PlaybackService.
+        if (getIntent().getBooleanExtra("smb_source", false)) {
+            PlayerSetting.setRuntimePlayerOverride(PlayerSetting.EXO);
+        }
+        long start = System.currentTimeMillis();"""
+        if init_anchor not in text:
+            raise SystemExit("[mod] ERROR: VideoActivity.initView anchor not found")
+        text = text.replace(init_anchor, init_replacement, 1)
+
+    if "MOD_SMB_FORCE_EXO_RELEASE" not in text:
+        anchor = "        super.onDestroy();"
+        start = text.find("protected void onDestroy()")
+        close = text.find(anchor, start)
+        if start < 0 or close < 0:
+            raise SystemExit("[mod] ERROR: VideoActivity.onDestroy anchor not found")
+        release = """        super.onDestroy();
+        // MOD_SMB_FORCE_EXO_RELEASE: restore the saved player after SMB playback ends.
+        if (getIntent().getBooleanExtra("smb_source", false) && !isChangingConfigurations()) {
+            PlayerSetting.clearRuntimePlayerOverride();
+        }"""
+        text = text[:close] + release + text[close + len(anchor):]
+
+    path.write_text(text, encoding="utf-8")
+    print("[mod] SMB temporary EXO override patched: " + str(path))
+
+
 def main():
     patch_player_setting()
     for path in LIVE_FILES:
         patch_live_activity(path)
-    print("[mod] live force EXO hook complete")
+    patch_smb_video_activity(SMB_VIDEO_ACTIVITY)
+    print("[mod] live and SMB force EXO hooks complete")
 
 
 if __name__ == "__main__":
