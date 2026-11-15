@@ -636,7 +636,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.audioLyrics.setAudioStageMode(true);
         mBinding.audioLyrics.setSeekListener(this::onAudioLyricsSeek);
         mBinding.audioLyrics.setSuppressed(true);
-        if (PlayerSetting.isImmersiveAudioMode()) ensureImmersiveAudioControllers();
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
@@ -658,10 +657,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setVideoView();
         setViewModel();
         setShortDisplay();
-        if (shouldUseImmersiveAudio()) {
-            setAudioStageVisible(true);
-            mBinding.progressLayout.showContent();
-        } else if (hasInitialPreview()) {
+        // 沉浸音频舞台必须等到详情/播放轨道状态明确后再显示。
+        // 初始化阶段 isMusicLike()/isAudioOnly() 可能仍是旧状态，提前切换布局和屏幕方向
+        // 会打断 MPV 首次建立媒体会话；真正的音频状态由 onTracksChanged() 统一判定。
+        if (hasInitialPreview()) {
             showInitialPreview();
         } else {
             mBinding.progressLayout.showProgress();
