@@ -186,7 +186,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return true;
             }
             if (showingFavorites) {
-                if (!isTvDevice()) removeFavoriteAt(position);
+                showFavoriteActions(position);
                 return true;
             }
             if (mode == Mode.SHARES && position >= 0 && position < shares.size()) {
@@ -474,11 +474,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
         Toast.makeText(this, "已隐藏文件夹：" + folderPath, Toast.LENGTH_SHORT).show();
     }
 
-    private void removeFavoriteAt(int position) {
-        List<String> values=new ArrayList<>(favorites);
-        if(position<0||position>=values.size()) return;
-        favorites.remove(values.get(position)); persistStringSet("favorites",favorites); showFavorites();
-        Toast.makeText(this,"已取消收藏",Toast.LENGTH_SHORT).show();
+    private void showFavoriteActions(int position) {
+        List<String> values = new ArrayList<>(favorites);
+        if (position < 0 || position >= values.size()) return;
+        String favorite = values.get(position);
+        new MaterialAlertDialogBuilder(this)
+                .setItems(new String[]{"取消收藏"}, (dialog, which) -> {
+                    if (!favorites.remove(favorite)) return;
+                    persistStringSet("favorites", favorites);
+                    showFavorites();
+                    Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private boolean isTvDevice() {
@@ -1130,8 +1137,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     showFileActions(remote,entry.directory); return true;
                 }
             }
-            if(mode==Mode.FAVORITES && position>=0 && position<favorites.size()) {
-                removeFavoriteAt(position); return true;
+            if (mode == Mode.FAVORITES && position >= 0 && position < favorites.size()) {
+                showFavoriteActions(position);
+                return true;
             }
         }
         return super.onKeyDown(keyCode, event);
