@@ -4610,7 +4610,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 .filter(item::equals).findFirst().ifPresentOrElse(target -> {
                     target.mergeEpisodes(item.getEpisodes(), mHistory.isRevSort());
                     if (target.equals(activated)) setEpisodeAdapter(target.getEpisodes());
-                }, () -> mFlagAdapter.add(item)));
+                }, () -> {
+                    mFlagAdapter.add(item);
+                    if (item.equals(activated)) setEpisodeAdapter(item.getEpisodes());
+                }));
     }
 
     private final PlaybackService.NavigationCallback mNavigationCallback = new PlaybackService.NavigationCallback() {
