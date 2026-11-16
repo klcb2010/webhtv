@@ -135,5 +135,12 @@
             style="@style/Control"
             android:text="@string/play_screenshot" />
 
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/videoSize"
+            style="@style/Control"
+            android:text="@string/player_video_size_label"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
     </androidx.appcompat.widget.LinearLayoutCompat>
 </HorizontalScrollView>
