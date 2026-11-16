@@ -126,11 +126,11 @@ for path in (
             path + " import",
         )
         start_pattern = re.compile(
-            r"(?m)^([ \\t]*)startPlayer\\(getHistoryKey\\(\\), result, isUseParse\\(\\), "
-            r"getSite\\(\\)\\.getTimeout\\(\\), buildMetadata\\(\\)(?:, mInitialPlaybackPosition)?\\);\\n"
+            r"(?m)^([ \t]*)startPlayer\(getHistoryKey\(\), result, isUseParse\(\), "
+            r"getSite\(\)\.getTimeout\(\), buildMetadata\(\)(?:, mInitialPlaybackPosition)?\);\n"
         )
         text, count = start_pattern.subn(
-            lambda match: match.group(0) + match.group(1) + "refreshVideoSizeAfterStart();\\n",
+            lambda match: match.group(0) + match.group(1) + "refreshVideoSizeAfterStart();\n",
             text,
         )
         if count == 0:
