@@ -80,7 +80,13 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.mpvScreenshotBtn.setOnClickListener(this::setMpvScreenshotBtn); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotBrightnessBoost.setOnClickListener(this::setMpvScreenshotBrightnessBoost); } catch (Throwable ignored) {}
         try { mBinding.mpvScreenshotContrast.setOnClickListener(this::setMpvScreenshotContrast); } catch (Throwable ignored) {}
-        try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
+        try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr);
+        try {
+            mBinding.showVideoSizeSetting.setOnClickListener(view -> {
+                Setting.putShowVideoSize(!Setting.isShowVideoSize());
+                mBinding.showVideoSizeSettingText.setText(getSwitch(Setting.isShowVideoSize()));
+            });
+        } catch (Throwable ignored) {} } catch (Throwable ignored) {}
         try { mBinding.mpvFontScale.setOnClickListener(this::setMpvFontScale); } catch (Throwable ignored) {}
         try { mBinding.debugLog.setOnClickListener(this::setDebugLog); } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}

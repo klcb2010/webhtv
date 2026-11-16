@@ -77,7 +77,13 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playDirectPanPrefer.setOnClickListener(this::setPlayDirectPanPrefer); } catch (Throwable ignored) {}
         try { mBinding.playbackScreenshotBtn.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
         try { mBinding.hdrToSdrText.setText(getSwitch(Setting.isHdrToSdrEnabled())); } catch (Throwable ignored) {}
-        try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr); } catch (Throwable ignored) {}
+        try { mBinding.hdrToSdr.setOnClickListener(this::setHdrToSdr);
+        try {
+            mBinding.showVideoSizeSetting.setOnClickListener(view -> {
+                Setting.putShowVideoSize(!Setting.isShowVideoSize());
+                mBinding.showVideoSizeSettingText.setText(getSwitch(Setting.isShowVideoSize()));
+            });
+        } catch (Throwable ignored) {} } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
         try { mBinding.smbEntry.setOnClickListener(this::setSmbEntry); } catch (Throwable ignored) {}
