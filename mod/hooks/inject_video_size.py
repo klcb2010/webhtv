@@ -51,7 +51,7 @@ for path in (
         container_start = text.find("<androidx.appcompat.widget.LinearLayoutCompat", scroll_start)
         if container_start < 0:
             raise SystemExit(f"[video-size] setting list missing: {path}")
-        tag_pattern = re.compile(r"</?androidx\\.appcompat\\.widget\\.LinearLayoutCompat\\b[^>]*>")
+        tag_pattern = re.compile(r"</?androidx\.appcompat\.widget\.LinearLayoutCompat\b[^>]*>")
         depth = 0
         parent_end = -1
         for match in tag_pattern.finditer(text, container_start):
