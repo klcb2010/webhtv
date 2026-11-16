@@ -45,12 +45,26 @@ for path in (
     def patch_setting_layout(text):
         if '@+id/showVideoSize' in text:
             return text
-        scroll_end = text.find("</androidx.core.widget.NestedScrollView>")
-        if scroll_end < 0:
+        scroll_start = text.find("<androidx.core.widget.NestedScrollView")
+        if scroll_start < 0:
             raise SystemExit(f"[video-size] scroll container missing: {path}")
-        parent_end = text.rfind("</androidx.appcompat.widget.LinearLayoutCompat>", 0, scroll_end)
-        if parent_end < 0:
+        container_start = text.find("<androidx.appcompat.widget.LinearLayoutCompat", scroll_start)
+        if container_start < 0:
             raise SystemExit(f"[video-size] setting list missing: {path}")
+        tag_pattern = re.compile(r"</?androidx\\.appcompat\\.widget\\.LinearLayoutCompat\\b[^>]*>")
+        depth = 0
+        parent_end = -1
+        for match in tag_pattern.finditer(text, container_start):
+            tag = match.group(0)
+            if tag.startswith("</"):
+                depth -= 1
+                if depth == 0:
+                    parent_end = match.start()
+                    break
+            elif not tag.endswith("/>"):
+                depth += 1
+        if parent_end < 0:
+            raise SystemExit(f"[video-size] setting list end missing: {path}")
         tv = "/leanback/" in path
         background = "@drawable/selector_item" if tv else "@drawable/shape_item"
         size = "18sp" if tv else "16sp"
