@@ -17,17 +17,17 @@ new = """    private boolean shouldUseImmersiveAudio() {
         PlayerManager current = player();
         if (current == null || current.isEmpty()) return false;
 
-        // 等待真实轨道信息到达，不能把尚未加载轨道的普通视频误判为纯音频。
+        // 等待真实轨道信息，避免加载初期把普通视频误判为音乐。
         androidx.media3.common.Tracks tracks = current.getCurrentTracks();
         if (tracks == null || tracks.isEmpty()) return false;
 
-        // 只要存在视频轨道或已经取得视频尺寸，就必须留在普通视频界面。
-        // 带画面的音乐 MV 也不自动切换沉浸音频模式。
+        // 存在视频轨道或视频尺寸时，始终使用普通视频界面。
         if (tracks.containsType(C.TRACK_TYPE_VIDEO)
                 || current.getVideoWidth() > 0
                 || current.getVideoHeight() > 0) return false;
 
-        return tracks.containsType(C.TRACK_TYPE_AUDIO) && isAudioOnly();
+        // 保留原有音乐识别；纯音频内容也可直接进入沉浸模式。
+        return tracks.containsType(C.TRACK_TYPE_AUDIO) && (isAudioOnly() || isMusicLike());
     }
 """
 for relative in targets:
