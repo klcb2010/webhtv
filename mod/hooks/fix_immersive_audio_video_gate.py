@@ -3,11 +3,11 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-path = root / "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java"
-if not path.exists():
-    raise SystemExit("[immersive-audio] missing mobile VideoActivity.java")
+targets = (
+    "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+    "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+)
 
-text = path.read_text(encoding="utf-8")
 old = """    private boolean shouldUseImmersiveAudio() {
         return PlayerSetting.isImmersiveAudioMode() && (isAudioOnly() || isMusicLike());
     }
@@ -30,11 +30,17 @@ new = """    private boolean shouldUseImmersiveAudio() {
         return tracks.containsType(C.TRACK_TYPE_AUDIO) && isAudioOnly();
     }
 """
-if old in text:
-    text = text.replace(old, new, 1)
-elif new not in text:
-    raise SystemExit("[immersive-audio] shouldUseImmersiveAudio marker missing or already changed")
-else:
-    print("[immersive-audio] already patched")
-path.write_text(text, encoding="utf-8")
-print("[immersive-audio] patched mobile VideoActivity.java")
+for relative in targets:
+    path = root / relative
+    if not path.exists():
+        print(f"[immersive-audio] source set absent, skip: {relative}")
+        continue
+    content = path.read_text(encoding="utf-8")
+    if old in content:
+        content = content.replace(old, new, 1)
+        path.write_text(content, encoding="utf-8")
+        print(f"[immersive-audio] patched {relative}")
+    elif new in content:
+        print(f"[immersive-audio] already patched: {relative}")
+    else:
+        raise SystemExit(f"[immersive-audio] shouldUseImmersiveAudio marker missing: {relative}")
