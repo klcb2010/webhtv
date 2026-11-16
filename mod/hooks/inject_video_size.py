@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import re
 import sys
 
 root = Path(sys.argv[1])
@@ -11,12 +10,11 @@ def edit(path, transform):
         raise SystemExit(f"[video-size] missing {path}")
     original = file.read_text(encoding="utf-8")
     updated = transform(original)
-    if updated == original:
-        return
-    file.write_text(updated, encoding="utf-8")
-    print(f"[video-size] patched {path}")
+    if updated != original:
+        file.write_text(updated, encoding="utf-8")
+        print(f"[video-size] patched {path}")
 
-def add_once(text, marker, addition, label):
+def add_before(text, marker, addition, label):
     if addition.strip() in text:
         return text
     if marker not in text:
@@ -26,7 +24,6 @@ def add_once(text, marker, addition, label):
 def patch_player_setting(text):
     if "isShowVideoSize()" in text:
         return text
-    marker = "    public static int getAudioBackground() {"
     methods = """    public static boolean isShowVideoSize() {
         return Prefers.getBoolean("show_video_size", true);
     }
@@ -36,28 +33,28 @@ def patch_player_setting(text):
     }
 
 """
-    return add_once(text, marker, methods, "PlayerSetting")
+    return add_before(text, "    public static int getAudioBackground() {", methods, "PlayerSetting")
 
 edit("app/src/main/java/com/fongmi/android/tv/setting/PlayerSetting.java", patch_player_setting)
 
-for path in [
+for path in (
     "app/src/mobile/res/layout/fragment_setting_player.xml",
     "app/src/leanback/res/layout/activity_setting_player.xml",
-]:
+):
     def patch_setting_layout(text):
         if '@+id/showVideoSize' in text:
             return text
-        marker = "</androidx.core.widget.NestedScrollView>"
-        position = text.find(marker)
-        if position < 0:
+        scroll_end = text.find("</androidx.core.widget.NestedScrollView>")
+        if scroll_end < 0:
             raise SystemExit(f"[video-size] scroll container missing: {path}")
-        parent_end = text.rfind("</androidx.appcompat.widget.LinearLayoutCompat>", 0, position)
+        parent_end = text.rfind("</androidx.appcompat.widget.LinearLayoutCompat>", 0, scroll_end)
         if parent_end < 0:
             raise SystemExit(f"[video-size] setting list missing: {path}")
         tv = "/leanback/" in path
         background = "@drawable/selector_item" if tv else "@drawable/shape_item"
         size = "18sp" if tv else "16sp"
-        focus = '            android:focusable="true"\n            android:focusableInTouchMode="true"\n' if tv else ""
+        focus = ('                android:focusable="true"\n'
+                 '                android:focusableInTouchMode="true"\n') if tv else ""
         row = f"""
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/showVideoSize"
@@ -65,8 +62,8 @@ for path in [
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:background="{background}"
-{focus}                android:orientation="horizontal">
-
+                android:orientation="horizontal"
+{focus}>
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -90,21 +87,20 @@ for path in [
         return text[:parent_end] + row + text[parent_end:]
     edit(path, patch_setting_layout)
 
-for path in [
+for path in (
     "app/src/mobile/java/com/fongmi/android/tv/ui/fragment/SettingPlayerFragment.java",
     "app/src/leanback/java/com/fongmi/android/tv/ui/activity/SettingPlayerActivity.java",
-]:
+):
     def patch_setting_java(text):
-        text = add_once(
+        text = add_before(
             text,
             "        mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));\n",
             "        mBinding.showVideoSizeText.setText(getSwitch(PlayerSetting.isShowVideoSize()));\n",
             path + " initView",
         )
-        line = "        mBinding.autoChange.setOnClickListener(this::setAutoChange);\n"
-        text = add_once(
+        text = add_before(
             text,
-            line,
+            "        mBinding.autoChange.setOnClickListener(this::setAutoChange);\n",
             """        mBinding.showVideoSize.setOnClickListener(view -> {
             PlayerSetting.putShowVideoSize(!PlayerSetting.isShowVideoSize());
             mBinding.showVideoSizeText.setText(getSwitch(PlayerSetting.isShowVideoSize()));
@@ -115,19 +111,30 @@ for path in [
         return text
     edit(path, patch_setting_java)
 
-for path in [
+for path in (
     "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
     "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
-]:
+):
     def patch_video_activity(text):
-        if "refreshVideoSizeAfterStart()" in text:
+        if "private void refreshVideoSizeAfterStart()" in text:
             return text
-        import_line = "import com.fongmi.android.tv.setting.PlayerSetting;\n"
-        text = add_once(text, import_line, "import com.fongmi.android.tv.player.VideoSizeProbe;\n", path + " import")
+        text = add_before(
+            text,
+            "import com.fongmi.android.tv.setting.PlayerSetting;\n",
+            "import com.fongmi.android.tv.player.VideoSizeProbe;\n",
+            path + " import",
+        )
         start_line = "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());\n"
         if start_line not in text:
             raise SystemExit(f"[video-size] startPlayer marker missing: {path}")
         text = text.replace(start_line, start_line + "        refreshVideoSizeAfterStart();\n")
+        lifecycle = """    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshVideoSizeAfterStart();
+    }
+
+"""
         method = """    private int videoSizeRequestToken;
 
     private void refreshVideoSizeAfterStart() {
@@ -156,8 +163,8 @@ for path in [
     }
 
 """
-        marker = "    private void setPlayerKernel() {"
-        return add_once(text, marker, method, path + " method")
+        text = add_before(text, "    private void setPlayerKernel() {", lifecycle + method, path + " methods")
+        return text
     edit(path, patch_video_activity)
 
 print("[video-size] all source hooks applied")
