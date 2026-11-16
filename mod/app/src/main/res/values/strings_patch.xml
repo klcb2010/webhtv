@@ -172,5 +172,5 @@
     <string name="smb_local_network_permission">SMB playback needs local network access. Allow the permission and try again.</string>
     <string name="player_show_video_size">Show current video size</string>
     <string name="player_video_size_label">Size</string>
-    <string name="player_video_size">Size %1$s</string>
+    <string name="player_video_size">%1$s</string>
 </resources>
