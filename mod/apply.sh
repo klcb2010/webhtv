@@ -310,3 +310,8 @@ if [[ -f "$MOD/hooks/inject_video_size.py" ]]; then
   echo "[mod] inject_video_size"
   python3 "$MOD/hooks/inject_video_size.py" "$ROOT" || exit 1
 fi
+
+if [[ -f "$MOD/hooks/fix_immersive_audio_video_gate.py" ]]; then
+  echo "[mod] fix_immersive_audio_video_gate"
+  python3 "$MOD/hooks/fix_immersive_audio_video_gate.py" "$ROOT" || exit 1
+fi
