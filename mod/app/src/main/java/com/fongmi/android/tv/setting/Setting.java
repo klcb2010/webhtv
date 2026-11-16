@@ -1517,4 +1517,14 @@ public class Setting {
         Prefers.put("smb_entry_enabled", enabled);
     }
 
+
+    /** 个性设置：显示当前播放文件大小，默认开启。 */
+    public static boolean isShowVideoSize() {
+        return Prefers.getBoolean("show_video_size", true);
+    }
+
+    public static void putShowVideoSize(boolean enabled) {
+        Prefers.put("show_video_size", enabled);
+    }
+
 }
