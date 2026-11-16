@@ -4,18 +4,20 @@ import android.content.Context;
 import android.net.Uri;
 
 import java.io.File;
-import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.DecimalFormat;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class VideoSizeProbe {
+
+    public interface Callback {
+        void onResult(String size);
+    }
 
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
     private static final Pattern RANGE_TOTAL = Pattern.compile("/(\\d+)\\s*$");
@@ -23,11 +25,11 @@ public final class VideoSizeProbe {
     private VideoSizeProbe() {
     }
 
-    public static void query(Context context, String source, Map<String, String> headers, Consumer<String> callback) {
+    public static void query(Context context, String source, Map<String, String> headers, Callback callback) {
         EXECUTOR.execute(() -> {
-            Long size = resolve(context, source, headers);
-            String result = size == null || size <= 0 ? null : format(size);
-            if (callback != null) callback.accept(result);
+            Long bytes = resolve(context, source, headers);
+            String result = bytes == null || bytes <= 0 ? null : format(bytes);
+            if (callback != null) callback.onResult(result);
         });
     }
 
@@ -83,14 +85,15 @@ public final class VideoSizeProbe {
             }
             int status = connection.getResponseCode();
             if (status < 200 || status >= 400) return null;
-            String type = connection.getContentType();
-            if (isPlaylist(type)) return null;
+            if (isPlaylist(connection.getContentType())) return null;
             String range = connection.getHeaderField("Content-Range");
             if (range != null) {
                 Matcher matcher = RANGE_TOTAL.matcher(range);
                 if (matcher.find()) return Long.parseLong(matcher.group(1));
             }
-            long length = connection.getContentLengthLong();
+            String contentLength = connection.getHeaderField("Content-Length");
+            if (contentLength == null) return null;
+            long length = Long.parseLong(contentLength);
             return length > 0 ? length : null;
         } catch (Exception ignored) {
             return null;
@@ -113,7 +116,6 @@ public final class VideoSizeProbe {
             value /= 1024;
             unit++;
         }
-        DecimalFormat format = new DecimalFormat("0.#");
-        return format.format(value) + " " + units[unit];
+        return new DecimalFormat("0.#").format(value) + " " + units[unit];
     }
 }
