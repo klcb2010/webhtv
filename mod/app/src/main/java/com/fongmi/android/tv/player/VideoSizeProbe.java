@@ -91,6 +91,7 @@ public final class VideoSizeProbe {
                 Matcher matcher = RANGE_TOTAL.matcher(range);
                 if (matcher.find()) return Long.parseLong(matcher.group(1));
             }
+            if ("GET".equals(method) && status == HttpURLConnection.HTTP_PARTIAL) return null;
             String contentLength = connection.getHeaderField("Content-Length");
             if (contentLength == null) return null;
             long length = Long.parseLong(contentLength);
