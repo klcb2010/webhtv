@@ -120,6 +120,7 @@ public class SettingPersonalActivity extends BaseActivity {
             mBinding.globalHistoryText.setText(String.valueOf(gh));
         }
         mBinding.playBackToDetailText.setText(getSwitch(Setting.isPlayBackToDetail()));
+        try { mBinding.showVideoSizeSettingText.setText(getSwitch(Setting.isShowVideoSize())); } catch (Throwable ignored) {}
         mBinding.searchThreadText.setText(String.valueOf(Setting.getSearchThread()));
         mBinding.subtitleAutoMatchText.setText(getSwitch(Setting.isSubtitleAutoMatchEnabled()));
         String lang = Setting.getSubtitlePreferredLanguage();
