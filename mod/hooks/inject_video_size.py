@@ -137,8 +137,8 @@ for path in (
             raise SystemExit(f"[video-size] startPlayer marker missing: {path}")
         text = add_before(
             text,
-            "        syncKaraokePosition();\\n",
-            "        refreshVideoSizeAfterStart();\\n",
+            "        syncKaraokePosition();\n",
+            "        refreshVideoSizeAfterStart();\n",
             path + " onResume",
         )
         method = """    private int videoSizeRequestToken;
