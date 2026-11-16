@@ -174,5 +174,5 @@
     <string name="setting_live_force_exo">直播强制使用 EXO</string>
     <string name="player_show_video_size">显示当前视频大小</string>
     <string name="player_video_size_label">大小</string>
-    <string name="player_video_size">大小 %1$s</string>
+    <string name="player_video_size">%1$s</string>
 </resources>
