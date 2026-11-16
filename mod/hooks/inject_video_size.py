@@ -90,4 +90,46 @@ for path in (
         return text
     edit(path, patch_video_activity)
 
+
+def add_after(text, marker, addition, label):
+    if addition.strip() in text:
+        return text
+    if marker not in text:
+        raise SystemExit(f"[video-size] marker missing: {label}")
+    return text.replace(marker, marker + addition, 1)
+
+
+def patch_video_size_order(text):
+    text = add_after(
+        text,
+        "        PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);\\n",
+        "        placeVideoSizeAfterChange();\\n",
+        "video size action order",
+    )
+    method = """    private void placeVideoSizeAfterChange() {
+        ViewGroup container = mBinding.control.action.container;
+        View change = mBinding.control.action.change2;
+        View videoSize = mBinding.control.action.videoSize;
+        if (container == null || change == null || videoSize == null) return;
+        if (videoSize.getParent() == container) container.removeView(videoSize);
+        int changeIndex = container.indexOfChild(change);
+        if (changeIndex >= 0) container.addView(videoSize, changeIndex + 1);
+    }
+
+"""
+    text = add_before(
+        text,
+        "    private void setPlayerKernel() {",
+        method,
+        "video size placement method",
+    )
+    return text
+
+
+for path in (
+    "app/src/mobile/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+    "app/src/leanback/java/com/fongmi/android/tv/ui/activity/VideoActivity.java",
+):
+    edit(path, patch_video_size_order)
+
 print("[video-size] all source hooks applied")
