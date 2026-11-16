@@ -135,13 +135,12 @@ for path in (
         )
         if count == 0:
             raise SystemExit(f"[video-size] startPlayer marker missing: {path}")
-        lifecycle = """    @Override
-    protected void onResume() {
-        super.onResume();
-        refreshVideoSizeAfterStart();
-    }
-
-"""
+        text = add_before(
+            text,
+            "        syncKaraokePosition();\\n",
+            "        refreshVideoSizeAfterStart();\\n",
+            path + " onResume",
+        )
         method = """    private int videoSizeRequestToken;
 
     private void refreshVideoSizeAfterStart() {
@@ -170,7 +169,7 @@ for path in (
     }
 
 """
-        text = add_before(text, "    private void setPlayerKernel() {", lifecycle + method, path + " methods")
+        text = add_before(text, "    private void setPlayerKernel() {", method, path + " methods")
         return text
     edit(path, patch_video_activity)
 
