@@ -9,10 +9,6 @@ targets = (
 )
 
 old = """    private boolean shouldUseImmersiveAudio() {
-        return PlayerSetting.isImmersiveAudioMode() && (isAudioOnly() || isMusicLike());
-    }
-"""
-new = """    private boolean shouldUseImmersiveAudio() {
         if (!PlayerSetting.isImmersiveAudioMode() || service() == null) return false;
         PlayerManager current = player();
         if (current == null || current.isEmpty()) return false;
@@ -28,6 +24,19 @@ new = """    private boolean shouldUseImmersiveAudio() {
 
         // 保留原有音乐识别；纯音频内容也可直接进入沉浸模式。
         return tracks.containsType(C.TRACK_TYPE_AUDIO) && (isAudioOnly() || isMusicLike());
+    }
+"""
+new = """    private boolean shouldUseImmersiveAudio() {
+        return PlayerSetting.isImmersiveAudioMode() && (isAudioOnly() || isImmersiveMusicTitle());
+    }
+
+    private boolean isImmersiveMusicTitle() {
+        String title = (getName() + " " + getOsdTitle()).toLowerCase(java.util.Locale.ROOT);
+        String[] keywords = {"无损", "好听", "经典", "榜", "曲", "音乐", "歌单"};
+        for (String keyword : keywords) {
+            if (title.contains(keyword)) return true;
+        }
+        return false;
     }
 """
 for relative in targets:
