@@ -102,8 +102,8 @@ def add_after(text, marker, addition, label):
 def patch_video_size_order(text):
     text = add_after(
         text,
-        "        PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);\\n",
-        "        placeVideoSizeAfterChange();\\n",
+        "        PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);\n",
+        "        placeVideoSizeAfterChange();\n",
         "video size action order",
     )
     method = """    private void placeVideoSizeAfterChange() {
