@@ -191,10 +191,6 @@ if [[ -f "$MOD/hooks/inject_player_buttons_fix.py" ]]; then
   echo "[mod] inject_player_buttons_fix"
   python3 "$MOD/hooks/inject_player_buttons_fix.py" "$ROOT" || exit 1
 fi
-if [[ -f "$MOD/hooks/inject_video_size.py" ]]; then
-  echo "[mod] inject_video_size"
-  python3 "$MOD/hooks/inject_video_size.py" "$ROOT" || exit 1
-fi
 if [[ -f "$MOD/hooks/inject_push_tv_newintent.py" ]]; then
   echo "[mod] inject_push_tv_newintent"
   python3 "$MOD/hooks/inject_push_tv_newintent.py" "$ROOT" || exit 1
@@ -307,4 +303,10 @@ fi
 if [[ -f "$MOD/hooks/inject_live_force_exo.py" ]]; then
   echo "[mod] inject_live_force_exo"
   python3 "$MOD/hooks/inject_live_force_exo.py" "$ROOT" || exit 1
+fi
+
+# 播放控制栏当前视频大小：在其他播放器补丁之后最后注入
+if [[ -f "$MOD/hooks/inject_video_size.py" ]]; then
+  echo "[mod] inject_video_size"
+  python3 "$MOD/hooks/inject_video_size.py" "$ROOT" || exit 1
 fi
