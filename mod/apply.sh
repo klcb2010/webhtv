@@ -246,6 +246,7 @@ fi
 if [[ -f "$MOD/hooks/inject_toast_gate.py" ]]; then
   python3 "$MOD/hooks/inject_toast_gate.py" "$ROOT"
 fi
+run_hook "$MOD/hooks/fix_immersive_audio_video_gate.py"
 
 echo "[mod] done"
 
