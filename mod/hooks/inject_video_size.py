@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 import sys
 
 root = Path(sys.argv[1])
@@ -124,10 +125,16 @@ for path in (
             "import com.fongmi.android.tv.player.VideoSizeProbe;\n",
             path + " import",
         )
-        start_line = "        startPlayer(getHistoryKey(), result, isUseParse(), getSite().getTimeout(), buildMetadata());\n"
-        if start_line not in text:
+        start_pattern = re.compile(
+            r"(?m)^([ \\t]*)startPlayer\\(getHistoryKey\\(\\), result, isUseParse\\(\\), "
+            r"getSite\\(\\)\\.getTimeout\\(\\), buildMetadata\\(\\)(?:, mInitialPlaybackPosition)?\\);\\n"
+        )
+        text, count = start_pattern.subn(
+            lambda match: match.group(0) + match.group(1) + "refreshVideoSizeAfterStart();\\n",
+            text,
+        )
+        if count == 0:
             raise SystemExit(f"[video-size] startPlayer marker missing: {path}")
-        text = text.replace(start_line, start_line + "        refreshVideoSizeAfterStart();\n")
         lifecycle = """    @Override
     protected void onResume() {
         super.onResume();
