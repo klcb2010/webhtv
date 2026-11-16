@@ -170,4 +170,7 @@
     <string name="smb_share_name">共享名称</string>
     <string name="smb_open_share">打开共享</string>
     <string name="smb_local_network_permission">SMB播放需要本地网络访问权限，请允许后重试</string>
+    <string name="player_show_video_size">显示当前视频大小</string>
+    <string name="player_video_size_label">大小</string>
+    <string name="player_video_size">大小 %1$s</string>
 </resources>
