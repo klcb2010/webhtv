@@ -49,6 +49,12 @@ while IFS= read -r -d '' src; do
 done < <(find "$MOD" -type f -print0)
 
 
+# EventIndex：避免依赖未生成的 EventBus 索引类
+if [[ -f "$MOD/hooks/inject_startup_no_eventindex.py" ]]; then
+  echo "[mod] inject_startup_no_eventindex"
+  python3 "$MOD/hooks/inject_startup_no_eventindex.py" "$ROOT" || exit 1
+fi
+
 # 清除误加的 vod_home 独立资源，避免与 strings.xml 重复
 rm -f "$ROOT/app/src/mobile/res/values/strings_vod_home.xml" \
       "$ROOT/app/src/mobile/res/values-zh-rCN/strings_vod_home.xml" \
