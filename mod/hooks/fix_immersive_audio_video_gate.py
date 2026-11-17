@@ -14,16 +14,28 @@ method = """    private boolean shouldUseImmersiveAudio() {
     }"""
 
 helper = """    private boolean isImmersiveMusicTitle() {
-        String title = (getName() + " " + getOsdTitle()).toLowerCase(java.util.Locale.ROOT);
+        StringBuilder title = new StringBuilder();
+        if (mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
+            title.append(mBinding.name.getText()).append(' ');
+        }
+        if (mHistory != null && mHistory.getVodName() != null) {
+            title.append(mHistory.getVodName()).append(' ');
+        }
+        Episode episode = getEpisode();
+        if (episode != null && episode.getName() != null) {
+            title.append(episode.getName()).append(' ');
+        }
+        title.append(getName());
+        String value = title.toString().toLowerCase(java.util.Locale.ROOT);
         String[] keywords = {"无损", "好听", "经典", "榜", "曲", "音乐", "歌单"};
         for (String keyword : keywords) {
-            if (title.contains(keyword)) return true;
+            if (value.contains(keyword)) return true;
         }
         return false;
     }"""
 
 pattern = re.compile(
-    r"^    private boolean shouldUseImmersiveAudio\(\) \{.*?^    \}",
+    r"^    private boolean shouldUseImmersiveAudio\\(\\) \\{.*?^    \\}",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -41,11 +53,16 @@ for relative in targets:
             raise SystemExit(f"[immersive-audio] shouldUseImmersiveAudio method missing: {relative}")
         updated = source
 
-    if helper not in updated:
-        anchor = method + "\n"
+    helper_pattern = re.compile(
+        r"^    private boolean isImmersiveMusicTitle\\(\\) \\{.*?^    \\}",
+        re.MULTILINE | re.DOTALL,
+    )
+    updated, helper_count = helper_pattern.subn(lambda _: helper, updated, count=1)
+    if helper_count == 0:
+        anchor = method + "\\n"
         if anchor not in updated:
             raise SystemExit(f"[immersive-audio] method insertion anchor missing: {relative}")
-        updated = updated.replace(anchor, anchor + "\n" + helper + "\n", 1)
+        updated = updated.replace(anchor, anchor + "\\n" + helper + "\\n", 1)
 
     if updated != source:
         path.write_text(updated, encoding="utf-8")
