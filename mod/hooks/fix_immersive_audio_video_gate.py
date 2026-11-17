@@ -35,7 +35,11 @@ helper = """    private boolean isImmersiveMusicTitle() {
     }"""
 
 pattern = re.compile(
-    r"^    private boolean shouldUseImmersiveAudio\\(\\) \\{.*?^    \\}",
+    r"^    private boolean shouldUseImmersiveAudio\(\) \{.*?^    \}",
+    re.MULTILINE | re.DOTALL,
+)
+helper_pattern = re.compile(
+    r"^    private boolean isImmersiveMusicTitle\(\) \{.*?^    \}",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -48,21 +52,15 @@ for relative in targets:
 
     source = path.read_text(encoding="utf-8")
     updated, count = pattern.subn(lambda _: method, source, count=1)
-    if count != 1:
-        if method not in source:
-            raise SystemExit(f"[immersive-audio] shouldUseImmersiveAudio method missing: {relative}")
-        updated = source
+    if count != 1 and method not in source:
+        raise SystemExit(f"[immersive-audio] shouldUseImmersiveAudio method missing: {relative}")
 
-    helper_pattern = re.compile(
-        r"^    private boolean isImmersiveMusicTitle\\(\\) \\{.*?^    \\}",
-        re.MULTILINE | re.DOTALL,
-    )
     updated, helper_count = helper_pattern.subn(lambda _: helper, updated, count=1)
     if helper_count == 0:
-        anchor = method + "\\n"
+        anchor = method + "\n"
         if anchor not in updated:
             raise SystemExit(f"[immersive-audio] method insertion anchor missing: {relative}")
-        updated = updated.replace(anchor, anchor + "\\n" + helper + "\\n", 1)
+        updated = updated.replace(anchor, anchor + "\n" + helper + "\n", 1)
 
     if updated != source:
         path.write_text(updated, encoding="utf-8")
