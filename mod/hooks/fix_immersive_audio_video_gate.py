@@ -15,17 +15,12 @@ method = """    private boolean shouldUseImmersiveAudio() {
 
 helper = """    private boolean isImmersiveMusicTitle() {
         StringBuilder title = new StringBuilder();
-        if (mBinding != null && mBinding.name != null && mBinding.name.getText() != null) {
-            title.append(mBinding.name.getText()).append(' ');
+        if (mBinding != null && mBinding.name != null) {
+            CharSequence displayedTitle = mBinding.name.getText();
+            if (displayedTitle != null) title.append(displayedTitle).append(' ');
         }
-        if (mHistory != null && mHistory.getVodName() != null) {
-            title.append(mHistory.getVodName()).append(' ');
-        }
-        Episode episode = getEpisode();
-        if (episode != null && episode.getName() != null) {
-            title.append(episode.getName()).append(' ');
-        }
-        title.append(getName());
+        String playerTitle = getName();
+        if (playerTitle != null) title.append(playerTitle);
         String value = title.toString().toLowerCase(java.util.Locale.ROOT);
         String[] keywords = {"无损", "好听", "经典", "榜", "曲", "音乐", "歌单"};
         for (String keyword : keywords) {
