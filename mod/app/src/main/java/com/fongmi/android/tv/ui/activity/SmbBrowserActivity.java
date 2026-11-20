@@ -648,7 +648,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             } else if (SmbClient.isVideo(entry.name) || SmbClient.isAudio(entry.name)) {
                 play(remotePath);
             } else if (SmbClient.isImage(entry.name)) {
-                showImage(remotePath);
+                showImage(remotePath, position);
             } else if (SmbClient.isApk(entry.name)) {
                 installApk(remotePath);
             } else {
@@ -918,17 +918,26 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private void showImage(String remotePath) {
+    private void showImage(String remotePath, int selectedPosition) {
         try {
-            String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
-            String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
+            List<String> imagePaths = new ArrayList<>();
+            for (SmbClient.Entry entry : visibleFiles) {
+                if (entry.directory || !SmbClient.isImage(entry.name)) continue;
+                imagePaths.add(path.isEmpty() ? entry.name : path + "\\" + entry.name);
+            }
+            int initialIndex = imagePaths.indexOf(remotePath);
+            if (initialIndex < 0) {
+                imagePaths.add(remotePath);
+                initialIndex = imagePaths.size() - 1;
+            }
+            final int[] imageIndex = {initialIndex};
 
             LinearLayout content = new LinearLayout(this);
             content.setOrientation(LinearLayout.VERTICAL);
             content.setBackgroundColor(Color.BLACK);
 
             TextView imageTitle = new TextView(this);
-            imageTitle.setText(name);
+            imageTitle.setText("");
             imageTitle.setTextColor(MaterialColors.getColor(this,
                     com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
             imageTitle.setTextSize(18);
@@ -960,7 +969,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
             dialog.setContentView(content);
             dialog.setCanceledOnTouchOutside(false);
             dialog.setOnKeyListener((dialogInterface, keyCode, event) -> {
-                if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() > 0) return false;
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    changeImagePage(imagePaths, imageIndex, -1, imageTitle, image);
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    changeImagePage(imagePaths, imageIndex, 1, imageTitle, image);
+                    return true;
+                }
+                if (event.getRepeatCount() > 0) return false;
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER
                         || keyCode == KeyEvent.KEYCODE_ENTER
                         || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
@@ -969,15 +987,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 }
                 return false;
             });
-            image.setOnClickListener(v -> {
-                if (isTvDevice()) {
-                    toggleImageFullscreen(dialog, imageTitle);
-                } else if (getResources().getDisplayMetrics().widthPixels
-                        >= getResources().getDisplayMetrics().heightPixels) {
-                    toggleImageFullscreen(dialog, imageTitle);
-                } else {
-                    togglePhoneImageRotation(dialog, imageTitle, image, imageContainer);
+            image.setOnTouchListener((view, event) -> {
+                if (isTvDevice()) return false;
+                if (event.getAction() == android.view.MotionEvent.ACTION_UP) {
+                    float x = event.getX();
+                    float width = view.getWidth();
+                    if (width > 0 && x < width / 3f) {
+                        changeImagePage(imagePaths, imageIndex, -1, imageTitle, image);
+                    } else if (width > 0 && x > width * 2f / 3f) {
+                        changeImagePage(imagePaths, imageIndex, 1, imageTitle, image);
+                    } else {
+                        toggleImageFullscreen(dialog, imageTitle);
+                    }
                 }
+                return true;
             });
             dialog.setOnShowListener(ignored -> {
                 Window window = dialog.getWindow();
@@ -990,7 +1013,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 image.requestFocus();
             });
             dialog.show();
+            loadSmbImage(imagePaths.get(imageIndex[0]), imageTitle, image);
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
+        }
+    }
 
+    private void changeImagePage(List<String> imagePaths, int[] imageIndex, int direction,
+                                 TextView imageTitle, ImageView image) {
+        int nextIndex = imageIndex[0] + direction;
+        if (nextIndex < 0 || nextIndex >= imagePaths.size()) {
+            Toast.makeText(this, "到底了", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        imageIndex[0] = nextIndex;
+        image.setRotation(0f);
+        image.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER));
+        loadSmbImage(imagePaths.get(nextIndex), imageTitle, image);
+    }
+
+    private void loadSmbImage(String remotePath, TextView imageTitle, ImageView image) {
+        try {
+            String url = SmbPlaybackProxy.createUrl(host, share, remotePath, username, password, domain);
+            String name = remotePath.substring(remotePath.lastIndexOf((char) 92) + 1);
+            imageTitle.setText(name);
             Glide.with(this)
                     .load(url)
                     .override(getResources().getDisplayMetrics().widthPixels,
@@ -1003,30 +1051,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.smb_connect_failed) + "：" + shortError(e), Toast.LENGTH_LONG).show();
         }
-    }
-
-    private void togglePhoneImageRotation(Dialog dialog, TextView imageTitle,
-                                          ImageView image, FrameLayout container) {
-        if (image.getRotation() != 0f) {
-            image.setRotation(0f);
-            image.setLayoutParams(new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    Gravity.CENTER));
-            toggleImageFullscreen(dialog, imageTitle);
-            return;
-        }
-
-        // 竖屏点击旋转时同步进入全屏，第二次点击恢复原图并退出全屏。
-        toggleImageFullscreen(dialog, imageTitle);
-        image.setRotation(90f);
-        container.post(() -> {
-            if (!dialog.isShowing() || image.getRotation() == 0f) return;
-            int width = container.getWidth();
-            int height = container.getHeight();
-            if (width <= 0 || height <= 0) return;
-            image.setLayoutParams(new FrameLayout.LayoutParams(height, width, Gravity.CENTER));
-        });
     }
 
     private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
