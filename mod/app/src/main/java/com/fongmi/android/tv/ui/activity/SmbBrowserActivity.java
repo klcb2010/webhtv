@@ -648,7 +648,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             } else if (SmbClient.isVideo(entry.name) || SmbClient.isAudio(entry.name)) {
                 play(remotePath);
             } else if (SmbClient.isImage(entry.name)) {
-                showImage(remotePath, position);
+                showImage(remotePath);
             } else if (SmbClient.isApk(entry.name)) {
                 installApk(remotePath);
             } else {
@@ -918,12 +918,27 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private void showImage(String remotePath, int selectedPosition) {
+    private void showImage(String remotePath) {
         try {
             List<String> imagePaths = new ArrayList<>();
-            for (SmbClient.Entry entry : visibleFiles) {
-                if (entry.directory || !SmbClient.isImage(entry.name)) continue;
-                imagePaths.add(path.isEmpty() ? entry.name : path + "\\" + entry.name);
+            if (showingFavorites) {
+                for (String favorite : favorites) {
+                    String[] parts = favorite.split("\\n", 4);
+                    if (parts.length != 4 || !parts[0].equals(host)
+                            || !parts[1].equals(share) || !parts[3].equals("F")) continue;
+                    String favoritePath = parts[2];
+                    int separator = favoritePath.lastIndexOf((char) 92);
+                    String favoriteFolder = separator < 0 ? "" : favoritePath.substring(0, separator);
+                    String favoriteName = separator < 0 ? favoritePath : favoritePath.substring(separator + 1);
+                    if (favoriteFolder.equals(path) && SmbClient.isImage(favoriteName)) {
+                        imagePaths.add(favoritePath);
+                    }
+                }
+            } else {
+                for (SmbClient.Entry entry : visibleFiles) {
+                    if (entry.directory || !SmbClient.isImage(entry.name)) continue;
+                    imagePaths.add(path.isEmpty() ? entry.name : path + "\\" + entry.name);
+                }
             }
             int initialIndex = imagePaths.indexOf(remotePath);
             if (initialIndex < 0) {
