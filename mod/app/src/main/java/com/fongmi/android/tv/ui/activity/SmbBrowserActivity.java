@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.app.Dialog;
 import android.content.pm.PackageManager;
 import android.content.Intent;
@@ -981,6 +982,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     Gravity.CENTER));
 
             Dialog dialog = new Dialog(this);
+            final int[] originalOrientation = {getRequestedOrientation()};
+            final boolean[] landscapeFullscreen = {false};
             dialog.setContentView(content);
             dialog.setCanceledOnTouchOutside(false);
             dialog.setOnKeyListener((dialogInterface, keyCode, event) -> {
@@ -997,7 +1000,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER
                         || keyCode == KeyEvent.KEYCODE_ENTER
                         || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-                    toggleImageFullscreen(dialog, imageTitle);
+                    toggleImageFullscreen(dialog, imageTitle, originalOrientation, landscapeFullscreen);
                     return true;
                 }
                 return false;
@@ -1016,6 +1019,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     }
                 }
                 return true;
+            });
+            dialog.setOnDismissListener(ignored -> {
+                if (landscapeFullscreen[0]) {
+                    setRequestedOrientation(originalOrientation[0]);
+                    landscapeFullscreen[0] = false;
+                }
             });
             dialog.setOnShowListener(ignored -> {
                 Window window = dialog.getWindow();
@@ -1068,7 +1077,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         }
     }
 
-    private void toggleImageFullscreen(Dialog dialog, TextView imageTitle) {
+    private void toggleImageFullscreen(Dialog dialog, TextView imageTitle,
+                                        int[] originalOrientation, boolean[] landscapeFullscreen) {
         Window window = dialog.getWindow();
         if (window == null) return;
         boolean fullscreen = imageTitle.getVisibility() == View.VISIBLE;
@@ -1079,12 +1089,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            if (!isTvDevice() && !landscapeFullscreen[0]) {
+                originalOrientation[0] = getRequestedOrientation();
+                landscapeFullscreen[0] = true;
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
         } else {
             imageTitle.setVisibility(View.VISIBLE);
-            window.setLayout(
-                    (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
-                    (int) (getResources().getDisplayMetrics().heightPixels * 0.84f));
+            if (!isTvDevice() && landscapeFullscreen[0]) {
+                setRequestedOrientation(originalOrientation[0]);
+                landscapeFullscreen[0] = false;
+            }
             window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            window.getDecorView().post(() -> window.setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
+                    (int) (getResources().getDisplayMetrics().heightPixels * 0.84f)));
         }
     }
 
