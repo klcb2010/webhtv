@@ -1015,7 +1015,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     } else if (width > 0 && x > width * 2f / 3f) {
                         changeImagePage(imagePaths, imageIndex, 1, imageTitle, image);
                     } else {
-                        toggleImageFullscreen(dialog, imageTitle);
+                        toggleImageFullscreen(dialog, imageTitle, originalOrientation, landscapeFullscreen);
                     }
                 }
                 return true;
