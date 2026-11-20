@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_hdr_to_sdr">HDR转码为SDR</string>
+    <string name="play_screenshot">截图</string>
+</resources>
