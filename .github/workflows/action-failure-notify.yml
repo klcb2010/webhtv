@@ -2,6 +2,10 @@ name: Action Failure Notify
 
 on:
   workflow_run:
+    workflows:
+      - "Android Release"
+      - "Delete Old Commits"
+      - "SMB feature compile test"
     types: [completed]
 
 permissions:
