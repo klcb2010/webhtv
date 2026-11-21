@@ -34,7 +34,7 @@ jobs:
             exit 0
           fi
 
-          content="$(printf '**Actions运行失败通知**\\n\\n仓库：%s\\n分支：%s\\n失败详情：[%s](%s)' "$REPOSITORY" "$BRANCH" "$RUN_URL" "$RUN_URL")"
+          content="$(printf '**Actions运行失败通知**\n\n仓库：%s\n分支：%s\n失败详情：[%s](%s)' "$REPOSITORY" "$BRANCH" "$RUN_URL" "$RUN_URL")"
 
           payload="$(jq -n --arg token "$PUSHPLUS_TOKEN" --arg title "Actions运行失败通知" --arg content "$content" --arg template "markdown" '{token:$token,title:$title,content:$content,template:$template}')"
 
