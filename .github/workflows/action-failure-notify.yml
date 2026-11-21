@@ -19,23 +19,51 @@ concurrency:
 
 jobs:
   notify:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Diagnose workflow result
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "Workflow : $WORKFLOW"
+          echo "Branch   : $BRANCH"
+          echo "Result   : $CONCLUSION"
+          echo "Run URL  : $RUN_URL"
+
       - name: Send failure notification to PushPlus
+        if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out' || github.event.workflow_run.conclusion == 'startup_failure' }}
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           if [ -z "$PUSHPLUS_TOKEN" ]; then
-            echo "::warning::未配置仓库 Secret PUSHPLUS_TOKEN，跳过 PushPlus 通知。"
-            exit 0
+            echo "::error::未配置仓库 Secret PUSHPLUS_TOKEN，无法发送失败通知。"
+            exit 1
           fi
 
-          content="$(printf '**Actions运行失败通知**\n\n仓库：%s\n分支：%s\n失败详情：[%s](%s)' "$REPOSITORY" "$BRANCH" "$RUN_URL" "$RUN_URL")"
+          content="$(printf '**Actions运行失败通知**\\n\\n仓库：%s\\n分支：%s\\n失败详情：[%s](%s)' "$REPOSITORY" "$BRANCH" "$RUN_URL" "$RUN_URL")"
 
-          payload="$(jq -n --arg token "$PUSHPLUS_TOKEN" --arg title "Actions运行失败通知" --arg content "$content" --arg template "markdown" '{token:$token,title:$title,content:$content,template:$template}')"
+          payload="$(jq -n \\
+            --arg token "$PUSHPLUS_TOKEN" \\
+            --arg title "Actions运行失败通知" \\
+            --arg content "$content" \\
+            --arg template "markdown" \\
+            '{token:$token,title:$title,content:$content,template:$template}')"
 
-          curl --fail --silent --show-error --request POST --url "https://www.pushplus.plus/send" --header "Content-Type: application/json" --data "$payload"
+          curl --fail --silent --show-error \\
+            --retry 3 --retry-all-errors --retry-delay 2 \\
+            --request POST \\
+            --url "https://www.pushplus.plus/send" \\
+            --header "Content-Type: application/json" \\
+            --data "$payload"
+
+          echo
+          echo "[OK] PushPlus failure notification sent"
