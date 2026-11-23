@@ -18,7 +18,7 @@ replacement = marker + """
             if (list.isEmpty() && result.getList().isEmpty()
                     && "YouTube".equals(site.getKey())
                     && "csp_Youtube".equals(site.getApi())
-                    && Setting.isYoutubeHomeFallbackEnabled()) {
+                    && com.fongmi.android.tv.setting.Setting.isYoutubeHomeFallbackEnabled()) {
                 for (Class type : result.getTypes()) {
                     String typeId = type.getTypeId();
                     if (type.isHome() || type.isFolder() || typeId.isEmpty()) continue;
@@ -30,7 +30,7 @@ replacement = marker + """
                                     typeId, category.getList().size());
                         }
                     } catch (Exception e) {
-                        SpiderDebug.log("homeVideoFallback", e);
+                        SpiderDebug.log("homeVideoFallback", e.getMessage());
                     }
                     break;
                 }
