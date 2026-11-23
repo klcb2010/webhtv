@@ -99,6 +99,27 @@ public final class SmbClient {
     }
 
 
+    public static void deleteRemote(String host, String shareName, String remotePath,
+                                    boolean directory, String username, String password,
+                                    String domain) throws Exception {
+        if (remotePath == null || remotePath.trim().isEmpty()) {
+            throw new IllegalArgumentException("Refusing to delete an empty SMB path");
+        }
+        try (SMBClient client = new SMBClient();
+             Connection connection = client.connect(host);
+             Session session = authenticate(connection, username, password, domain)) {
+            Share remote = session.connectShare(shareName);
+            if (!(remote instanceof DiskShare)) {
+                remote.close();
+                throw new IllegalStateException("Not a disk share");
+            }
+            try (DiskShare diskShare = (DiskShare) remote) {
+                if (directory) diskShare.rmdir(remotePath, true);
+                else diskShare.rm(remotePath);
+            }
+        }
+    }
+
     public static boolean isVideo(String name) {
         if (name == null) return false;
         String value = name.toLowerCase(java.util.Locale.ROOT);
