@@ -1676,6 +1676,16 @@ public class Setting {
         return saved.equalsIgnoreCase(h);
     }
 
+    /** 仅 leanback TV 构建允许启用 YouTube 首页推荐兜底。 */
+    public static boolean isYoutubeHomeFallbackEnabled() {
+        return BuildConfig.FLAVOR.startsWith("leanback")
+                && Prefers.getBoolean("youtube_home_fallback", false);
+    }
+
+    public static void putYoutubeHomeFallbackEnabled(boolean enabled) {
+        Prefers.put("youtube_home_fallback", enabled);
+    }
+
     /** 本地 SMB 播放入口，默认关闭。 */
     public static boolean isSmbEntryEnabled() {
         return Prefers.getBoolean("smb_entry_enabled", false);
