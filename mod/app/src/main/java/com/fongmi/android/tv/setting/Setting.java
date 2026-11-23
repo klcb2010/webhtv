@@ -966,10 +966,9 @@ public class Setting {
 
 
 
-    /** 仅 TV 设备允许启用 YouTube 首页推荐兜底。 */
+    /** 仅 leanback TV 构建允许启用 YouTube 首页推荐兜底。 */
     public static boolean isYoutubeHomeFallbackEnabled() {
-        return App.get() != null
-                && App.get().getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        return BuildConfig.FLAVOR.startsWith("leanback")
                 && Prefers.getBoolean("youtube_home_fallback", false);
     }
 
