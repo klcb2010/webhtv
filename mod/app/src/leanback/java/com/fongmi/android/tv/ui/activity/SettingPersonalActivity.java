@@ -86,6 +86,7 @@ public class SettingPersonalActivity extends BaseActivity {
         } catch (Throwable ignored) {} } catch (Throwable ignored) {}
         try { mBinding.webviewLive.setOnClickListener(this::setWebViewLive); } catch (Throwable ignored) {}
         try { mBinding.recommendSource.setOnClickListener(this::setRecommendSource); } catch (Throwable ignored) {}
+        try { mBinding.youtubeHomeFallback.setOnClickListener(this::setYoutubeHomeFallback); } catch (Throwable ignored) {}
     }
 
     private void refreshTexts() {
@@ -136,6 +137,7 @@ public class SettingPersonalActivity extends BaseActivity {
         try { mBinding.playbackScreenshotBtn.setVisibility(android.view.View.GONE); } catch (Throwable ignored) {}
         try { mBinding.webviewLiveText.setText(getSwitch(Setting.isWebViewLiveEnabled())); } catch (Throwable ignored) {}
         try { mBinding.recommendSourceText.setText(recommendSourceLabel()); } catch (Throwable ignored) {}
+        try { mBinding.youtubeHomeFallbackText.setText(getSwitch(Setting.isYoutubeHomeFallbackEnabled())); } catch (Throwable ignored) {}
         // TV-only rows may be GONE on mobile via layout; still safe if present
         try {
             boolean tv = false;
@@ -328,6 +330,11 @@ public class SettingPersonalActivity extends BaseActivity {
 
 
 
+
+    private void setYoutubeHomeFallback(View view) {
+        Setting.putYoutubeHomeFallbackEnabled(!Setting.isYoutubeHomeFallbackEnabled());
+        refreshTexts();
+    }
 
     private void setWebViewLive(View view) {
         try {
