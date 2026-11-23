@@ -15,9 +15,8 @@ if anchor not in source:
     raise SystemExit("[mod] ERROR: SiteApi homeContent injection point not found")
 
 replacement = anchor + """
-            // 仅 TV 端、仅肥猫油管：首页推荐为空时，只拉取配置 JSON 中的第一个分类。
-            if (result.getList().isEmpty()
-                    && "YouTube".equals(site.getKey())
+            // 仅 TV 端、仅肥猫油管：启用后首页推荐固定取配置分类列表的第一个分类。
+            if ("YouTube".equals(site.getKey())
                     && "csp_Youtube".equals(site.getApi())
                     && com.fongmi.android.tv.setting.Setting.isYoutubeHomeFallbackEnabled()
                     && !result.getTypes().isEmpty()) {
@@ -26,15 +25,15 @@ replacement = anchor + """
                 if (!firstType.isHome() && !firstType.isFolder() && !typeId.isEmpty()) {
                     try {
                         Result category = categoryContent(site.getKey(), typeId, "1", false, new HashMap<>());
-                        if (!category.getList().isEmpty()) {
-                            result.setList(category.getList());
-                            SpiderDebug.log("homeVideoFallback", "YouTube first category=%s, count=%s",
-                                    typeId, category.getList().size());
-                        }
+                        // 不再显示 Jar 自带的首页推荐，始终以第一个配置分类的结果为准。
+                        result.setList(category.getList());
+                        SpiderDebug.log("homeVideoFallback", "YouTube first category=%s, count=%s",
+                                typeId, category.getList().size());
                     } catch (Exception e) {
+                        result.setList(new ArrayList<>());
                         SpiderDebug.log("homeVideoFallback", e.getMessage());
                     }
                 }
             }"""
 target.write_text(source.replace(anchor, replacement, 1), encoding="utf-8")
-print("[mod] injected YouTube first-category home fallback")
+print("[mod] injected YouTube configured-first-category home content")
