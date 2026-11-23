@@ -219,6 +219,7 @@ if [[ -f "$MOD/hooks/inject_live_channel_zorder.py" ]]; then
   python3 "$MOD/hooks/inject_live_channel_zorder.py" "$ROOT" || exit 1
 fi
 run_hook "$MOD/hooks/fix_update_setting_stubs.py"
+run_hook "$MOD/hooks/inject_youtube_home_fallback.py"
 run_hook "$MOD/hooks/inject_result_msg_ui.py"
 
 if [[ -f "$MOD/hooks/inject_subtitle_style.py" ]]; then
