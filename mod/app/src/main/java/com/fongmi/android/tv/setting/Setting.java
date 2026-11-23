@@ -966,6 +966,14 @@ public class Setting {
 
 
 
+    public static boolean isYoutubeHomeFallbackEnabled() {
+        return Prefers.getBoolean("youtube_home_fallback", false);
+    }
+
+    public static void putYoutubeHomeFallbackEnabled(boolean enabled) {
+        Prefers.put("youtube_home_fallback", enabled);
+    }
+
     public static boolean isHomeVodAutoLoad() {
         return Prefers.getBoolean("home_vod_auto_load", true);
     }
