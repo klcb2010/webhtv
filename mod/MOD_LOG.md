@@ -11,3 +11,7 @@
 - Disabled inject_disable_mpv + inject_strip_mpv_assets in apply.sh
 - Added inject_restore_mpv_phase_a.py (default mpv options, default kernel EXO)
 - apply-mpv-tail.sh no longer disables MPV
+
+## 2026-11-24 SMB 文件删除
+- SMB 浏览器支持手机长按、TV 长按 OK 打开操作菜单，新增远程文件和文件夹删除。
+- 删除前二次确认；文件夹递归删除；确认弹窗沿用顶部按钮背景，TV 默认聚焦取消并保留淡蓝色焦点框。

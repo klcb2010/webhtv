@@ -421,14 +421,172 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
     private void showFolderActions(String folderPath) { showFileActions(folderPath,true); }
     private void showFileActions(String remote, boolean directory) {
-        String key=favoriteKey(remote,directory); boolean saved=favorites.contains(key);
-        String[] actions=directory?new String[]{"隐藏此文件夹",saved?"取消收藏":"加入收藏夹"}
-                :new String[]{saved?"取消收藏":"加入收藏夹"};
-        new MaterialAlertDialogBuilder(this).setTitle(remote).setItems(actions,(d,w)->{
-            if(directory&&w==0) hideFolder(remote);
-            else { if(saved) favorites.remove(key); else favorites.add(key);
-                persistStringSet("favorites",favorites); }
+        String key = favoriteKey(remote, directory);
+        boolean saved = favorites.contains(key);
+        String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
+        String[] actions = directory
+                ? new String[]{"隐藏此文件夹", favoriteAction, "删除"}
+                : new String[]{favoriteAction, "删除"};
+        new MaterialAlertDialogBuilder(this).setTitle(remote).setItems(actions, (dialog, which) -> {
+            if (directory && which == 0) {
+                hideFolder(remote);
+                return;
+            }
+            int favoriteIndex = directory ? 1 : 0;
+            if (which == favoriteIndex) {
+                if (saved) favorites.remove(key);
+                else favorites.add(key);
+                persistStringSet("favorites", favorites);
+            } else if (which == favoriteIndex + 1) {
+                showDeleteConfirm(remote, directory);
+            }
         }).show();
+    }
+
+    private void showDeleteConfirm(String remote, boolean directory) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        int background = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        int foreground = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorOnPrimaryContainer, 0xFFFFFFFF);
+        android.graphics.drawable.GradientDrawable panelBackground =
+                new android.graphics.drawable.GradientDrawable();
+        panelBackground.setColor(background);
+        panelBackground.setCornerRadius(dp(16));
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(24), dp(22), dp(24), dp(18));
+        panel.setBackground(panelBackground);
+
+        TextView heading = new TextView(this);
+        heading.setText("确认删除");
+        heading.setTextColor(foreground);
+        heading.setTextSize(20);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        panel.addView(heading, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView message = new TextView(this);
+        message.setText((directory
+                ? "确定递归删除此文件夹及其中的全部内容？"
+                : "确定删除此文件？")
+                + "\n\n" + remote + "\n\n此操作无法撤销。");
+        message.setTextColor(foreground);
+        message.setTextSize(16);
+        message.setPadding(0, dp(14), 0, dp(20));
+        panel.addView(message, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+
+        MaterialButton cancel = themedButton("取消");
+        MaterialButton confirm = themedButton("删除");
+        cancel.setTextSize(16);
+        confirm.setTextSize(16);
+        cancel.setAllCaps(false);
+        confirm.setAllCaps(false);
+        cancel.setMinWidth(dp(88));
+        confirm.setMinWidth(dp(88));
+        cancel.setFocusable(true);
+        confirm.setFocusable(true);
+        cancel.setFocusableInTouchMode(false);
+        confirm.setFocusableInTouchMode(false);
+
+        LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(-2, dp(44));
+        cancelParams.leftMargin = dp(8);
+        actions.addView(cancel, cancelParams);
+        LinearLayout.LayoutParams confirmParams = new LinearLayout.LayoutParams(-2, dp(44));
+        confirmParams.leftMargin = dp(8);
+        actions.addView(confirm, confirmParams);
+        panel.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+
+        dialog.setContentView(panel);
+        dialog.setCancelable(true);
+        cancel.setOnClickListener(view -> dialog.dismiss());
+        confirm.setOnClickListener(view -> {
+            dialog.dismiss();
+            deleteRemote(remote, directory);
+        });
+        dialog.setOnShowListener(ignored -> {
+            if (isTvDevice()) cancel.requestFocus();
+        });
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int availableWidth = getResources().getDisplayMetrics().widthPixels - dp(48);
+            window.setLayout(Math.max(dp(280), Math.min(availableWidth, dp(520))),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            attributes.dimAmount = 0.55f;
+            window.setAttributes(attributes);
+        }
+        if (isTvDevice()) cancel.post(() -> cancel.requestFocus());
+    }
+
+    private void deleteRemote(String remote, boolean directory) {
+        if (host == null || share == null || remote == null || remote.trim().isEmpty()) return;
+
+        final String targetHost = host;
+        final String targetShare = share;
+        final String targetUser = username;
+        final String targetPassword = password;
+        final String targetDomain = domain;
+        setStatus("正在删除…");
+
+        worker.execute(() -> {
+            try {
+                SmbClient.deleteRemote(targetHost, targetShare, remote, directory,
+                        targetUser, targetPassword, targetDomain);
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    removeDeletedReferences(targetHost, targetShare, remote, directory);
+                    loadDirectory();
+                    Toast.makeText(this, directory ? "文件夹已删除" : "文件已删除",
+                            Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    String detail = shortError(error);
+                    setStatus("删除失败：" + detail);
+                    Toast.makeText(this, "删除失败：" + detail, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void removeDeletedReferences(String targetHost, String targetShare,
+                                         String remote, boolean directory) {
+        String prefix = targetHost + "\n" + targetShare + "\n";
+        boolean favoritesChanged = false;
+        for (String favorite : new ArrayList<>(favorites)) {
+            String[] parts = favorite.split("\\n", 4);
+            if (parts.length != 4 || !parts[0].equals(targetHost)
+                    || !parts[1].equals(targetShare)) continue;
+            if (parts[2].equals(remote)
+                    || (directory && parts[2].startsWith(remote + "\\"))) {
+                favorites.remove(favorite);
+                favoritesChanged = true;
+            }
+        }
+        if (favoritesChanged) persistStringSet("favorites", favorites);
+
+        if (directory) {
+            boolean hiddenChanged = false;
+            for (String hidden : new ArrayList<>(hiddenFolders)) {
+                if (hidden.equals(prefix + remote)
+                        || hidden.startsWith(prefix + remote + "\\")) {
+                    hiddenFolders.remove(hidden);
+                    hiddenChanged = true;
+                }
+            }
+            if (hiddenChanged) persistHiddenFolders();
+        }
     }
     private void showFavorites() {
         showingFavorites=true; showingHiddenHosts=false; showingHiddenFolders=false;
