@@ -74,7 +74,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private static final int REQUEST_LOCAL_NETWORK = 7301;
     private static final int REQUEST_INSTALL_APK_PERMISSION = 7302;
     private static final int REQUEST_COPY_STORAGE_PERMISSION = 7303;
-    private static final int REQUEST_COPY_STORAGE_SETTINGS = 7304;
     private static final String LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -614,7 +613,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         pendingCopyDirectory = directory;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q
                 && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
@@ -630,7 +629,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         final String targetUser = username;
         final String targetPassword = password;
         final String targetDomain = domain;
-        final String name = remote.substring(Math.max(remote.lastIndexOf('\\\\'),
+        final String name = remote.substring(Math.max(remote.lastIndexOf('\\'),
                 remote.lastIndexOf('/')) + 1);
         if (name.isEmpty() || ".".equals(name) || "..".equals(name)) {
             Toast.makeText(this, "无法识别要复制的项目名称", Toast.LENGTH_LONG).show();
