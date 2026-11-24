@@ -87,6 +87,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private TextView status;
     private ListView list;
     private ArrayAdapter<String> adapter;
+    private int focusedItemPosition = ListView.INVALID_POSITION;
 
     private Mode mode = Mode.HOSTS;
     private String host;
@@ -166,9 +167,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         list.setId(View.generateViewId());
         list.setFocusable(true);
         list.setFocusableInTouchMode(true);
-        list.setDividerHeight(dp(1));
-        list.setDivider(new ColorDrawable(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0x334F5B6B)));
-        list.setBackgroundColor(surface);
+        list.setDividerHeight(dp(5));
+        list.setDivider(new ColorDrawable(Color.TRANSPARENT));
+        list.setBackground(smbDialogBackground());
         adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
@@ -179,13 +180,34 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setPadding(dp(16), dp(10), dp(16), dp(10));
                 item.setMinHeight(dp(54));
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, dp(54)));
                 item.setBackground(smbItemBackground());
+                item.setSelected(position == focusedItemPosition);
+                item.setActivated(position == focusedItemPosition);
                 return item;
             }
         };
-        list.setSelector(smbItemBackground());
+        list.setSelector(new ColorDrawable(Color.TRANSPARENT));
         list.setDrawSelectorOnTop(false);
         list.setAdapter(adapter);
+        list.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
+                                       int position, long id) {
+                updateFocusedItem(position);
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+                updateFocusedItem(ListView.INVALID_POSITION);
+            }
+        });
+        list.setOnFocusChangeListener((view, focused) -> {
+            if (focused) updateFocusedItem(list.getSelectedItemPosition());
+            else updateFocusedItem(ListView.INVALID_POSITION);
+        });
         configureToolbarFocus(back, favoritesButton, hiddenButton);
         list.setOnKeyListener((view, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN
@@ -269,21 +291,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private android.graphics.drawable.Drawable smbItemBackground() {
-        int background = MaterialColors.getColor(this,
-                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         android.graphics.drawable.GradientDrawable focused = new android.graphics.drawable.GradientDrawable();
-        focused.setColor(background);
-        focused.setCornerRadius(dp(10));
+        focused.setColor(0x333B9DFF);
+        focused.setCornerRadius(dp(8));
         focused.setStroke(dp(2), 0xFF8CCBFF);
-        android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
-        normal.setColor(background);
-        normal.setCornerRadius(dp(10));
         android.graphics.drawable.StateListDrawable selector = new android.graphics.drawable.StateListDrawable();
         selector.addState(new int[]{android.R.attr.state_focused}, focused);
         selector.addState(new int[]{android.R.attr.state_activated}, focused);
         selector.addState(new int[]{android.R.attr.state_selected}, focused);
-        selector.addState(new int[]{}, normal);
+        selector.addState(new int[]{}, new ColorDrawable(Color.TRANSPARENT));
         return selector;
+    }
+
+    private void updateFocusedItem(int position) {
+        int previous = focusedItemPosition;
+        focusedItemPosition = position;
+        if (previous == position || list == null) return;
+        int first = list.getFirstVisiblePosition();
+        int last = list.getLastVisiblePosition();
+        for (int index = first; index <= last; index++) {
+            View child = list.getChildAt(index - first);
+            if (child != null) {
+                boolean selected = index == position;
+                child.setSelected(selected);
+                child.setActivated(selected);
+            }
+        }
     }
 
     private MaterialAlertDialogBuilder smbDialogBuilder() {
