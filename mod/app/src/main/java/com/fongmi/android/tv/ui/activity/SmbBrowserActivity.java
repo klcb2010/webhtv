@@ -171,7 +171,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         list.setFocusableInTouchMode(true);
         list.setDividerHeight(dp(5));
         list.setDivider(new ColorDrawable(Color.TRANSPARENT));
-        list.setBackground(smbDialogBackground());
+        list.setBackgroundColor(Color.TRANSPARENT);
         adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
@@ -294,7 +294,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         android.graphics.drawable.GradientDrawable drawable =
                 new android.graphics.drawable.GradientDrawable();
-        drawable.setColor(0xB3101420);
+        drawable.setColor(background);
         drawable.setCornerRadius(dp(10));
         return drawable;
     }
