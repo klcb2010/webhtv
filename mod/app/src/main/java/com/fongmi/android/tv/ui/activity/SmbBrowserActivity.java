@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.Uri;
@@ -13,6 +14,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Environment;
 import android.text.InputType;
 import android.view.Gravity;
 import android.util.TypedValue;
@@ -63,6 +65,7 @@ import org.json.JSONArray;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SmbBrowserActivity extends AppCompatActivity {
 
@@ -70,6 +73,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private static final int REQUEST_LOCAL_NETWORK = 7301;
     private static final int REQUEST_INSTALL_APK_PERMISSION = 7302;
+    private static final int REQUEST_COPY_STORAGE_PERMISSION = 7303;
+    private static final int REQUEST_COPY_STORAGE_SETTINGS = 7304;
     private static final String LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -104,6 +109,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private boolean showingFavorites;
     private boolean installingApk;
     private File pendingApkFile;
+    private String pendingCopyRemote;
+    private boolean pendingCopyDirectory;
 
     public static void start(Activity activity) {
         activity.startActivity(new android.content.Intent(activity, SmbBrowserActivity.class));
@@ -578,8 +585,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
         String[] actions = directory
-                ? new String[]{"隐藏此文件夹", favoriteAction, "请确认删除"}
-                : new String[]{favoriteAction, "请确认删除"};
+                ? new String[]{"隐藏此文件夹", favoriteAction, "复制到 Download", "请确认删除"}
+                : new String[]{favoriteAction, "复制到 Download", "请确认删除"};
         AlertDialog dialog = smbDialogBuilder()
                 .setTitle(remote).setItems(actions, (target, which) -> {
                     if (directory && which == 0) {
@@ -592,11 +599,123 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         else favorites.add(key);
                         persistFavorites();
                     } else if (which == favoriteIndex + 1) {
+                        copyToDownload(remote, directory);
+                    } else if (which == favoriteIndex + 2) {
                         showDeleteConfirm(remote, directory);
                     }
                 }).create();
         dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
         dialog.show();
+    }
+
+    private void copyToDownload(String remote, boolean directory) {
+        if (remote == null || remote.trim().isEmpty() || host == null || share == null) return;
+        pendingCopyRemote = remote;
+        pendingCopyDirectory = directory;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_COPY_STORAGE_PERMISSION);
+            return;
+        }
+        startCopyToDownload(remote, directory);
+    }
+
+    private void startCopyToDownload(String remote, boolean directory) {
+        final String targetHost = host;
+        final String targetShare = share;
+        final String targetUser = username;
+        final String targetPassword = password;
+        final String targetDomain = domain;
+        final String name = remote.substring(Math.max(remote.lastIndexOf('\\\\'),
+                remote.lastIndexOf('/')) + 1);
+        if (name.isEmpty() || ".".equals(name) || "..".equals(name)) {
+            Toast.makeText(this, "无法识别要复制的项目名称", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        File downloadDirectory = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS);
+        if (!downloadDirectory.exists() && !downloadDirectory.mkdirs()) {
+            Toast.makeText(this, "无法创建 Download 目录", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!downloadDirectory.isDirectory() || !downloadDirectory.canWrite()) {
+            Toast.makeText(this, "Download 目录不可写，请检查存储权限", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        File destination = new File(downloadDirectory, name);
+        try {
+            String rootPath = downloadDirectory.getCanonicalPath() + File.separator;
+            if (!destination.getCanonicalPath().startsWith(rootPath)) {
+                Toast.makeText(this, "目标文件名无效", Toast.LENGTH_LONG).show();
+                return;
+            }
+        } catch (IOException error) {
+            Toast.makeText(this, "无法检查 Download 目录：" + shortError(error), Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (destination.exists()) {
+            Toast.makeText(this, "Download 中已存在同名项目，未覆盖原文件", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        ProgressDialog progress = new ProgressDialog(this);
+        progress.setTitle("复制到 Download");
+        progress.setMessage("正在连接 SMB…");
+        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        progress.setIndeterminate(true);
+        progress.setCancelable(true);
+        progress.setOnCancelListener(dialog -> cancelled.set(true));
+        progress.show();
+        setStatus("正在复制到 Download…");
+
+        worker.execute(() -> {
+            try {
+                SmbClient.copyToLocal(targetHost, targetShare, remote, directory, destination,
+                        targetUser, targetPassword, targetDomain, new SmbClient.CopyProgressListener() {
+                            @Override
+                            public boolean isCancelled() {
+                                return cancelled.get() || isFinishing();
+                            }
+
+                            @Override
+                            public void onProgress(long copiedBytes, long totalBytes, String currentName) {
+                                runOnUiThread(() -> {
+                                    if (progress.isShowing()) {
+                                        progress.setIndeterminate(totalBytes <= 0);
+                                        if (totalBytes > 0) {
+                                            progress.setMax(1000);
+                                            progress.setProgress((int) Math.min(1000,
+                                                    copiedBytes * 1000L / totalBytes));
+                                        }
+                                        progress.setMessage(currentName == null || currentName.isEmpty()
+                                                ? "正在创建文件夹…" : "正在复制：" + currentName);
+                                    }
+                                });
+                            }
+                        });
+                runOnUiThread(() -> {
+                    if (progress.isShowing()) progress.dismiss();
+                    if (isFinishing()) return;
+                    setStatus("复制完成：" + name);
+                    Toast.makeText(this, "已复制到 Download：" + name, Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (progress.isShowing()) progress.dismiss();
+                    if (isFinishing()) return;
+                    String detail = shortError(error);
+                    setStatus("复制失败：" + detail);
+                    Toast.makeText(this, "复制失败：" + detail, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
     private void showDeleteConfirm(String remote, boolean directory) {
@@ -1539,6 +1658,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 scanNetworkInternal();
             } else {
                 setStatus(getString(R.string.smb_local_network_permission));
+            }
+        } else if (requestCode == REQUEST_COPY_STORAGE_PERMISSION) {
+            String remote = pendingCopyRemote;
+            boolean directory = pendingCopyDirectory;
+            pendingCopyRemote = null;
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                    && remote != null) {
+                startCopyToDownload(remote, directory);
+            } else {
+                Toast.makeText(this, "未授予存储权限，无法复制到 Download", Toast.LENGTH_LONG).show();
             }
         }
     }
