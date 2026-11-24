@@ -536,7 +536,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = directory
                 ? new String[]{"隐藏此文件夹", favoriteAction, "请确认删除"}
                 : new String[]{favoriteAction, "请确认删除"};
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+        AlertDialog dialog = smbDialogBuilder()
                 .setBackground(smbDialogBackground())
                 .setTitle(remote).setItems(actions, (target, which) -> {
                     if (directory && which == 0) {
@@ -685,7 +685,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 favoritesChanged = true;
             }
         }
-        if (favoritesChanged) persistStringSet("favorites", favorites);
+        if (favoritesChanged) persistFavorites();
 
         if (directory) {
             boolean hiddenChanged = false;
@@ -730,7 +730,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String key = host + "\n" + shareName + "\n\nD";
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+        AlertDialog dialog = smbDialogBuilder()
                 .setBackground(smbDialogBackground())
                 .setTitle(shareName)
                 .setItems(new String[]{"隐藏此路径", favoriteAction}, (target, which) -> {
@@ -882,7 +882,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void showHostNoteDialog(String value) {
         EditText note = field("备注（可留空）", InputType.TYPE_CLASS_TEXT);
         note.setText(savedHosts.getOrDefault(value, ""));
-        new MaterialAlertDialogBuilder(this)
+        smbDialogBuilder()
                 .setTitle("保存 SMB 主机")
                 .setView(note)
                 .setNegativeButton(android.R.string.cancel, null)
@@ -1030,7 +1030,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         form.addView(pass);
         form.addView(realm);
 
-        new MaterialAlertDialogBuilder(this)
+        smbDialogBuilder()
                 .setTitle(getString(R.string.smb_auth_title) + " · " + host)
                 .setView(form)
                 .setNegativeButton(android.R.string.cancel, (dialog, which) -> setStatus(getString(R.string.smb_auth_failed)))
@@ -1069,7 +1069,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void showManualShareDialog() {
         EditText input = field(getString(R.string.smb_share_name), InputType.TYPE_CLASS_TEXT);
-        new MaterialAlertDialogBuilder(this)
+        smbDialogBuilder()
                 .setTitle(R.string.smb_manual_share)
                 .setView(input)
                 .setNegativeButton(android.R.string.cancel, null)
@@ -1197,7 +1197,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !getPackageManager().canRequestPackageInstalls()) {
             pendingApkFile = apkFile;
-            new MaterialAlertDialogBuilder(this)
+            smbDialogBuilder()
                     .setTitle("允许安装应用")
                     .setMessage("需要允许 WebHTV 安装未知来源应用，授权后会继续打开安装程序。")
                     .setNegativeButton(android.R.string.cancel, (dialog, which) -> pendingApkFile = null)
