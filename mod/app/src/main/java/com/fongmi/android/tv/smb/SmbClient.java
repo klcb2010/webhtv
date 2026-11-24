@@ -187,8 +187,6 @@ public final class SmbClient {
 
                 if (directory) {
                     if (!destination.mkdirs()) throw new IOException("无法创建目标文件夹");
-                } else if (!destination.createNewFile()) {
-                    throw new IOException("无法创建目标文件");
                 }
 
                 long copiedBytes = 0;
