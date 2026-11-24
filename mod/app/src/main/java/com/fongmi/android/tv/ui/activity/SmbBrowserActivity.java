@@ -248,8 +248,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
         android.graphics.drawable.GradientDrawable drawable =
                 new android.graphics.drawable.GradientDrawable();
         drawable.setColor(background);
-        drawable.setCornerRadius(dp(16));
+        drawable.setCornerRadius(dp(10));
         return drawable;
+    }
+
+    private void applyDialogFocusFrame(ListView dialogList) {
+        android.graphics.drawable.GradientDrawable focused =
+                new android.graphics.drawable.GradientDrawable();
+        focused.setColor(0x223B9DFF);
+        focused.setCornerRadius(dp(8));
+        focused.setStroke(dp(2), 0xFF8CCBFF);
+
+        android.graphics.drawable.StateListDrawable selector =
+                new android.graphics.drawable.StateListDrawable();
+        selector.addState(new int[]{android.R.attr.state_focused}, focused);
+        selector.addState(new int[]{android.R.attr.state_activated}, focused);
+        selector.addState(new int[]{android.R.attr.state_selected}, focused);
+
+        android.graphics.drawable.GradientDrawable normal =
+                new android.graphics.drawable.GradientDrawable();
+        normal.setColor(Color.TRANSPARENT);
+        selector.addState(new int[]{}, normal);
+
+        dialogList.setSelector(selector);
+        dialogList.setDrawSelectorOnTop(false);
+        dialogList.setSelection(0);
+        dialogList.requestFocus();
     }
 
     private MaterialButton themedButton(String label) {
@@ -464,29 +488,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         showDeleteConfirm(remote, directory);
                     }
                 }).create();
-        dialog.setOnShowListener(target -> {
-            ListView list = dialog.getListView();
-            android.graphics.drawable.GradientDrawable focused =
-                    new android.graphics.drawable.GradientDrawable();
-            focused.setColor(0x223B9DFF);
-            focused.setCornerRadius(dp(8));
-            focused.setStroke(dp(2), 0xFF8CCBFF);
-
-            android.graphics.drawable.StateListDrawable selector =
-                    new android.graphics.drawable.StateListDrawable();
-            selector.addState(new int[]{android.R.attr.state_focused}, focused);
-            selector.addState(new int[]{android.R.attr.state_activated}, focused);
-            selector.addState(new int[]{android.R.attr.state_selected}, focused);
-            android.graphics.drawable.GradientDrawable normal =
-                    new android.graphics.drawable.GradientDrawable();
-            normal.setColor(Color.TRANSPARENT);
-            selector.addState(new int[]{}, normal);
-
-            list.setSelector(selector);
-            list.setDrawSelectorOnTop(false);
-            list.setSelection(0);
-            list.requestFocus();
-        });
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
         dialog.show();
     }
 
@@ -637,8 +639,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
         showingFavorites=true; showingHiddenHosts=false; showingHiddenFolders=false;
         mode=Mode.FAVORITES; title.setText("收藏夹");
         List<String> labels=new ArrayList<>();
-        for(String value:favorites) { String[] p=value.split("\\n",4);
-            if(p.length==4) labels.add((p[3].equals("D")?"📁  ":"★  ")+p[0]+" / "+p[1]+" / "+p[2]); }
+        for (String value : favorites) {
+            String[] p = value.split("\\n", 4);
+            if (p.length != 4) continue;
+            String location = p[0] + " / " + p[1] + (p[2].isEmpty() ? "" : " / " + p[2]);
+            labels.add((p[3].equals("D") ? "📁  " : "★  ") + location);
+        }
         setItems(labels);
         setStatus(favorites.isEmpty()?"收藏夹为空":(isTvDevice()?"短按打开，菜单键取消收藏":"短按打开，长按取消收藏"));
     }
@@ -656,9 +662,29 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void showShareActions(String shareName) {
-        if (shareName == null || shareName.isEmpty()) return;
-        new MaterialAlertDialogBuilder(this).setTitle(shareName)
-                .setItems(new String[]{"隐藏此路径"},(d,w)->hideShare(shareName)).show();
+        if (host == null || shareName == null || shareName.isEmpty()) return;
+        String key = host + "\\n" + shareName + "\\n\\nD";
+        boolean saved = favorites.contains(key);
+        String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setBackground(smbDialogBackground())
+                .setTitle(shareName)
+                .setItems(new String[]{"隐藏此路径", favoriteAction}, (target, which) -> {
+                    if (which == 0) {
+                        hideShare(shareName);
+                    } else if (which == 1) {
+                        if (saved) {
+                            favorites.remove(key);
+                            Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+                        } else {
+                            favorites.add(key);
+                            Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
+                        }
+                        persistStringSet("favorites", favorites);
+                    }
+                }).create();
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.show();
     }
 
     private void hideShare(String shareName) {
