@@ -44,6 +44,7 @@ import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.smb.SmbClient;
 import com.fongmi.android.tv.smb.SmbNetworkScanner;
 import com.fongmi.android.tv.smb.SmbPlaybackProxy;
+import com.fongmi.android.tv.ui.custom.CustomWallView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
@@ -130,7 +131,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         int surface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface, 0xFF10131B);
         int onSurface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFFFFFFF);
         int onSurfaceVariant = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFFB8C4D8);
-        root.setBackgroundColor(surface);
+        root.setBackgroundColor(Color.TRANSPARENT);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
@@ -247,7 +248,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
         });
         root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        setContentView(root);
+        FrameLayout screen = new FrameLayout(this);
+        screen.setBackgroundColor(Color.TRANSPARENT);
+        screen.addView(new CustomWallView(this, null).setMotionEnabled(false),
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+        screen.addView(root, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(screen);
     }
 
     private void configureToolbarFocus(MaterialButton back, MaterialButton favorites, MaterialButton hidden) {
@@ -286,7 +294,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         android.graphics.drawable.GradientDrawable drawable =
                 new android.graphics.drawable.GradientDrawable();
-        drawable.setColor(background);
+        drawable.setColor(0xB3101420);
         drawable.setCornerRadius(dp(10));
         return drawable;
     }
