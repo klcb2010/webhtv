@@ -169,6 +169,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         list.setId(View.generateViewId());
         list.setFocusable(true);
         list.setFocusableInTouchMode(true);
+        list.setVerticalScrollBarEnabled(false);
+        list.setHorizontalScrollBarEnabled(false);
         list.setDividerHeight(dp(5));
         list.setDivider(new ColorDrawable(Color.TRANSPARENT));
         list.setBackgroundColor(Color.TRANSPARENT);
@@ -184,7 +186,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setMinHeight(dp(54));
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, dp(54)));
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == focusedItemPosition);
                 item.setActivated(position == focusedItemPosition);
