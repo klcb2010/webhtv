@@ -242,6 +242,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
         toolbar.addView(button, params);
     }
 
+    private android.graphics.drawable.Drawable smbDialogBackground() {
+        int background = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        android.graphics.drawable.GradientDrawable drawable =
+                new android.graphics.drawable.GradientDrawable();
+        drawable.setColor(background);
+        drawable.setCornerRadius(dp(16));
+        return drawable;
+    }
+
     private MaterialButton themedButton(String label) {
         int background = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         int foreground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimaryContainer, 0xFFFFFFFF);
@@ -427,7 +437,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = directory
                 ? new String[]{"隐藏此文件夹", favoriteAction, "删除"}
                 : new String[]{favoriteAction, "删除"};
-        new MaterialAlertDialogBuilder(this).setTitle(remote).setItems(actions, (dialog, which) -> {
+        new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground())
+                .setTitle(remote).setItems(actions, (dialog, which) -> {
             if (directory && which == 0) {
                 hideFolder(remote);
                 return;
@@ -447,19 +458,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
-        int background = MaterialColors.getColor(this,
-                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         int foreground = MaterialColors.getColor(this,
                 com.google.android.material.R.attr.colorOnPrimaryContainer, 0xFFFFFFFF);
-        android.graphics.drawable.GradientDrawable panelBackground =
-                new android.graphics.drawable.GradientDrawable();
-        panelBackground.setColor(background);
-        panelBackground.setCornerRadius(dp(16));
 
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(24), dp(22), dp(24), dp(18));
-        panel.setBackground(panelBackground);
+        panel.setBackground(smbDialogBackground());
 
         TextView heading = new TextView(this);
         heading.setText("确认删除");
