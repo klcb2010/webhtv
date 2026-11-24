@@ -17,6 +17,10 @@ import com.rapid7.client.dcerpc.mssrvs.dto.NetShareInfo0;
 import com.rapid7.client.dcerpc.transport.RPCTransport;
 import com.rapid7.client.dcerpc.transport.SMBTransportFactories;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -119,6 +123,157 @@ public final class SmbClient {
                 else diskShare.rm(remotePath);
             }
         }
+    }
+
+    public interface CopyProgressListener {
+        boolean isCancelled();
+        void onProgress(long copiedBytes, long totalBytes, String currentName);
+    }
+
+    private static final class CopyEntry {
+        final String remotePath;
+        final String relativePath;
+        final boolean directory;
+        final long size;
+
+        CopyEntry(String remotePath, String relativePath, boolean directory, long size) {
+            this.remotePath = remotePath;
+            this.relativePath = relativePath;
+            this.directory = directory;
+            this.size = size;
+        }
+    }
+
+    public static void copyToLocal(String host, String shareName, String remotePath,
+                                   boolean directory, File destination,
+                                   String username, String password, String domain,
+                                   CopyProgressListener listener) throws Exception {
+        if (destination == null || destination.exists()) {
+            throw new IOException("Download 中已存在同名项目");
+        }
+        File parent = destination.getParentFile();
+        if (parent == null || (!parent.exists() && !parent.mkdirs()) || !parent.isDirectory()) {
+            throw new IOException("无法创建 Download 目录");
+        }
+
+        List<CopyEntry> entries = new ArrayList<>();
+        long totalBytes;
+        try (SMBClient client = new SMBClient();
+             Connection connection = client.connect(host);
+             Session session = authenticate(connection, username, password, domain)) {
+            Share remote = session.connectShare(shareName);
+            if (!(remote instanceof DiskShare)) {
+                remote.close();
+                throw new IOException("SMB 共享不支持文件复制");
+            }
+            try (DiskShare diskShare = (DiskShare) remote) {
+                if (directory) {
+                    collectCopyEntries(diskShare, remotePath, "", entries);
+                } else {
+                    try (com.hierynomus.smbj.share.File source = diskShare.openFile(
+                            remotePath, EnumSet.of(AccessMask.GENERIC_READ), null,
+                            EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ,
+                                    SMB2ShareAccess.FILE_SHARE_WRITE,
+                                    SMB2ShareAccess.FILE_SHARE_DELETE),
+                            SMB2CreateDisposition.FILE_OPEN, null)) {
+                        long size = source.getFileInformation(FileStandardInformation.class).getEndOfFile();
+                        entries.add(new CopyEntry(remotePath, "", false, size));
+                    }
+                }
+
+                totalBytes = 0;
+                for (CopyEntry entry : entries) {
+                    if (!entry.directory) totalBytes += Math.max(0, entry.size);
+                }
+
+                if (directory && !destination.mkdirs()) {
+                    throw new IOException("无法创建目标文件夹");
+                }
+
+                long copiedBytes = 0;
+                byte[] buffer = new byte[64 * 1024];
+                try {
+                    for (CopyEntry entry : entries) {
+                        if (listener != null && listener.isCancelled()) {
+                            throw new IOException("用户已取消复制");
+                        }
+                        File outputFile = entry.relativePath.isEmpty()
+                                ? destination : new File(destination, entry.relativePath);
+                        if (entry.directory) {
+                            if (!outputFile.exists() && !outputFile.mkdirs()) {
+                                throw new IOException("无法创建文件夹：" + entry.relativePath);
+                            }
+                            if (listener != null) listener.onProgress(copiedBytes, totalBytes, entry.relativePath);
+                            continue;
+                        }
+
+                        File outputParent = outputFile.getParentFile();
+                        if (outputParent != null && !outputParent.exists() && !outputParent.mkdirs()) {
+                            throw new IOException("无法创建目录：" + entry.relativePath);
+                        }
+                        if (outputFile.exists()) throw new IOException("目标中存在同名文件：" + entry.relativePath);
+
+                        try (com.hierynomus.smbj.share.File source = diskShare.openFile(
+                                entry.remotePath, EnumSet.of(AccessMask.GENERIC_READ), null,
+                                EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ,
+                                        SMB2ShareAccess.FILE_SHARE_WRITE,
+                                        SMB2ShareAccess.FILE_SHARE_DELETE),
+                                SMB2CreateDisposition.FILE_OPEN, null);
+                             BufferedOutputStream output = new BufferedOutputStream(
+                                     new FileOutputStream(outputFile))) {
+                            long offset = 0;
+                            long fileSize = source.getFileInformation(FileStandardInformation.class).getEndOfFile();
+                            while (offset < fileSize) {
+                                if (listener != null && listener.isCancelled()) {
+                                    throw new IOException("用户已取消复制");
+                                }
+                                int count = source.read(buffer, offset, 0,
+                                        (int) Math.min((long) buffer.length, fileSize - offset));
+                                if (count <= 0) throw new IOException("文件读取不完整：" + entry.relativePath);
+                                output.write(buffer, 0, count);
+                                offset += count;
+                                copiedBytes += count;
+                                if (listener != null) listener.onProgress(copiedBytes, totalBytes, entry.relativePath);
+                            }
+                            output.flush();
+                        }
+                    }
+                } catch (Exception error) {
+                    deleteLocalRecursively(destination);
+                    throw error;
+                }
+            }
+        }
+    }
+
+    private static void collectCopyEntries(DiskShare share, String remoteDirectory,
+                                           String relativeDirectory, List<CopyEntry> entries) throws Exception {
+        entries.add(new CopyEntry(remoteDirectory, relativeDirectory, true, 0));
+        for (FileIdBothDirectoryInformation item : share.list(remoteDirectory)) {
+            String name = item.getFileName();
+            if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) continue;
+            String childRemote = remoteDirectory == null || remoteDirectory.isEmpty()
+                    ? name : remoteDirectory + "\\" + name;
+            String childRelative = relativeDirectory.isEmpty()
+                    ? name : relativeDirectory + File.separator + name;
+            boolean childDirectory = (item.getFileAttributes()
+                    & FileAttributes.FILE_ATTRIBUTE_DIRECTORY.getValue()) != 0;
+            if (childDirectory) {
+                collectCopyEntries(share, childRemote, childRelative, entries);
+            } else {
+                entries.add(new CopyEntry(childRemote, childRelative, false,
+                        Math.max(0, item.getEndOfFile())));
+            }
+        }
+    }
+
+    private static void deleteLocalRecursively(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) for (File child : children) deleteLocalRecursively(child);
+        }
+        file.delete();
     }
 
     public static boolean isVideo(String name) {
