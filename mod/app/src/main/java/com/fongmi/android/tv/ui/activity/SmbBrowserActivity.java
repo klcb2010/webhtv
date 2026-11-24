@@ -537,7 +537,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 ? new String[]{"隐藏此文件夹", favoriteAction, "请确认删除"}
                 : new String[]{favoriteAction, "请确认删除"};
         AlertDialog dialog = smbDialogBuilder()
-                .setBackground(smbDialogBackground())
                 .setTitle(remote).setItems(actions, (target, which) -> {
                     if (directory && which == 0) {
                         hideFolder(remote);
@@ -744,7 +743,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             favorites.add(key);
                             Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
                         }
-                        persistStringSet("favorites", favorites);
+                        persistFavorites();
                     }
                 }).create();
         dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
