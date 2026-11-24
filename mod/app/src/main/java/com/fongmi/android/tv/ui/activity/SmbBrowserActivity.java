@@ -57,6 +57,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -168,7 +169,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         list.setDividerHeight(dp(1));
         list.setDivider(new ColorDrawable(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant, 0x334F5B6B)));
         list.setBackgroundColor(surface);
-        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, displayItems);
+        adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                TextView item = (TextView) super.getView(position, convertView, parent);
+                item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
+                        com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+                item.setTextSize(18);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setPadding(dp(16), dp(10), dp(16), dp(10));
+                item.setMinHeight(dp(54));
+                item.setBackground(smbItemBackground());
+                return item;
+            }
+        };
+        list.setSelector(smbItemBackground());
+        list.setDrawSelectorOnTop(false);
         list.setAdapter(adapter);
         configureToolbarFocus(back, favoritesButton, hiddenButton);
         list.setOnKeyListener((view, keyCode, event) -> {
@@ -252,6 +268,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return drawable;
     }
 
+    private android.graphics.drawable.Drawable smbItemBackground() {
+        int background = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        android.graphics.drawable.GradientDrawable focused = new android.graphics.drawable.GradientDrawable();
+        focused.setColor(background);
+        focused.setCornerRadius(dp(10));
+        focused.setStroke(dp(2), 0xFF8CCBFF);
+        android.graphics.drawable.GradientDrawable normal = new android.graphics.drawable.GradientDrawable();
+        normal.setColor(background);
+        normal.setCornerRadius(dp(10));
+        android.graphics.drawable.StateListDrawable selector = new android.graphics.drawable.StateListDrawable();
+        selector.addState(new int[]{android.R.attr.state_focused}, focused);
+        selector.addState(new int[]{android.R.attr.state_activated}, focused);
+        selector.addState(new int[]{android.R.attr.state_selected}, focused);
+        selector.addState(new int[]{}, normal);
+        return selector;
+    }
+
+    private MaterialAlertDialogBuilder smbDialogBuilder() {
+        return new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground());
+    }
+
     private void applyDialogFocusFrame(ListView dialogList) {
         android.graphics.drawable.GradientDrawable focused =
                 new android.graphics.drawable.GradientDrawable();
@@ -317,7 +355,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         android.content.SharedPreferences preferences = getSharedPreferences("smb_hosts", MODE_PRIVATE);
         loadStringSet(preferences, "hidden", hiddenHosts);
         loadStringSet(preferences, "hidden_folders", hiddenFolders);
-        loadStringSet(preferences, "favorites", favorites);
+        loadFavorites(preferences);
         String json = preferences.getString("saved", "{}");
         try {
             JSONObject object = new JSONObject(json);
@@ -343,6 +381,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
         } catch (RuntimeException error) {
             if (logActive()) android.util.Log.d("WebHTV-SMB", "load key=" + key + " failed: " + error.getClass().getSimpleName());
         }
+    }
+
+    private void loadFavorites(android.content.SharedPreferences preferences) {
+        favorites.clear();
+        String ordered = preferences.getString("favorites_ordered", null);
+        if (ordered != null) {
+            try {
+                JSONArray array = new JSONArray(ordered);
+                for (int i = 0; i < array.length(); i++) {
+                    String value = array.optString(i, "");
+                    if (!value.isEmpty()) favorites.add(value);
+                }
+                return;
+            } catch (Exception ignored) { }
+        }
+        loadStringSet(preferences, "favorites", favorites);
+    }
+
+    private void persistFavorites() {
+        JSONArray array = new JSONArray();
+        for (String value : favorites) array.put(value);
+        boolean saved = getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
+                .putString("favorites_ordered", array.toString())
+                .putStringSet("favorites", new LinkedHashSet<>(favorites))
+                .commit();
+        if (!saved) Toast.makeText(this, "收藏夹保存失败，请重试", Toast.LENGTH_LONG).show();
     }
 
     private void persistStringSet(String key, Set<String> values) {
@@ -461,7 +525,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
     private void addFavorite(String remote, boolean directory) {
         if(remote==null||remote.isEmpty()) return;
-        favorites.add(favoriteKey(remote,directory)); persistStringSet("favorites",favorites);
+        favorites.add(favoriteKey(remote,directory)); persistFavorites();
         Toast.makeText(this,"已加入收藏夹",Toast.LENGTH_SHORT).show();
     }
     private void showFolderActions(String folderPath) { showFileActions(folderPath,true); }
@@ -483,7 +547,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     if (which == favoriteIndex) {
                         if (saved) favorites.remove(key);
                         else favorites.add(key);
-                        persistStringSet("favorites", favorites);
+                        persistFavorites();
                     } else if (which == favoriteIndex + 1) {
                         showDeleteConfirm(remote, directory);
                     }
@@ -707,15 +771,42 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void showFavoriteActions(int position) {
         List<String> values = new ArrayList<>(favorites);
         if (position < 0 || position >= values.size()) return;
-        String favorite = values.get(position);
-        new MaterialAlertDialogBuilder(this)
-                .setItems(new String[]{"取消收藏"}, (dialog, which) -> {
-                    if (!favorites.remove(favorite)) return;
-                    persistStringSet("favorites", favorites);
-                    showFavorites();
-                    Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+        List<String> actions = new ArrayList<>();
+        if (position > 0) actions.add("上移");
+        if (position < values.size() - 1) actions.add("下移");
+        actions.add("取消收藏");
+        AlertDialog dialog = smbDialogBuilder()
+                .setTitle("调整收藏夹")
+                .setItems(actions.toArray(new String[0]), (target, which) -> {
+                    String action = actions.get(which);
+                    if ("上移".equals(action)) {
+                        moveFavorite(position, -1);
+                    } else if ("下移".equals(action)) {
+                        moveFavorite(position, 1);
+                    } else {
+                        String favorite = values.get(position);
+                        if (!favorites.remove(favorite)) return;
+                        persistFavorites();
+                        showFavorites();
+                        Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+                    }
+                }).create();
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.show();
+    }
+
+    private void moveFavorite(int position, int offset) {
+        List<String> values = new ArrayList<>(favorites);
+        int target = position + offset;
+        if (position < 0 || position >= values.size() || target < 0 || target >= values.size()) return;
+        String moved = values.remove(position);
+        values.add(target, moved);
+        favorites.clear();
+        favorites.addAll(values);
+        persistFavorites();
+        showFavorites();
+        list.setSelection(target);
+        Toast.makeText(this, offset < 0 ? "已上移" : "已下移", Toast.LENGTH_SHORT).show();
     }
 
     private boolean isTvDevice() {
@@ -771,10 +862,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = saved
                 ? new String[]{"修改备注", "取消保存", "隐藏此地址"}
                 : new String[]{"保存并备注", "隐藏此地址"};
-        new MaterialAlertDialogBuilder(this)
+        AlertDialog dialog = smbDialogBuilder()
                 .setTitle(value)
-                .setItems(actions, (dialog, which) -> {
-                    if ((!saved && which == 0) || (saved && which == 0)) {
+                .setItems(actions, (target, which) -> {
+                    if (which == 0) {
                         showHostNoteDialog(value);
                     } else if (saved && which == 1) {
                         savedHosts.remove(value);
@@ -783,8 +874,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     } else {
                         hideHost(value);
                     }
-                })
-                .show();
+                }).create();
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.show();
     }
 
     private void showHostNoteDialog(String value) {
