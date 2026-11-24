@@ -663,7 +663,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void showShareActions(String shareName) {
         if (host == null || shareName == null || shareName.isEmpty()) return;
-        String key = host + "\\n" + shareName + "\\n\\nD";
+        String key = host + "\n" + shareName + "\n\nD";
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
         AlertDialog dialog = new MaterialAlertDialogBuilder(this)
