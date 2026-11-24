@@ -185,6 +185,9 @@ public final class SmbClient {
                 for (CopyEntry entry : entries) {
                     if (!entry.directory) totalBytes += Math.max(0, entry.size);
                 }
+                if (parent.getUsableSpace() < totalBytes) {
+                    throw new IOException("Download 剩余空间不足");
+                }
 
                 if (directory && !destination.mkdirs()) {
                     throw new IOException("无法创建目标文件夹");
