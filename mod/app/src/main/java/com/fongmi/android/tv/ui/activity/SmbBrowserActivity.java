@@ -448,21 +448,46 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = directory
                 ? new String[]{"隐藏此文件夹", favoriteAction, "请确认删除"}
                 : new String[]{favoriteAction, "请确认删除"};
-        new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground())
-                .setTitle(remote).setItems(actions, (dialog, which) -> {
-            if (directory && which == 0) {
-                hideFolder(remote);
-                return;
-            }
-            int favoriteIndex = directory ? 1 : 0;
-            if (which == favoriteIndex) {
-                if (saved) favorites.remove(key);
-                else favorites.add(key);
-                persistStringSet("favorites", favorites);
-            } else if (which == favoriteIndex + 1) {
-                showDeleteConfirm(remote, directory);
-            }
-        }).show();
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setBackground(smbDialogBackground())
+                .setTitle(remote).setItems(actions, (target, which) -> {
+                    if (directory && which == 0) {
+                        hideFolder(remote);
+                        return;
+                    }
+                    int favoriteIndex = directory ? 1 : 0;
+                    if (which == favoriteIndex) {
+                        if (saved) favorites.remove(key);
+                        else favorites.add(key);
+                        persistStringSet("favorites", favorites);
+                    } else if (which == favoriteIndex + 1) {
+                        showDeleteConfirm(remote, directory);
+                    }
+                }).create();
+        dialog.setOnShowListener(target -> {
+            ListView list = dialog.getListView();
+            android.graphics.drawable.GradientDrawable focused =
+                    new android.graphics.drawable.GradientDrawable();
+            focused.setColor(0x223B9DFF);
+            focused.setCornerRadius(dp(8));
+            focused.setStroke(dp(2), 0xFF8CCBFF);
+
+            android.graphics.drawable.StateListDrawable selector =
+                    new android.graphics.drawable.StateListDrawable();
+            selector.addState(new int[]{android.R.attr.state_focused}, focused);
+            selector.addState(new int[]{android.R.attr.state_activated}, focused);
+            selector.addState(new int[]{android.R.attr.state_selected}, focused);
+            android.graphics.drawable.GradientDrawable normal =
+                    new android.graphics.drawable.GradientDrawable();
+            normal.setColor(Color.TRANSPARENT);
+            selector.addState(new int[]{}, normal);
+
+            list.setSelector(selector);
+            list.setDrawSelectorOnTop(false);
+            list.setSelection(0);
+            list.requestFocus();
+        });
+        dialog.show();
     }
 
     private void showDeleteConfirm(String remote, boolean directory) {
