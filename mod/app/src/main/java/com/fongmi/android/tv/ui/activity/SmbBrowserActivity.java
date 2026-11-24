@@ -273,6 +273,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return button;
     }
 
+    private void applyTvFocusFrame(MaterialButton button) {
+        button.setFocusable(true);
+        button.setFocusableInTouchMode(false);
+        button.setOnFocusChangeListener((view, focused) -> {
+            button.setStrokeWidth(dp(2));
+            button.setStrokeColor(ColorStateList.valueOf(
+                    focused && isTvDevice() ? 0xFF8CCBFF : Color.TRANSPARENT));
+        });
+        button.refreshDrawableState();
+    }
+
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
@@ -435,8 +446,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
         String[] actions = directory
-                ? new String[]{"隐藏此文件夹", favoriteAction, "删除"}
-                : new String[]{favoriteAction, "删除"};
+                ? new String[]{"隐藏此文件夹", favoriteAction, "请确认删除"}
+                : new String[]{favoriteAction, "请确认删除"};
         new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground())
                 .setTitle(remote).setItems(actions, (dialog, which) -> {
             if (directory && which == 0) {
@@ -488,7 +499,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
 
         MaterialButton cancel = themedButton("取消");
-        MaterialButton confirm = themedButton("删除");
+        MaterialButton confirm = themedButton("执行删除");
+        applyTvFocusFrame(cancel);
+        applyTvFocusFrame(confirm);
         cancel.setTextSize(16);
         confirm.setTextSize(16);
         cancel.setAllCaps(false);
@@ -516,7 +529,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
             deleteRemote(remote, directory);
         });
         dialog.setOnShowListener(ignored -> {
-            if (isTvDevice()) cancel.requestFocus();
+            if (isTvDevice()) {
+                cancel.requestFocus();
+                cancel.post(() -> cancel.requestFocus());
+            }
         });
         dialog.show();
 
@@ -530,7 +546,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
             attributes.dimAmount = 0.55f;
             window.setAttributes(attributes);
         }
-        if (isTvDevice()) cancel.post(() -> cancel.requestFocus());
     }
 
     private void deleteRemote(String remote, boolean directory) {
