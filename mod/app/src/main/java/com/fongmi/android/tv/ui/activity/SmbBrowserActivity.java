@@ -1266,11 +1266,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     username = user.getText().toString().trim();
                     password = pass.getText().toString();
                     domain = realm.getText().toString().trim();
-                    persistRememberedCredentials(host, username, password, domain, remember.isChecked());
+                    final String loginHost = host;
+                    final String loginUsername = username;
+                    final String loginPassword = password;
+                    final String loginDomain = domain;
+                    final boolean rememberLogin = remember.isChecked();
+                    if (!rememberLogin) {
+                        persistRememberedCredentials(loginHost, loginUsername, loginPassword,
+                                loginDomain, false);
+                    }
                     worker.execute(() -> {
                         try {
-                            List<String> found = SmbClient.listShares(host, username, password, domain);
+                            List<String> found = SmbClient.listShares(loginHost, loginUsername,
+                                    loginPassword, loginDomain);
                             runOnUiThread(() -> {
+                                persistRememberedCredentials(loginHost, loginUsername, loginPassword,
+                                        loginDomain, rememberLogin);
                                 shares.clear();
                                 for (String shareName : found) {
                                     if (!isHiddenShare(shareName)) shares.add(shareName);
