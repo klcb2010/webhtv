@@ -368,8 +368,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         }
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int dialogWidth = Math.min((int) (screenWidth * 0.72f),
-                Math.max(dp(180), (int) Math.ceil(widestAction) + dp(64)));
+        // 给菜单文字留足空间，避免长选项被过早截断；同时限制面板不要贴满屏幕。
+        int dialogWidth = Math.min((int) (screenWidth * 0.90f),
+                Math.max(dp(220), (int) Math.ceil(widestAction) + dp(96)));
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
             dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
