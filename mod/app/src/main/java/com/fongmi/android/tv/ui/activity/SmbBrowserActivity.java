@@ -463,13 +463,27 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private String rememberedCredentialsKey(String targetHost) {
+        return "auth_" + targetHost.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
     private void loadRememberedCredentials(String targetHost) {
         username = "";
         password = "";
         domain = "";
-        if (targetHost == null || targetHost.isEmpty()) return;
-        String saved = getSharedPreferences("smb_hosts", MODE_PRIVATE)
-                .getString("auth_" + targetHost, null);
+        if (targetHost == null || targetHost.trim().isEmpty()) return;
+        android.content.SharedPreferences preferences =
+                getSharedPreferences("smb_hosts", MODE_PRIVATE);
+        String key = rememberedCredentialsKey(targetHost);
+        String saved = preferences.getString(key, null);
+        // 兼容旧版本按原始主机名保存的记录，并在读取时迁移到标准化键名。
+        if (saved == null) {
+            String legacyKey = "auth_" + targetHost;
+            saved = preferences.getString(legacyKey, null);
+            if (saved != null && !legacyKey.equals(key)) {
+                preferences.edit().putString(key, saved).remove(legacyKey).commit();
+            }
+        }
         if (saved == null || saved.isEmpty()) return;
         try {
             JSONObject credentials = new JSONObject(saved);
@@ -477,17 +491,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
             password = credentials.optString("password", "");
             domain = credentials.optString("domain", "");
         } catch (Exception ignored) {
+            username = "";
+            password = "";
+            domain = "";
         }
     }
 
     private void persistRememberedCredentials(String targetHost, String user,
                                                String pass, String realm, boolean remember) {
-        if (targetHost == null || targetHost.isEmpty()) return;
+        if (targetHost == null || targetHost.trim().isEmpty()) return;
         android.content.SharedPreferences.Editor editor =
                 getSharedPreferences("smb_hosts", MODE_PRIVATE).edit();
-        String key = "auth_" + targetHost;
+        String key = rememberedCredentialsKey(targetHost);
+        String legacyKey = "auth_" + targetHost;
         if (!remember) {
-            editor.remove(key).apply();
+            editor.remove(key).remove(legacyKey).commit();
             return;
         }
         try {
@@ -495,7 +513,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
             credentials.put("username", user);
             credentials.put("password", pass);
             credentials.put("domain", realm);
-            editor.putString(key, credentials.toString()).apply();
+            // 使用同步提交，确保用户退出或重新打开页面前凭据已写入。
+            editor.putString(key, credentials.toString()).remove(legacyKey).commit();
         } catch (Exception ignored) {
         }
     }
@@ -1356,17 +1375,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     final String loginPassword = password;
                     final String loginDomain = domain;
                     final boolean rememberLogin = remember.isChecked();
-                    if (!rememberLogin) {
-                        persistRememberedCredentials(loginHost, loginUsername, loginPassword,
-                                loginDomain, false);
-                    }
+                    // 点击登录时立即保存；即使服务器拒绝枚举共享列表，也不会丢失已输入凭据。
+                    persistRememberedCredentials(loginHost, loginUsername, loginPassword,
+                            loginDomain, rememberLogin);
                     worker.execute(() -> {
                         try {
                             List<String> found = SmbClient.listShares(loginHost, loginUsername,
                                     loginPassword, loginDomain);
                             runOnUiThread(() -> {
-                                persistRememberedCredentials(loginHost, loginUsername, loginPassword,
-                                        loginDomain, rememberLogin);
                                 shares.clear();
                                 for (String shareName : found) {
                                     if (!isHiddenShare(shareName)) shares.add(shareName);
