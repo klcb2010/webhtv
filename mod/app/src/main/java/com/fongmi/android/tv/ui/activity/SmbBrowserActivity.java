@@ -25,6 +25,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.AbsListView;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -183,20 +184,37 @@ public class SmbBrowserActivity extends AppCompatActivity {
         adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
-                TextView item = (TextView) super.getView(position, convertView, parent);
+                LinearLayout row;
+                TextView item;
+                if (convertView instanceof LinearLayout && ((LinearLayout) convertView).getChildCount() > 0) {
+                    row = (LinearLayout) convertView;
+                    item = (TextView) row.getChildAt(0);
+                } else {
+                    row = new LinearLayout(SmbBrowserActivity.this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+                    row.setFocusable(false);
+                    item = new TextView(SmbBrowserActivity.this);
+                    row.addView(item, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                }
+                item.setText(getItem(position));
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setTextSize(18);
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setPadding(dp(16), dp(10), dp(16), dp(10));
                 item.setMinHeight(dp(54));
-                item.setGravity(Gravity.CENTER_VERTICAL);
-                item.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                item.setMaxWidth(Math.max(dp(160), getResources().getDisplayMetrics().widthPixels - dp(64)));
                 item.setBackground(smbItemBackground());
-                item.setSelected(position == focusedItemPosition);
-                item.setActivated(position == focusedItemPosition);
-                return item;
+                boolean selected = position == focusedItemPosition;
+                item.setSelected(selected);
+                item.setActivated(selected);
+                row.setSelected(selected);
+                row.setActivated(selected);
+                row.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                return row;
             }
         };
         list.setSelector(new ColorDrawable(Color.TRANSPARENT));
@@ -332,6 +350,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 boolean selected = index == position;
                 child.setSelected(selected);
                 child.setActivated(selected);
+                if (child instanceof ViewGroup && ((ViewGroup) child).getChildCount() > 0) {
+                    View item = ((ViewGroup) child).getChildAt(0);
+                    item.setSelected(selected);
+                    item.setActivated(selected);
+                }
             }
         }
     }
@@ -398,6 +421,43 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private void loadRememberedCredentials(String targetHost) {
+        username = "";
+        password = "";
+        domain = "";
+        if (targetHost == null || targetHost.isEmpty()) return;
+        String saved = getSharedPreferences("smb_hosts", MODE_PRIVATE)
+                .getString("auth_" + targetHost, null);
+        if (saved == null || saved.isEmpty()) return;
+        try {
+            JSONObject credentials = new JSONObject(saved);
+            username = credentials.optString("username", "");
+            password = credentials.optString("password", "");
+            domain = credentials.optString("domain", "");
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void persistRememberedCredentials(String targetHost, String user,
+                                               String pass, String realm, boolean remember) {
+        if (targetHost == null || targetHost.isEmpty()) return;
+        android.content.SharedPreferences.Editor editor =
+                getSharedPreferences("smb_hosts", MODE_PRIVATE).edit();
+        String key = "auth_" + targetHost;
+        if (!remember) {
+            editor.remove(key).apply();
+            return;
+        }
+        try {
+            JSONObject credentials = new JSONObject();
+            credentials.put("username", user);
+            credentials.put("password", pass);
+            credentials.put("domain", realm);
+            editor.putString(key, credentials.toString()).apply();
+        } catch (Exception ignored) {
+        }
     }
 
     private void loadSavedHosts() {
@@ -1141,6 +1201,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     private void connectHost(String value, boolean withCredentials) {
         host = value;
+        loadRememberedCredentials(value);
         loginAttempted = false;
         setStatus("正在连接 " + value + " …");
         worker.execute(() -> {
@@ -1185,10 +1246,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         EditText realm = field(getString(R.string.smb_domain), InputType.TYPE_CLASS_TEXT);
         user.setText(username);
+        pass.setText(password);
         realm.setText(domain);
+        CheckBox remember = new CheckBox(this);
+        remember.setText("记住登录信息");
+        remember.setTextColor(MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorOnSurface, Color.WHITE));
+        remember.setChecked(true);
         form.addView(user);
         form.addView(pass);
         form.addView(realm);
+        form.addView(remember);
 
         smbDialogBuilder()
                 .setTitle(getString(R.string.smb_auth_title) + " · " + host)
@@ -1198,6 +1266,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     username = user.getText().toString().trim();
                     password = pass.getText().toString();
                     domain = realm.getText().toString().trim();
+                    persistRememberedCredentials(host, username, password, domain, remember.isChecked());
                     worker.execute(() -> {
                         try {
                             List<String> found = SmbClient.listShares(host, username, password, domain);
