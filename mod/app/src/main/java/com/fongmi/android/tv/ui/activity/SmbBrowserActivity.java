@@ -368,9 +368,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         }
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        // 给菜单文字留足空间，避免长选项被过早截断；同时限制面板不要贴满屏幕。
-        int dialogWidth = Math.min((int) (screenWidth * 0.90f),
-                Math.max(dp(220), (int) Math.ceil(widestAction) + dp(96)));
+        // 按最长菜单文字自适应弹窗宽度，仅在接近屏幕边缘时才限制宽度。
+        // 额外空间同时覆盖文字内边距、ListView 默认内边距和 Dialog 窗口装饰留白。
+        int dialogWidth = Math.min(screenWidth - dp(32),
+                Math.max(dp(220), (int) Math.ceil(widestAction) + dp(144)));
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
             dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -407,8 +408,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     item.setGravity(Gravity.CENTER_VERTICAL);
                     item.setPadding(dp(9), dp(8), dp(9), dp(8));
                     item.setMinHeight(dp(48));
-                    item.setMaxWidth(Math.max(dp(120),
-                            getResources().getDisplayMetrics().widthPixels - dp(96)));
+                    item.setMaxWidth(Math.max(dp(160),
+                            getResources().getDisplayMetrics().widthPixels - dp(64)));
                     item.setTextSize(16);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
@@ -420,7 +421,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setSingleLine(true);
-                item.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                // 弹窗已按最长文字自适应宽度，不主动用省略号截断菜单项。
+                item.setEllipsize(null);
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
 
