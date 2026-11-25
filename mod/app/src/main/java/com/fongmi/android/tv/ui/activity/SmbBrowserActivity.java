@@ -96,6 +96,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private ListView list;
     private ArrayAdapter<String> adapter;
     private int focusedItemPosition = ListView.INVALID_POSITION;
+    private boolean listOkLongPressHandled;
 
     private Mode mode = Mode.HOSTS;
     private String host;
@@ -228,7 +229,28 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 back.requestFocus();
                 return true;
             }
-            return false;
+            boolean okKey = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                    || keyCode == KeyEvent.KEYCODE_ENTER
+                    || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
+            if (!isTvDevice() || !okKey) return false;
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) {
+                    listOkLongPressHandled = false;
+                } else if (!listOkLongPressHandled) {
+                    listOkLongPressHandled = true;
+                    showSelectedItemActions();
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (!listOkLongPressHandled) {
+                    int position = list.getSelectedItemPosition();
+                    if (position != ListView.INVALID_POSITION) onItemClick(position);
+                }
+                listOkLongPressHandled = false;
+                return true;
+            }
+            return true;
         });
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
         list.setOnItemLongClickListener((parent, view, position, id) -> {
@@ -1185,6 +1207,24 @@ public class SmbBrowserActivity extends AppCompatActivity {
         });
     }
 
+    private void showSelectedItemActions() {
+        int position = list == null ? ListView.INVALID_POSITION : list.getSelectedItemPosition();
+        if (position < 0) return;
+        if (showingHiddenHosts || showingHiddenFolders) {
+            activateHiddenItem(position);
+        } else if (showingFavorites) {
+            showFavoriteActions(position);
+        } else if (mode == Mode.SHARES && position < shares.size()) {
+            showShareActions(shares.get(position));
+        } else if (mode == Mode.FILES && position < visibleFiles.size()) {
+            SmbClient.Entry entry = visibleFiles.get(position);
+            String remote = path.isEmpty() ? entry.name : path + "\\" + entry.name;
+            showFileActions(remote, entry.directory);
+        } else if (mode == Mode.HOSTS && position < hosts.size()) {
+            showHostActions(hosts.get(position));
+        }
+    }
+
     private void onItemClick(int position) {
         if(showingFavorites) { openFavorite(position); return; }
         if(showingHiddenHosts||showingHiddenFolders) { if(isTvDevice()) activateHiddenItem(position); return; }
@@ -1764,30 +1804,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 Toast.makeText(this, "未授予存储权限，无法复制到 Download", Toast.LENGTH_LONG).show();
             }
         }
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (isTvDevice() && (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_MODE)) {
-            int position = list == null ? ListView.INVALID_POSITION : list.getSelectedItemPosition();
-            if (mode == Mode.SHARES && position >= 0 && position < shares.size()) {
-                showShareActions(shares.get(position));
-                return true;
-            }
-            if (mode == Mode.FILES) {
-                int filePosition=position;
-                if(filePosition>=0&&filePosition<visibleFiles.size()) {
-                    SmbClient.Entry entry=visibleFiles.get(filePosition);
-                    String remote=path.isEmpty()?entry.name:path+"\\"+entry.name;
-                    showFileActions(remote,entry.directory); return true;
-                }
-            }
-            if (mode == Mode.FAVORITES && position >= 0 && position < favorites.size()) {
-                showFavoriteActions(position);
-                return true;
-            }
-        }
-        return super.onKeyDown(keyCode, event);
     }
 
     @Override
