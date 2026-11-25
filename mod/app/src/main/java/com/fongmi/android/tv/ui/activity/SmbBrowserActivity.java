@@ -628,7 +628,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         final String targetUser = username;
         final String targetPassword = password;
         final String targetDomain = domain;
-        final String name = remote.substring(Math.max(remote.lastIndexOf('\\\\'),
+        final String name = remote.substring(Math.max(remote.lastIndexOf('\\'),
                 remote.lastIndexOf('/')) + 1);
         if (name.isEmpty() || ".".equals(name) || "..".equals(name)) {
             Toast.makeText(this, "无法识别要复制的项目名称", Toast.LENGTH_LONG).show();
