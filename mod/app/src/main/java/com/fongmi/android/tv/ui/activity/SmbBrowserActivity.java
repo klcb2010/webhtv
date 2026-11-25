@@ -229,28 +229,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 back.requestFocus();
                 return true;
             }
-            boolean okKey = keyCode == KeyEvent.KEYCODE_DPAD_CENTER
-                    || keyCode == KeyEvent.KEYCODE_ENTER
-                    || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER;
-            if (!isTvDevice() || !okKey) return false;
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                if (event.getRepeatCount() == 0) {
-                    listOkLongPressHandled = false;
-                } else if (!listOkLongPressHandled) {
-                    listOkLongPressHandled = true;
-                    showSelectedItemActions();
-                }
-                return true;
-            }
-            if (event.getAction() == KeyEvent.ACTION_UP) {
-                if (!listOkLongPressHandled) {
-                    int position = list.getSelectedItemPosition();
-                    if (position != ListView.INVALID_POSITION) onItemClick(position);
-                }
-                listOkLongPressHandled = false;
-                return true;
-            }
-            return true;
+            return false;
         });
         list.setOnItemClickListener((parent, view, position, id) -> onItemClick(position));
         list.setOnItemLongClickListener((parent, view, position, id) -> {
@@ -1228,6 +1207,33 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (isTvDevice() && list != null && list.hasFocus()
+                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) {
+                    listOkLongPressHandled = false;
+                } else if (!listOkLongPressHandled) {
+                    listOkLongPressHandled = true;
+                    showSelectedItemActions();
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (!listOkLongPressHandled) {
+                    int position = list.getSelectedItemPosition();
+                    if (position != ListView.INVALID_POSITION) onItemClick(position);
+                }
+                listOkLongPressHandled = false;
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void showSelectedItemActions() {
