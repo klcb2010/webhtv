@@ -394,8 +394,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setText(getItem(position));
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+                item.setSingleLine(true);
+                item.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
+
+                // ListView 会把整行按可用宽度测量；显式固定内部文字项宽度，
+                // 避免焦点背景跟随整行被拉宽。
+                int maxItemWidth = (int) (getResources().getDisplayMetrics().widthPixels * 0.72f);
+                int textWidth = (int) Math.ceil(item.getPaint().measureText(
+                        item.getText().toString()));
+                int itemWidth = Math.min(maxItemWidth,
+                        textWidth + item.getPaddingLeft() + item.getPaddingRight());
+                ViewGroup.LayoutParams itemParams = item.getLayoutParams();
+                itemParams.width = Math.max(dp(48), itemWidth);
+                item.setLayoutParams(itemParams);
+
                 row.setLayoutParams(new AbsListView.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
