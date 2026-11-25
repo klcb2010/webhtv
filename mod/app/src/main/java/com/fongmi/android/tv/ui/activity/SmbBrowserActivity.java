@@ -184,37 +184,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
         adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
-                LinearLayout row;
-                TextView item;
-                if (convertView instanceof LinearLayout && ((LinearLayout) convertView).getChildCount() > 0) {
-                    row = (LinearLayout) convertView;
-                    item = (TextView) row.getChildAt(0);
-                } else {
-                    row = new LinearLayout(SmbBrowserActivity.this);
-                    row.setOrientation(LinearLayout.HORIZONTAL);
-                    row.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
-                    row.setFocusable(false);
-                    item = new TextView(SmbBrowserActivity.this);
-                    row.addView(item, new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                }
-                item.setText(getItem(position));
+                TextView item = (TextView) super.getView(position, convertView, parent);
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setTextSize(18);
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setPadding(dp(16), dp(10), dp(16), dp(10));
                 item.setMinHeight(dp(54));
-                item.setMaxWidth(Math.max(dp(160), getResources().getDisplayMetrics().widthPixels - dp(64)));
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 item.setBackground(smbItemBackground());
-                boolean selected = position == focusedItemPosition;
-                item.setSelected(selected);
-                item.setActivated(selected);
-                row.setSelected(selected);
-                row.setActivated(selected);
-                row.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                return row;
+                item.setSelected(position == focusedItemPosition);
+                item.setActivated(position == focusedItemPosition);
+                return item;
             }
         };
         list.setSelector(new ColorDrawable(Color.TRANSPARENT));
@@ -364,25 +347,57 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void applyDialogFocusFrame(ListView dialogList) {
-        android.graphics.drawable.GradientDrawable focused =
-                new android.graphics.drawable.GradientDrawable();
-        focused.setColor(0x223B9DFF);
-        focused.setCornerRadius(dp(8));
-        focused.setStroke(dp(2), 0xFF8CCBFF);
+        if (dialogList == null) return;
+        ListAdapter source = dialogList.getAdapter();
+        if (source == null) return;
+        List<String> actions = new ArrayList<>();
+        for (int i = 0; i < source.getCount(); i++) {
+            actions.add(String.valueOf(source.getItem(i)));
+        }
 
-        android.graphics.drawable.StateListDrawable selector =
-                new android.graphics.drawable.StateListDrawable();
-        selector.addState(new int[]{android.R.attr.state_focused}, focused);
-        selector.addState(new int[]{android.R.attr.state_activated}, focused);
-        selector.addState(new int[]{android.R.attr.state_selected}, focused);
-
-        android.graphics.drawable.GradientDrawable normal =
-                new android.graphics.drawable.GradientDrawable();
-        normal.setColor(Color.TRANSPARENT);
-        selector.addState(new int[]{}, normal);
-
-        dialogList.setSelector(selector);
+        dialogList.setSelector(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDrawSelectorOnTop(false);
+        dialogList.setAdapter(new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_1, actions) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                TextView item = (TextView) super.getView(position, convertView, parent);
+                item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
+                        com.google.android.material.R.attr.colorOnSurface, Color.WHITE));
+                item.setTextSize(18);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setPadding(dp(16), dp(10), dp(16), dp(10));
+                item.setMinHeight(dp(48));
+                item.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                item.setBackground(smbItemBackground());
+                boolean selected = position == dialogList.getSelectedItemPosition();
+                item.setSelected(selected);
+                item.setActivated(selected);
+                return item;
+            }
+        });
+        dialogList.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view,
+                                       int position, long id) {
+                for (int i = 0; i < dialogList.getChildCount(); i++) {
+                    View child = dialogList.getChildAt(i);
+                    boolean selected = dialogList.getFirstVisiblePosition() + i == position;
+                    child.setSelected(selected);
+                    child.setActivated(selected);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+                for (int i = 0; i < dialogList.getChildCount(); i++) {
+                    View child = dialogList.getChildAt(i);
+                    child.setSelected(false);
+                    child.setActivated(false);
+                }
+            }
+        });
         dialogList.setSelection(0);
         dialogList.requestFocus();
     }
