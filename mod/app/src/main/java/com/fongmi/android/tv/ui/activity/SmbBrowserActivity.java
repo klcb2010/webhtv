@@ -380,10 +380,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     row.setFocusable(false);
                     item = new TextView(SmbBrowserActivity.this);
                     item.setGravity(Gravity.CENTER_VERTICAL);
-                    item.setPadding(dp(16), dp(10), dp(16), dp(10));
-                    item.setMinHeight(dp(54));
-                    item.setMaxWidth(dp(420));
-                    item.setTextSize(18);
+                    item.setPadding(dp(9), dp(8), dp(9), dp(8));
+                    item.setMinHeight(dp(48));
+                    item.setMaxWidth(Math.max(dp(120),
+                            getResources().getDisplayMetrics().widthPixels - dp(96)));
+                    item.setTextSize(16);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
                     row.addView(item, new LinearLayout.LayoutParams(
@@ -473,18 +474,29 @@ public class SmbBrowserActivity extends AppCompatActivity {
         password = "";
         domain = "";
         if (targetHost == null || targetHost.trim().isEmpty()) return;
-        android.content.SharedPreferences preferences =
-                getSharedPreferences("smb_hosts", MODE_PRIVATE);
+
         String key = rememberedCredentialsKey(targetHost);
-        String saved = preferences.getString(key, null);
-        // 兼容旧版本按原始主机名保存的记录，并在读取时迁移到标准化键名。
+        String saved = getSharedPreferences("smb_credentials", MODE_PRIVATE)
+                .getString(key, null);
+
+        // 兼容此前保存在 smb_hosts 中的凭据，读取后迁移到独立凭据文件。
         if (saved == null) {
-            String legacyKey = "auth_" + targetHost;
-            saved = preferences.getString(legacyKey, null);
-            if (saved != null && !legacyKey.equals(key)) {
-                preferences.edit().putString(key, saved).remove(legacyKey).commit();
+            android.content.SharedPreferences legacy =
+                    getSharedPreferences("smb_hosts", MODE_PRIVATE);
+            saved = legacy.getString(key, null);
+            if (saved == null) {
+                String legacyKey = "auth_" + targetHost;
+                saved = legacy.getString(legacyKey, null);
+                if (saved != null && !legacyKey.equals(key)) {
+                    legacy.edit().remove(legacyKey).commit();
+                }
+            }
+            if (saved != null) {
+                getSharedPreferences("smb_credentials", MODE_PRIVATE)
+                        .edit().putString(key, saved).commit();
             }
         }
+
         if (saved == null || saved.isEmpty()) return;
         try {
             JSONObject credentials = new JSONObject(saved);
@@ -499,24 +511,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void persistRememberedCredentials(String targetHost, String user,
-                                               String pass, String realm, boolean remember) {
+                                               String pass, String realm) {
         if (targetHost == null || targetHost.trim().isEmpty()) return;
-        android.content.SharedPreferences.Editor editor =
-                getSharedPreferences("smb_hosts", MODE_PRIVATE).edit();
-        String key = rememberedCredentialsKey(targetHost);
-        String legacyKey = "auth_" + targetHost;
-        if (!remember) {
-            editor.remove(key).remove(legacyKey).commit();
-            return;
-        }
         try {
             JSONObject credentials = new JSONObject();
-            credentials.put("username", user);
-            credentials.put("password", pass);
-            credentials.put("domain", realm);
-            // 使用同步提交，确保用户退出或重新打开页面前凭据已写入。
-            editor.putString(key, credentials.toString()).remove(legacyKey).commit();
-        } catch (Exception ignored) {
+            credentials.put("username", user == null ? "" : user);
+            credentials.put("password", pass == null ? "" : pass);
+            credentials.put("domain", realm == null ? "" : realm);
+            // 使用独立文件并同步提交，登录成功与否、是否列出共享目录都不影响保存。
+            boolean saved = getSharedPreferences("smb_credentials", MODE_PRIVATE)
+                    .edit().putString(rememberedCredentialsKey(targetHost),
+                            credentials.toString()).commit();
+            if (!saved) android.util.Log.e("WebHTV-SMB", "保存登录凭据失败");
+        } catch (Exception error) {
+            android.util.Log.e("WebHTV-SMB", "保存登录凭据异常", error);
         }
     }
 
@@ -1387,15 +1395,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
         user.setText(username);
         pass.setText(password);
         realm.setText(domain);
-        CheckBox remember = new CheckBox(this);
-        remember.setText("记住登录信息");
-        remember.setTextColor(MaterialColors.getColor(this,
+        TextView rememberHint = new TextView(this);
+        rememberHint.setText("登录信息将自动保存到本机");
+        rememberHint.setTextColor(MaterialColors.getColor(this,
                 com.google.android.material.R.attr.colorOnSurface, Color.WHITE));
-        remember.setChecked(true);
+        rememberHint.setPadding(0, dp(8), 0, dp(4));
         form.addView(user);
         form.addView(pass);
         form.addView(realm);
-        form.addView(remember);
+        form.addView(rememberHint);
 
         smbDialogBuilder()
                 .setTitle(getString(R.string.smb_auth_title) + " · " + host)
@@ -1409,10 +1417,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     final String loginUsername = username;
                     final String loginPassword = password;
                     final String loginDomain = domain;
-                    final boolean rememberLogin = remember.isChecked();
-                    // 点击登录时立即保存；即使服务器拒绝枚举共享列表，也不会丢失已输入凭据。
+                    // 每次点击登录都先同步保存，不受认证结果、共享列表是否为空影响。
                     persistRememberedCredentials(loginHost, loginUsername, loginPassword,
-                            loginDomain, rememberLogin);
+                            loginDomain);
                     worker.execute(() -> {
                         try {
                             List<String> found = SmbClient.listShares(loginHost, loginUsername,
