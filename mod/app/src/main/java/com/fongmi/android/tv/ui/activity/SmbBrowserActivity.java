@@ -469,15 +469,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return "auth_" + targetHost.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
+    private String rememberEnabledKey(String targetHost) {
+        return "remember_enabled_" + targetHost.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
     private void loadRememberedCredentials(String targetHost) {
         username = "";
         password = "";
         domain = "";
         if (targetHost == null || targetHost.trim().isEmpty()) return;
 
+        android.content.SharedPreferences preferences =
+                getSharedPreferences("smb_credentials", MODE_PRIVATE);
+        if (!preferences.getBoolean(rememberEnabledKey(targetHost), true)) return;
+
         String key = rememberedCredentialsKey(targetHost);
-        String saved = getSharedPreferences("smb_credentials", MODE_PRIVATE)
-                .getString(key, null);
+        String saved = preferences.getString(key, null);
 
         // 兼容此前保存在 smb_hosts 中的凭据，读取后迁移到独立凭据文件。
         if (saved == null) {
@@ -1380,8 +1387,19 @@ public class SmbBrowserActivity extends AppCompatActivity {
         });
     }
 
+    private void clearRememberedCredentials(String targetHost) {
+        if (targetHost == null || targetHost.trim().isEmpty()) return;
+        android.content.SharedPreferences preferences =
+                getSharedPreferences("smb_credentials", MODE_PRIVATE);
+        boolean cleared = preferences.edit()
+                .remove(rememberedCredentialsKey(targetHost))
+                .putBoolean(rememberEnabledKey(targetHost), false)
+                .commit();
+        if (!cleared) android.util.Log.e("WebHTV-SMB", "清除登录凭据失败");
+    }
+
     private void showAuthDialog() {
-        // 无论从主机列表还是收藏夹触发登录，都按当前主机重新读取已保存凭据。
+        // 无论从主机列表还是收藏夹触发登录，都按当前主机读取已保存凭据。
         loadRememberedCredentials(host);
         loginAttempted = true;
         LinearLayout form = new LinearLayout(this);
@@ -1395,15 +1413,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
         user.setText(username);
         pass.setText(password);
         realm.setText(domain);
-        TextView rememberHint = new TextView(this);
-        rememberHint.setText("登录信息将自动保存到本机");
-        rememberHint.setTextColor(MaterialColors.getColor(this,
+
+        CheckBox remember = new CheckBox(this);
+        remember.setText("记住登录信息");
+        remember.setTextColor(MaterialColors.getColor(this,
                 com.google.android.material.R.attr.colorOnSurface, Color.WHITE));
-        rememberHint.setPadding(0, dp(8), 0, dp(4));
+        remember.setChecked(getSharedPreferences("smb_credentials", MODE_PRIVATE)
+                .getBoolean(rememberEnabledKey(host), true));
+
+        MaterialButton clearSaved = themedButton("清除已保存登录信息");
+        clearSaved.setOnClickListener(view -> {
+            clearRememberedCredentials(host);
+            remember.setChecked(false);
+            user.setText("");
+            pass.setText("");
+            realm.setText("");
+            username = "";
+            password = "";
+            domain = "";
+            Toast.makeText(this, "已清除该主机保存的登录信息", Toast.LENGTH_SHORT).show();
+        });
+
         form.addView(user);
         form.addView(pass);
         form.addView(realm);
-        form.addView(rememberHint);
+        form.addView(remember);
+        form.addView(clearSaved);
 
         smbDialogBuilder()
                 .setTitle(getString(R.string.smb_auth_title) + " · " + host)
@@ -1417,9 +1452,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     final String loginUsername = username;
                     final String loginPassword = password;
                     final String loginDomain = domain;
-                    // 每次点击登录都先同步保存，不受认证结果、共享列表是否为空影响。
-                    persistRememberedCredentials(loginHost, loginUsername, loginPassword,
-                            loginDomain);
+                    android.content.SharedPreferences preferences =
+                            getSharedPreferences("smb_credentials", MODE_PRIVATE);
+                    boolean rememberEnabled = remember.isChecked();
+                    boolean settingSaved = preferences.edit()
+                            .putBoolean(rememberEnabledKey(loginHost), rememberEnabled)
+                            .commit();
+                    if (!settingSaved) {
+                        android.util.Log.e("WebHTV-SMB", "保存记住登录信息开关状态失败");
+                    }
+                    // 开关开启时，点击登录立即保存；认证失败或共享列表为空也不影响保存。
+                    if (rememberEnabled) {
+                        persistRememberedCredentials(loginHost, loginUsername, loginPassword,
+                                loginDomain);
+                    }
                     worker.execute(() -> {
                         try {
                             List<String> found = SmbClient.listShares(loginHost, loginUsername,
