@@ -375,13 +375,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 } else {
                     row = new LinearLayout(SmbBrowserActivity.this);
                     row.setOrientation(LinearLayout.HORIZONTAL);
-                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                     row.setBackgroundColor(Color.TRANSPARENT);
                     row.setFocusable(false);
                     item = new TextView(SmbBrowserActivity.this);
                     item.setGravity(Gravity.CENTER_VERTICAL);
                     item.setPadding(dp(16), dp(10), dp(16), dp(10));
                     item.setMinHeight(dp(54));
+                    item.setMaxWidth(dp(420));
                     item.setTextSize(18);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
@@ -992,16 +993,35 @@ public class SmbBrowserActivity extends AppCompatActivity {
         setStatus(favorites.isEmpty()?"收藏夹为空":(isTvDevice()?"短按打开，菜单键取消收藏":"短按打开，长按取消收藏"));
     }
     private void openFavorite(int position) {
-        List<String> values=new ArrayList<>(favorites);
-        if(position<0||position>=values.size()) return;
-        String[] p=values.get(position).split("\\n",4); if(p.length!=4)return;
-        host=p[0]; share=p[1]; String remote=p[2]; boolean dir=p[3].equals("D");
-        if(dir) { path=remote; if(path.isEmpty()) openShare(share); else loadDirectory(); return; }
-        int cut=remote.lastIndexOf((char)92); String name=cut<0?remote:remote.substring(cut+1);
-        path=cut<0?"":remote.substring(0,cut);
-        if(SmbClient.isVideo(name)||SmbClient.isAudio(name)) play(remote);
-        else if(SmbClient.isImage(name)) showImage(remote);
-        else if(SmbClient.isApk(name)) installApk(remote);
+        List<String> values = new ArrayList<>(favorites);
+        if (position < 0 || position >= values.size()) return;
+        String[] parts = values.get(position).split("\\n", 4);
+        if (parts.length != 4) return;
+
+        host = parts[0];
+        share = parts[1];
+        String remote = parts[2];
+        boolean directory = "D".equals(parts[3]);
+        loadRememberedCredentials(host);
+
+        if (directory) {
+            // 进入收藏的文件夹后切换为普通目录模式，短按/长按完全复用 SMB 列表逻辑。
+            showingFavorites = false;
+            showingHiddenHosts = false;
+            showingHiddenFolders = false;
+            path = remote;
+            if (path.isEmpty()) openShare(share);
+            else loadDirectory();
+            return;
+        }
+
+        int cut = remote.lastIndexOf((char) 92);
+        String name = cut < 0 ? remote : remote.substring(cut + 1);
+        path = cut < 0 ? "" : remote.substring(0, cut);
+        if (SmbClient.isVideo(name) || SmbClient.isAudio(name)) play(remote);
+        else if (SmbClient.isImage(name)) showImage(remote);
+        else if (SmbClient.isApk(name)) installApk(remote);
+        else Toast.makeText(this, R.string.smb_play_video_only, Toast.LENGTH_SHORT).show();
     }
 
     private void showShareActions(String shareName) {
@@ -1050,20 +1070,33 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void showFavoriteActions(int position) {
         List<String> values = new ArrayList<>(favorites);
         if (position < 0 || position >= values.size()) return;
+        String favorite = values.get(position);
+        String[] parts = favorite.split("\\n", 4);
+        if (parts.length != 4) return;
+
+        host = parts[0];
+        share = parts[1];
+        String remote = parts[2];
+        boolean directory = "D".equals(parts[3]);
+        loadRememberedCredentials(host);
+
         List<String> actions = new ArrayList<>();
         if (position > 0) actions.add("上移");
         if (position < values.size() - 1) actions.add("下移");
+        if (!remote.isEmpty()) actions.add("复制到 Download");
         actions.add("取消收藏");
+
         AlertDialog dialog = smbDialogBuilder()
-                .setTitle("调整收藏夹")
+                .setTitle("收藏项目操作")
                 .setItems(actions.toArray(new String[0]), (target, which) -> {
                     String action = actions.get(which);
                     if ("上移".equals(action)) {
                         moveFavorite(position, -1);
                     } else if ("下移".equals(action)) {
                         moveFavorite(position, 1);
-                    } else {
-                        String favorite = values.get(position);
+                    } else if ("复制到 Download".equals(action)) {
+                        copyToDownload(remote, directory);
+                    } else if ("取消收藏".equals(action)) {
                         if (!favorites.remove(favorite)) return;
                         persistFavorites();
                         showFavorites();
@@ -1340,6 +1373,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void showAuthDialog() {
+        // 无论从主机列表还是收藏夹触发登录，都按当前主机重新读取已保存凭据。
+        loadRememberedCredentials(host);
         loginAttempted = true;
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
