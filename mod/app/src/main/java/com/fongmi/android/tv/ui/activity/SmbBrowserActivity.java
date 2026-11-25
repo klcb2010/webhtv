@@ -356,30 +356,29 @@ public class SmbBrowserActivity extends AppCompatActivity {
         // 收窄的是整个弹出菜单面板背景，而不是焦点框。
         // 根据菜单文字计算窗口宽度，避免 AlertDialog 使用默认的大比例屏幕宽度。
         ListAdapter dialogAdapter = dialogList.getAdapter();
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
         int widestItemWidth = 0;
         if (dialogAdapter != null) {
             TextView widthProbe = new TextView(this);
             widthProbe.setTextSize(16);
             widthProbe.setPadding(dp(9), dp(8), dp(9), dp(8));
+            widthProbe.setSingleLine(true);
+            widthProbe.setHorizontallyScrolling(true);
+            widthProbe.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            widthProbe.setMaxWidth(Math.max(dp(160), screenWidth - dp(96)));
             for (int i = 0; i < dialogAdapter.getCount(); i++) {
                 widthProbe.setText(String.valueOf(dialogAdapter.getItem(i)));
-                widthProbe.setSingleLine(true);
-                widthProbe.setHorizontallyScrolling(true);
                 widthProbe.measure(
                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                        View.MeasureSpec.makeMeasureSpec(dp(64), View.MeasureSpec.AT_MOST));
                 widestItemWidth = Math.max(widestItemWidth, widthProbe.getMeasuredWidth());
             }
         }
-        int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        // 使用真实 TextView 测量结果确定宽度，避免 Paint 字宽与实际布局宽度不一致。
-        // 弹窗只比最长菜单项多出少量窗口留白，不再按固定比例压缩菜单。
-        int dialogWidth = Math.min(screenWidth - dp(32),
-                Math.max(dp(220), widestItemWidth + dp(48)));
-        Window dialogWindow = dialog.getWindow();
-        if (dialogWindow != null) {
-            dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
-        }
+        // 面板按最长菜单项自适应，左右只保留适量窗口留白，并保留屏幕边缘。
+        int dialogWidth = Math.min(screenWidth - dp(48),
+                Math.max(dp(200), widestItemWidth + dp(48)));
         ListAdapter source = dialogList.getAdapter();
         if (source == null) return;
         List<String> actions = new ArrayList<>();
@@ -413,7 +412,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     item.setPadding(dp(9), dp(8), dp(9), dp(8));
                     item.setMinHeight(dp(48));
                     item.setMaxWidth(Math.max(dp(160),
-                            getResources().getDisplayMetrics().widthPixels - dp(64)));
+                            getResources().getDisplayMetrics().widthPixels - dp(96)));
                     item.setTextSize(16);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
@@ -449,6 +448,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 updateDialogActionFocus(dialogList, ListView.INVALID_POSITION);
             }
         });
+        // 在自定义菜单项完成设置后再指定窗口宽度，避免 AlertDialog 后续布局覆盖宽度。
+        Window dialogWindow = dialog.getWindow();
+        if (dialogWindow != null) {
+            dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
         dialogList.setSelection(0);
         dialogList.requestFocus();
     }
