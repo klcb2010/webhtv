@@ -356,22 +356,26 @@ public class SmbBrowserActivity extends AppCompatActivity {
         // 收窄的是整个弹出菜单面板背景，而不是焦点框。
         // 根据菜单文字计算窗口宽度，避免 AlertDialog 使用默认的大比例屏幕宽度。
         ListAdapter dialogAdapter = dialogList.getAdapter();
-        float textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
-                getResources().getDisplayMetrics());
-        android.graphics.Paint widthPaint = new android.graphics.Paint();
-        widthPaint.setTextSize(textSize);
-        float widestAction = 0;
+        int widestItemWidth = 0;
         if (dialogAdapter != null) {
+            TextView widthProbe = new TextView(this);
+            widthProbe.setTextSize(16);
+            widthProbe.setPadding(dp(9), dp(8), dp(9), dp(8));
             for (int i = 0; i < dialogAdapter.getCount(); i++) {
-                widestAction = Math.max(widestAction,
-                        widthPaint.measureText(String.valueOf(dialogAdapter.getItem(i))));
+                widthProbe.setText(String.valueOf(dialogAdapter.getItem(i)));
+                widthProbe.setSingleLine(true);
+                widthProbe.setHorizontallyScrolling(true);
+                widthProbe.measure(
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                widestItemWidth = Math.max(widestItemWidth, widthProbe.getMeasuredWidth());
             }
         }
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        // 按最长菜单文字自适应弹窗宽度，仅在接近屏幕边缘时才限制宽度。
-        // 额外空间同时覆盖文字内边距、ListView 默认内边距和 Dialog 窗口装饰留白。
+        // 使用真实 TextView 测量结果确定宽度，避免 Paint 字宽与实际布局宽度不一致。
+        // 弹窗只比最长菜单项多出少量窗口留白，不再按固定比例压缩菜单。
         int dialogWidth = Math.min(screenWidth - dp(32),
-                Math.max(dp(220), (int) Math.ceil(widestAction) + dp(144)));
+                Math.max(dp(220), widestItemWidth + dp(48)));
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
             dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -421,7 +425,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setSingleLine(true);
-                // 弹窗已按最长文字自适应宽度，不主动用省略号截断菜单项。
+                item.setHorizontallyScrolling(true);
+                // 保持单行横向布局，禁止长菜单项被挤压后自动换行。
                 item.setEllipsize(null);
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
