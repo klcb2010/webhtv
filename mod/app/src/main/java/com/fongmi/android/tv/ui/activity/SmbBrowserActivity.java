@@ -31,14 +31,12 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.ListAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.activity.OnBackPressedCallback;
-import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
@@ -77,6 +75,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private static final int REQUEST_INSTALL_APK_PERMISSION = 7302;
     private static final int REQUEST_COPY_STORAGE_PERMISSION = 7303;
     private static final String LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK";
+    private static final int MENU_ITEM_TEXT_SIZE = 16;
+    private static final int MENU_ITEM_MIN_TEXT_SIZE = 12;
+    private static final int MENU_PANEL_MIN_WIDTH_DP = 96;
+    private static final int MENU_PANEL_EDGE_DP = 24;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<String> displayItems = new ArrayList<>();
@@ -348,50 +350,106 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground());
     }
 
-    private void applyDialogFocusFrame(AlertDialog dialog) {
-        if (dialog == null) return;
-        ListView dialogList = dialog.getListView();
-        if (dialogList == null) return;
+    private interface SmbActionListener {
+        void onSelect(int index);
+    }
 
-        // 收窄的是整个弹出菜单面板背景，而不是焦点框。
-        // 根据菜单文字计算窗口宽度，避免 AlertDialog 使用默认的大比例屏幕宽度。
-        ListAdapter dialogAdapter = dialogList.getAdapter();
+    /**
+     * 长按操作菜单。
+     *
+     * 面板宽度直接由「最长菜单项文字」决定，不再交给 AlertDialog 计算：
+     * AlertDialog 的窗口最小宽度（windowMinWidth）、内容区左右 padding、背景 inset
+     * 三者叠加，会导致同一个数字既算不出窄面板、也保证不了文字单行完整显示。
+     * 这里改为自绘面板：先用与实际菜单项完全一致的字体/字号/内边距测出最长项宽度，
+     * 再按该宽度定面板和窗口宽度，面板背景铺满窗口，菜单项拿到的宽度必然不小于文字宽度。
+     */
+    private void showSmbActionMenu(String title, String[] actions, SmbActionListener listener) {
+        if (actions == null || actions.length == 0) return;
+
+        final int itemPaddingH = dp(9);
+        final int itemPaddingV = dp(8);
+        final int panelPaddingH = dp(6);
+        final int panelPaddingV = dp(6);
+
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int widestItemWidth = 0;
-        if (dialogAdapter != null) {
-            TextView widthProbe = new TextView(this);
-            widthProbe.setTextSize(16);
-            widthProbe.setPadding(dp(9), dp(8), dp(9), dp(8));
-            widthProbe.setSingleLine(true);
-            widthProbe.setHorizontallyScrolling(true);
-            widthProbe.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT));
-            widthProbe.setMaxWidth(Math.max(dp(160), screenWidth - dp(96)));
-            for (int i = 0; i < dialogAdapter.getCount(); i++) {
-                widthProbe.setText(String.valueOf(dialogAdapter.getItem(i)));
-                widthProbe.measure(
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                        View.MeasureSpec.makeMeasureSpec(dp(64), View.MeasureSpec.AT_MOST));
-                widestItemWidth = Math.max(widestItemWidth, widthProbe.getMeasuredWidth());
-            }
+        // 面板宽度上限只受屏幕物理宽度约束（左右各留安全边距）。
+        // 这里不使用"屏宽百分比"上限：百分比上限会在长文字时把面板强行缩窄，
+        // 与"菜单文字必须完整单行、不允许省略号、不允许换行"直接冲突。
+        int hardLimit = Math.max(dp(MENU_PANEL_MIN_WIDTH_DP), screenWidth - dp(MENU_PANEL_EDGE_DP) * 2);
+
+        // 1) 面板宽度 = 最长菜单项实际宽度 + 面板左右内边距 + 取整余量。
+        int itemTextSize = MENU_ITEM_TEXT_SIZE;
+        int widestItem = measureSmbMenuItemWidth(actions, itemTextSize, itemPaddingH, itemPaddingV);
+        int panelWidth = widestItem + panelPaddingH * 2 + dp(2);
+        // 2) 万一单条菜单文字接近整屏宽，逐级缩小菜单项字号，而不是截断面板宽度；
+        //    只有缩到最小字号仍放不下（意味着文字本身超过整屏）才退到屏幕安全宽度。
+        while (panelWidth > hardLimit && itemTextSize > MENU_ITEM_MIN_TEXT_SIZE) {
+            itemTextSize--;
+            widestItem = measureSmbMenuItemWidth(actions, itemTextSize, itemPaddingH, itemPaddingV);
+            panelWidth = widestItem + panelPaddingH * 2 + dp(2);
         }
-        // 面板按最长菜单项自适应，左右只保留适量窗口留白，并保留屏幕边缘。
-        int dialogWidth = Math.min(screenWidth - dp(48),
-                Math.max(dp(200), widestItemWidth + dp(48)));
-        ListAdapter source = dialogList.getAdapter();
-        if (source == null) return;
-        List<String> actions = new ArrayList<>();
-        for (int i = 0; i < source.getCount(); i++) {
-            actions.add(String.valueOf(source.getItem(i)));
+        // 3) 缩到最小字号仍超过屏幕安全宽度（意味着单条文字本身接近/超过整屏）时，
+        //    以"文字完整显示"为优先，允许面板贴到屏幕边缘，只保留 4dp 防裁剪边距。
+        if (panelWidth > hardLimit) {
+            int absoluteLimit = Math.max(dp(MENU_PANEL_MIN_WIDTH_DP), screenWidth - dp(4));
+            panelWidth = Math.min(panelWidth, absoluteLimit);
+        }
+        final int finalItemTextSize = itemTextSize;
+        final int finalWidestItem = widestItem;
+        final int finalPanelWidth = Math.max(dp(MENU_PANEL_MIN_WIDTH_DP), panelWidth);
+
+        if (logActive()) {
+            android.util.Log.d("WebHTV-SMB", "SMB-MENU width=" + finalPanelWidth
+                    + " widestItem=" + finalWidestItem + " textSize=" + finalItemTextSize
+                    + " screen=" + screenWidth + " items=" + actions.length);
         }
 
-        dialogList.setSelector(new ColorDrawable(Color.TRANSPARENT));
-        dialogList.setDrawSelectorOnTop(false);
-        dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
-        dialogList.setDividerHeight(dp(5));
-        dialogList.setAdapter(new ArrayAdapter<String>(this,
-                android.R.layout.simple_list_item_1, actions) {
+        FrameLayout panel = new FrameLayout(this);
+        panel.setBackground(smbDialogBackground());
+        panel.setPadding(panelPaddingH, panelPaddingV, panelPaddingH, panelPaddingV);
+        panel.setMinimumWidth(0);
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+                finalPanelWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        panelParams.gravity = Gravity.CENTER;
+        panel.setLayoutParams(panelParams);
+
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        panel.addView(column, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        int textColor = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE);
+
+        // 标题只做单行展示，不参与面板宽度计算：标题是文件路径或主机地址，
+        // 一旦参与就会把窄面板撑到屏幕宽度，与「按最长菜单项自适应」相冲突。
+        if (title != null && !title.isEmpty()) {
+            TextView heading = new TextView(this);
+            heading.setText(title);
+            heading.setTextSize(finalItemTextSize);
+            heading.setTextColor(textColor);
+            heading.setTypeface(null, Typeface.BOLD);
+            heading.setSingleLine(true);
+            heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            heading.setPadding(dp(12), dp(10), dp(12), dp(6));
+            column.addView(heading, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        final ListView menuList = new ListView(this);
+        menuList.setFocusable(true);
+        menuList.setFocusableInTouchMode(true);
+        menuList.setVerticalScrollBarEnabled(false);
+        menuList.setHorizontalScrollBarEnabled(false);
+        menuList.setSelector(new ColorDrawable(Color.TRANSPARENT));
+        menuList.setDrawSelectorOnTop(false);
+        menuList.setDivider(new ColorDrawable(Color.TRANSPARENT));
+        menuList.setDividerHeight(dp(5));
+        menuList.setBackgroundColor(Color.TRANSPARENT);
+
+        final List<String> entries = java.util.Arrays.asList(actions);
+        menuList.setAdapter(new ArrayAdapter<String>(this,
+                android.R.layout.simple_list_item_1, entries) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 LinearLayout row;
@@ -409,11 +467,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     row.setFocusable(false);
                     item = new TextView(SmbBrowserActivity.this);
                     item.setGravity(Gravity.CENTER_VERTICAL);
-                    item.setPadding(dp(9), dp(8), dp(9), dp(8));
+                    item.setPadding(itemPaddingH, itemPaddingV, itemPaddingH, itemPaddingV);
                     item.setMinHeight(dp(48));
-                    item.setMaxWidth(Math.max(dp(160),
-                            getResources().getDisplayMetrics().widthPixels - dp(96)));
-                    item.setTextSize(16);
+                    item.setTextSize(finalItemTextSize);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
                     row.addView(item, new LinearLayout.LayoutParams(
@@ -421,14 +477,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             ViewGroup.LayoutParams.WRAP_CONTENT));
                 }
                 item.setText(getItem(position));
-                item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
-                        com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+                item.setTextColor(textColor);
+                // 菜单项永远单行横向排布：不换行、不省略；宽度由面板宽度保证，而不是压缩文字区域。
                 item.setSingleLine(true);
                 item.setHorizontallyScrolling(true);
-                // 保持单行横向布局，禁止长菜单项被挤压后自动换行。
                 item.setEllipsize(null);
-                item.setSelected(position == dialogList.getSelectedItemPosition());
-                item.setActivated(position == dialogList.getSelectedItemPosition());
+                // 不再限制菜单项自身最大宽度：宽度由面板宽度保证，文字区不被压缩。
+                int selected = menuList.getSelectedItemPosition();
+                item.setSelected(position == selected);
+                item.setActivated(position == selected);
 
                 row.setLayoutParams(new AbsListView.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -436,25 +493,126 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 return row;
             }
         });
-        dialogList.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+        menuList.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view,
                                        int position, long id) {
-                updateDialogActionFocus(dialogList, position);
+                updateDialogActionFocus(menuList, position);
             }
 
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {
-                updateDialogActionFocus(dialogList, ListView.INVALID_POSITION);
+                updateDialogActionFocus(menuList, ListView.INVALID_POSITION);
             }
         });
-        // 在自定义菜单项完成设置后再指定窗口宽度，避免 AlertDialog 后续布局覆盖宽度。
+        column.addView(menuList, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final Dialog dialog = new Dialog(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.setContentView(panel);
+        menuList.setOnItemClickListener((parent, view, position, id) -> {
+            dialog.dismiss();
+            if (listener != null) listener.onSelect(position);
+        });
+
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
-            dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            // 面板背景由 panel 自己绘制；窗口背景保持透明，避免 inset 造成背景与面板不同宽。
+            dialogWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            View decor = dialogWindow.getDecorView();
+            decor.setPadding(0, 0, 0, 0);
+            // 主题里的 windowMinWidth / windowFixedWidth 最终作用在 DecorView 的最小尺寸上，
+            // 这里显式清零，避免不同系统的浮动窗口策略把面板重新顶宽。
+            decor.setMinimumWidth(0);
+            decor.setMinimumHeight(0);
+            // 直接改 window attributes：宽度就是面板宽度，不经过主题的 WRAP_CONTENT 推断。
+            WindowManager.LayoutParams attrs = dialogWindow.getAttributes();
+            if (attrs != null) {
+                attrs.width = finalPanelWidth;
+                attrs.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                attrs.gravity = Gravity.CENTER;
+                attrs.dimAmount = 0.32f;
+                attrs.flags |= WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+                dialogWindow.setAttributes(attrs);
+            }
+            dialogWindow.setLayout(finalPanelWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         }
-        dialogList.setSelection(0);
-        dialogList.requestFocus();
+        dialog.setOnShowListener(target -> {
+            Window shown = dialog.getWindow();
+            if (shown == null) return;
+            shown.getDecorView().setPadding(0, 0, 0, 0);
+            shown.getDecorView().setMinimumWidth(0);
+            shown.setLayout(finalPanelWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        });
+        dialog.show();
+        menuList.setSelection(0);
+        menuList.requestFocus();
+        // show 之后以实测窗口宽度为准再校正一次，不依赖"主题宽度约束已经消除"这个假设。
+        panel.post(() -> verifyMenuWindowWidth(dialog, finalPanelWidth, 0));
+    }
+
+    /**
+     * 实测并校正菜单窗口宽度。
+     *
+     * 不同系统对浮动窗口可能有额外的最小宽度/宽度修正策略，所以 show 之后读一次 DecorView
+     * 的实际宽度：与期望值不符时把 DecorView 最小宽度清零并重新下发宽度，最多重试两次。
+     * 诊断日志由 {@link #logActive()} 控制，默认关闭。
+     */
+    private void verifyMenuWindowWidth(Dialog dialog, int expectedWidth, int attempt) {
+        if (dialog == null || !dialog.isShowing()) return;
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        View decor = window.getDecorView();
+        if (decor == null) return;
+        int actual = decor.getWidth();
+        if (logActive()) {
+            android.util.Log.d("WebHTV-SMB", "SMB-MENU window expected=" + expectedWidth
+                    + " actual=" + actual + " attempt=" + attempt);
+        }
+        boolean mismatch = actual > 0 && Math.abs(actual - expectedWidth) > 1;
+        boolean notMeasured = actual <= 0;
+        if (attempt < 2 && (mismatch || notMeasured)) {
+            if (mismatch) {
+                decor.setMinimumWidth(0);
+                window.setLayout(expectedWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+            decor.postDelayed(() -> verifyMenuWindowWidth(dialog, expectedWidth, attempt + 1), 120);
+        }
+    }
+
+    /** 诊断日志开关复用类内已有的 logActive()，默认关闭。 */
+
+    /**
+     * 用与菜单项完全一致的字体、字号、内边距，测量最长菜单项的单行宽度。
+     * 同时用 TextView 真实测量与 TextPaint 计算两种方式，取较大值，避免测量偏小导致文字被挤压。
+     */
+    private int measureSmbMenuItemWidth(String[] actions, int textSize, int paddingH, int paddingV) {
+        TextView probe = new TextView(this);
+        // 必须先设置 LayoutParams：setText() 会触发 checkForRelayout，其中会读取 LayoutParams，
+        // 缺少时会抛 NullPointerException（历史崩溃原因）。
+        probe.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        probe.setTextSize(textSize);
+        probe.setPadding(paddingH, paddingV, paddingH, paddingV);
+        probe.setSingleLine(true);
+        probe.setHorizontallyScrolling(true);
+        probe.setEllipsize(null);
+        int widest = 0;
+        for (String action : actions) {
+            String text = action == null ? "" : action;
+            probe.setText(text);
+            probe.measure(
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int measured = probe.getMeasuredWidth();
+            int desired = (int) Math.ceil(android.text.Layout.getDesiredWidth(text, probe.getPaint()))
+                    + paddingH * 2;
+            widest = Math.max(widest, Math.max(measured, desired));
+        }
+        return widest;
     }
 
     private void updateDialogActionFocus(ListView dialogList, int position) {
@@ -760,25 +918,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = directory
                 ? new String[]{"隐藏此文件夹", favoriteAction, "复制到 Download", "请确认删除"}
                 : new String[]{favoriteAction, "复制到 Download", "请确认删除"};
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle(remote).setItems(actions, (target, which) -> {
-                    if (directory && which == 0) {
-                        hideFolder(remote);
-                        return;
-                    }
-                    int favoriteIndex = directory ? 1 : 0;
-                    if (which == favoriteIndex) {
-                        if (saved) favorites.remove(key);
-                        else favorites.add(key);
-                        persistFavorites();
-                    } else if (which == favoriteIndex + 1) {
-                        copyToDownload(remote, directory);
-                    } else if (which == favoriteIndex + 2) {
-                        showDeleteConfirm(remote, directory);
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSmbActionMenu(remote, actions, which -> {
+            if (directory && which == 0) {
+                hideFolder(remote);
+                return;
+            }
+            int favoriteIndex = directory ? 1 : 0;
+            if (which == favoriteIndex) {
+                if (saved) favorites.remove(key);
+                else favorites.add(key);
+                persistFavorites();
+            } else if (which == favoriteIndex + 1) {
+                copyToDownload(remote, directory);
+            } else if (which == favoriteIndex + 2) {
+                showDeleteConfirm(remote, directory);
+            }
+        });
     }
 
     private void copyToDownload(String remote, boolean directory) {
@@ -1083,25 +1238,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String key = host + "\n" + shareName + "\n\nD";
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
-        AlertDialog dialog = smbDialogBuilder()
-                .setBackground(smbDialogBackground())
-                .setTitle(shareName)
-                .setItems(new String[]{"隐藏此路径", favoriteAction}, (target, which) -> {
-                    if (which == 0) {
-                        hideShare(shareName);
-                    } else if (which == 1) {
-                        if (saved) {
-                            favorites.remove(key);
-                            Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
-                        } else {
-                            favorites.add(key);
-                            Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
-                        }
-                        persistFavorites();
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSmbActionMenu(shareName, new String[]{"隐藏此路径", favoriteAction}, which -> {
+            if (which == 0) {
+                hideShare(shareName);
+            } else if (which == 1) {
+                if (saved) {
+                    favorites.remove(key);
+                    Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+                } else {
+                    favorites.add(key);
+                    Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
+                }
+                persistFavorites();
+            }
+        });
     }
 
     private void hideShare(String shareName) {
@@ -1140,25 +1290,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
         if (!remote.isEmpty()) actions.add("复制到 Download");
         actions.add("取消收藏");
 
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle("收藏项目操作")
-                .setItems(actions.toArray(new String[0]), (target, which) -> {
-                    String action = actions.get(which);
-                    if ("上移".equals(action)) {
-                        moveFavorite(position, -1);
-                    } else if ("下移".equals(action)) {
-                        moveFavorite(position, 1);
-                    } else if ("复制到 Download".equals(action)) {
-                        copyToDownload(remote, directory);
-                    } else if ("取消收藏".equals(action)) {
-                        if (!favorites.remove(favorite)) return;
-                        persistFavorites();
-                        showFavorites();
-                        Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSmbActionMenu("收藏项目操作", actions.toArray(new String[0]), which -> {
+            String action = actions.get(which);
+            if ("上移".equals(action)) {
+                moveFavorite(position, -1);
+            } else if ("下移".equals(action)) {
+                moveFavorite(position, 1);
+            } else if ("复制到 Download".equals(action)) {
+                copyToDownload(remote, directory);
+            } else if ("取消收藏".equals(action)) {
+                if (!favorites.remove(favorite)) return;
+                persistFavorites();
+                showFavorites();
+                Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void moveFavorite(int position, int offset) {
@@ -1228,21 +1374,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = saved
                 ? new String[]{"修改备注", "取消保存", "隐藏此地址"}
                 : new String[]{"保存并备注", "隐藏此地址"};
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle(value)
-                .setItems(actions, (target, which) -> {
-                    if (which == 0) {
-                        showHostNoteDialog(value);
-                    } else if (saved && which == 1) {
-                        savedHosts.remove(value);
-                        persistSavedHosts();
-                        setItems(hostLabels());
-                    } else {
-                        hideHost(value);
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSmbActionMenu(value, actions, which -> {
+            if (which == 0) {
+                showHostNoteDialog(value);
+            } else if (saved && which == 1) {
+                savedHosts.remove(value);
+                persistSavedHosts();
+                setItems(hostLabels());
+            } else {
+                hideHost(value);
+            }
+        });
     }
 
     private void showHostNoteDialog(String value) {
