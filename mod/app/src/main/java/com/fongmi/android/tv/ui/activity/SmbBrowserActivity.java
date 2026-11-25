@@ -348,8 +348,32 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground());
     }
 
-    private void applyDialogFocusFrame(ListView dialogList) {
+    private void applyDialogFocusFrame(AlertDialog dialog) {
+        if (dialog == null) return;
+        ListView dialogList = dialog.getListView();
         if (dialogList == null) return;
+
+        // 收窄的是整个弹出菜单面板背景，而不是焦点框。
+        // 根据菜单文字计算窗口宽度，避免 AlertDialog 使用默认的大比例屏幕宽度。
+        ListAdapter dialogAdapter = dialogList.getAdapter();
+        float textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
+                getResources().getDisplayMetrics());
+        android.graphics.Paint widthPaint = new android.graphics.Paint();
+        widthPaint.setTextSize(textSize);
+        float widestAction = 0;
+        if (dialogAdapter != null) {
+            for (int i = 0; i < dialogAdapter.getCount(); i++) {
+                widestAction = Math.max(widestAction,
+                        widthPaint.measureText(String.valueOf(dialogAdapter.getItem(i))));
+            }
+        }
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int dialogWidth = Math.min((int) (screenWidth * 0.72f),
+                Math.max(dp(180), (int) Math.ceil(widestAction) + dp(64)));
+        Window dialogWindow = dialog.getWindow();
+        if (dialogWindow != null) {
+            dialogWindow.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
         ListAdapter source = dialogList.getAdapter();
         if (source == null) return;
         List<String> actions = new ArrayList<>();
@@ -398,17 +422,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
-
-                // ListView 会把整行按可用宽度测量；显式固定内部文字项宽度，
-                // 避免焦点背景跟随整行被拉宽。
-                int maxItemWidth = (int) (getResources().getDisplayMetrics().widthPixels * 0.72f);
-                int textWidth = (int) Math.ceil(item.getPaint().measureText(
-                        item.getText().toString()));
-                int itemWidth = Math.min(maxItemWidth,
-                        textWidth + item.getPaddingLeft() + item.getPaddingRight());
-                ViewGroup.LayoutParams itemParams = item.getLayoutParams();
-                itemParams.width = Math.max(dp(48), itemWidth);
-                item.setLayoutParams(itemParams);
 
                 row.setLayoutParams(new AbsListView.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -752,7 +765,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         showDeleteConfirm(remote, directory);
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1075,7 +1088,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         persistFavorites();
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1132,7 +1145,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1216,7 +1229,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         hideHost(value);
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
