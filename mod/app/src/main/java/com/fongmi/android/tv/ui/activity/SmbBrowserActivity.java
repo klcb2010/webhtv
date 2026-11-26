@@ -1569,12 +1569,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
         host = value;
         loadRememberedCredentials(value);
         loginAttempted = false;
-        // Samba builds without srvsvc make listShares() block on an RPC timeout for
-        // tens of seconds. The server maps every share name onto the main share
-        // ("default service"), so go straight there instead of enumerating.
-        String fallback = getDefaultShare();
-        setStatus("正在进入 " + value + " / " + fallback + " …");
-        openShare(fallback);
+        // Not every server exposes a share called "Share" (routers use their own
+        // names), while Samba builds without srvsvc make listShares() block for tens
+        // of seconds. So: reuse whatever share this host served last time, otherwise
+        // try the default share first and enumerate only when that name is missing.
+        String remembered = getLastShare(value);
+        String target = remembered.isEmpty() ? getDefaultShare() : remembered;
+        share = target;
+        path = "";
+        title.setText(value + " / " + target);
+        setStatus("正在进入 " + value + " / " + target + " …");
+        loadDirectory(true);
     }
 
     private void clearRememberedCredentials(String targetHost) {
@@ -1715,6 +1720,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private void loadDirectory() {
+        loadDirectory(false);
+    }
+
+    private void loadDirectory(boolean enumerateOnFailure) {
         mode = Mode.FILES;
         setStatus("正在读取目录…");
         worker.execute(() -> {
@@ -1737,11 +1746,66 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     setItems(labels);
                     title.setText(host + " / " + share + (path.isEmpty() ? "" : " / " + path));
                     setStatus(found.isEmpty() ? getString(R.string.smb_no_files) : "视频/音乐可播放，图片可查看，APK 可安装");
+                    rememberShare(host, share);
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e)));
+                runOnUiThread(() -> {
+                    String message = String.valueOf(e.getMessage());
+                    boolean nameMissing = message.contains("BAD_NETWORK_NAME")
+                            || message.contains("0xc00000cc")
+                            || message.contains("OBJECT_NAME_NOT_FOUND")
+                            || message.contains("0xc0000034");
+                    if (enumerateOnFailure && nameMissing) {
+                        setStatus("共享「" + share + "」不存在，正在获取共享列表…");
+                        enumerateShares();
+                    } else {
+                        setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e));
+                    }
+                });
             }
         });
+    }
+
+    /** Ask the server for its real share list; used when the assumed share is missing. */
+    private void enumerateShares() {
+        worker.execute(() -> {
+            try {
+                List<String> found = SmbClient.listShares(host, username, password, domain);
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    shares.clear();
+                    for (String shareName : found) {
+                        if (!isHiddenShare(shareName)) shares.add(shareName);
+                    }
+                    mode = Mode.SHARES;
+                    path = "";
+                    title.setText(host);
+                    setItems(shares);
+                    if (found.isEmpty()) {
+                        setStatus(getString(R.string.smb_no_shares));
+                    } else {
+                        setStatus("选择共享目录");
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    setStatus("无法获取共享列表：" + shortError(e));
+                });
+            }
+        });
+    }
+
+    private String getLastShare(String targetHost) {
+        String value = getSharedPreferences("smb_hosts", MODE_PRIVATE)
+                .getString("last_share_" + targetHost, "");
+        return value == null ? "" : value;
+    }
+
+    private void rememberShare(String targetHost, String shareName) {
+        if (targetHost == null || shareName == null || shareName.isEmpty()) return;
+        getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
+                .putString("last_share_" + targetHost, shareName).apply();
     }
 
     private void installApk(String remotePath) {
