@@ -162,12 +162,16 @@ public class SmbBrowserActivity extends AppCompatActivity {
         favoritesButton.setOnClickListener(v -> showFavorites());
         MaterialButton hiddenButton = themedButton("显示隐藏");
         hiddenButton.setOnClickListener(v -> showHiddenItems());
+        MaterialButton addButton = themedButton("添加");
+        addButton.setOnClickListener(v -> showAddSmbServerDialog());
         back.setId(View.generateViewId());
         favoritesButton.setId(View.generateViewId());
         hiddenButton.setId(View.generateViewId());
+        addButton.setId(View.generateViewId());
         addToolbarButton(toolbar, back);
         addToolbarButton(toolbar, favoritesButton);
         addToolbarButton(toolbar, hiddenButton);
+        addToolbarButton(toolbar, addButton);
         root.addView(toolbar);
 
         status = new TextView(this);
@@ -223,7 +227,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             if (focused) updateFocusedItem(list.getSelectedItemPosition());
             else updateFocusedItem(ListView.INVALID_POSITION);
         });
-        configureToolbarFocus(back, favoritesButton, hiddenButton);
+        configureToolbarFocus(back, favoritesButton, hiddenButton, addButton);
         list.setOnKeyListener((view, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN
                     && keyCode == KeyEvent.KEYCODE_DPAD_UP
@@ -271,8 +275,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         setContentView(screen);
     }
 
-    private void configureToolbarFocus(MaterialButton back, MaterialButton favorites, MaterialButton hidden) {
-        MaterialButton[] buttons = new MaterialButton[]{back, favorites, hidden};
+    private void configureToolbarFocus(MaterialButton back, MaterialButton favorites, MaterialButton hidden, MaterialButton add) {
+        MaterialButton[] buttons = new MaterialButton[]{back, favorites, hidden, add};
         for (int i = 0; i < buttons.length; i++) {
             MaterialButton button = buttons[i];
             button.setFocusable(true);
@@ -373,6 +377,14 @@ public class SmbBrowserActivity extends AppCompatActivity {
             public View getView(int position, View convertView, ViewGroup parent) {
                 TextView item = convertView instanceof TextView
                         ? (TextView) convertView : new TextView(SmbBrowserActivity.this);
+                // setText() -> checkForRelayout() reads mLayoutParams.width directly; a
+                // TextView that was already measured but has no LayoutParams throws NPE
+                // (reproduced on Android 12 TVs inside the dialog onShow callback).
+                if (item.getLayoutParams() == null) {
+                    item.setLayoutParams(new AbsListView.LayoutParams(
+                            AbsListView.LayoutParams.MATCH_PARENT,
+                            AbsListView.LayoutParams.WRAP_CONTENT));
+                }
                 item.setText(getItem(position));
                 item.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                 item.setPadding(dp(9), dp(8), dp(9), dp(8));
@@ -433,6 +445,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
     /** 测量最长菜单项的自然宽度，包含菜单文字自身的左右内边距。 */
     private int measureActionItemWidth(List<String> actions) {
         TextView probe = new TextView(this);
+        // measure() makes mLayout non-null; a later setText() then calls
+        // checkForRelayout() and dereferences mLayoutParams -> NPE if it is null.
+        probe.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         probe.setTextSize(16);
         probe.setPadding(dp(9), dp(8), dp(9), dp(8));
         probe.setSingleLine(true);
@@ -898,6 +914,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             public void onProgress(long copiedBytes, long totalBytes, String currentName) {
                                 runOnUiThread(() -> {
                                     if (progress.isShowing()) {
+
                                         progress.setIndeterminate(totalBytes <= 0);
                                         if (totalBytes > 0) {
                                             progress.setMax(1000);
@@ -1283,6 +1300,45 @@ public class SmbBrowserActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    private String getDefaultShare() {
+        String value = getSharedPreferences("smb_hosts", MODE_PRIVATE)
+                .getString("default_share", "");
+        return value == null || value.trim().isEmpty() ? "Share" : value.trim();
+    }
+
+    private void setDefaultShare(String value) {
+        getSharedPreferences("smb_hosts", MODE_PRIVATE).edit()
+                .putString("default_share", value == null ? "" : value.trim()).commit();
+    }
+
+    private void showAddSmbServerDialog() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        EditText address = field("服务器地址，如 192.168.50.85", InputType.TYPE_CLASS_TEXT);
+        EditText note = field("备注（可留空）", InputType.TYPE_CLASS_TEXT);
+        EditText shareField = field("默认共享名（留空用 Share）", InputType.TYPE_CLASS_TEXT);
+        shareField.setText(getDefaultShare());
+        box.addView(address);
+        box.addView(note);
+        box.addView(shareField);
+        smbDialogBuilder()
+                .setTitle("添加 SMB 服务器")
+                .setView(box)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String value = address.getText().toString().trim();
+                    if (value.isEmpty()) return;
+                    savedHosts.put(value, note.getText().toString().trim());
+                    persistSavedHosts();
+                    setDefaultShare(shareField.getText().toString().trim());
+                    if (!hosts.contains(value) && !isHiddenHost(value)) hosts.add(value);
+                    mode = Mode.HOSTS;
+                    setItems(hostLabels());
+                    setStatus("已保存服务器：" + value);
+                })
+                .show();
+    }
+
     private void showHostNoteDialog(String value) {
         EditText note = field("备注（可留空）", InputType.TYPE_CLASS_TEXT);
         note.setText(savedHosts.getOrDefault(value, ""));
@@ -1447,8 +1503,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     title.setText(host);
                     setItems(shares);
                     if (found.isEmpty()) {
-                        setStatus(getString(R.string.smb_no_shares));
-                        if (!loginAttempted) showAuthDialog();
+                        // Login succeeded but no share list came back (Samba builds
+                        // without srvsvc). Enter the default share directly.
+                        String fallback = getDefaultShare();
+                        setStatus("未获取到共享列表，直接进入 " + fallback);
+                        openShare(fallback);
                     } else {
                         setStatus("选择共享目录");
                     }
@@ -1797,6 +1856,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             imageContainer.setClipToPadding(false);
             content.addView(imageContainer, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
 
             ImageView image = new ImageView(this);
             image.setBackgroundColor(Color.BLACK);
