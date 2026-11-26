@@ -360,6 +360,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (int i = 0; i < source.getCount(); i++) {
             actions.add(String.valueOf(source.getItem(i)));
         }
+        final int actionItemWidth = measureActionItemWidth(actions);
         dialogList.setSelector(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDrawSelectorOnTop(false);
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
@@ -389,9 +390,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
+                // 固定为最长菜单项的自然宽度，避免 ListView 按窗口剩余宽度压缩文字。
                 item.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT));
+                        actionItemWidth, ViewGroup.LayoutParams.WRAP_CONTENT));
                 return item;
             }
         });
@@ -429,6 +430,27 @@ public class SmbBrowserActivity extends AppCompatActivity {
         dialogList.requestFocus();
     }
 
+    /** 测量最长菜单项的自然宽度，包含菜单文字自身的左右内边距。 */
+    private int measureActionItemWidth(List<String> actions) {
+        TextView probe = new TextView(this);
+        probe.setTextSize(16);
+        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
+        probe.setSingleLine(true);
+        probe.setMaxLines(1);
+        probe.setHorizontallyScrolling(true);
+        probe.setEllipsize(null);
+
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int maxWidth = 0;
+        for (String action : actions) {
+            probe.setText(action == null ? "" : action);
+            probe.measure(widthSpec, heightSpec);
+            maxWidth = Math.max(maxWidth, probe.getMeasuredWidth());
+        }
+        return maxWidth;
+    }
+
     /**
      * 长按菜单背景宽度跟随实际焦点框。
      * 首次布局尚未完成时才按最长菜单项测量，布局完成后改用真实菜单项宽度。
@@ -442,25 +464,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         clearDialogMinimumWidth(decor);
 
         ListView dialogList = dialog.getListView();
-        TextView probe = new TextView(this);
-        probe.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-        probe.setTextSize(16);
-        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
-        probe.setSingleLine(true);
-        probe.setHorizontallyScrolling(true);
-        probe.setEllipsize(null);
-        probe.setMaxLines(1);
-
-        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int maxItemWidth = 0;
-        for (String action : actions) {
-            probe.setText(action == null ? "" : action);
-            probe.measure(widthSpec, heightSpec);
-            maxItemWidth = Math.max(maxItemWidth, probe.getMeasuredWidth());
-        }
+        int maxItemWidth = measureActionItemWidth(actions);
 
         int listPadding = dialogList == null ? dp(16)
                 : dialogList.getPaddingLeft() + dialogList.getPaddingRight();
