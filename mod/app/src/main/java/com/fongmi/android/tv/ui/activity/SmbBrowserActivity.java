@@ -348,7 +348,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground());
     }
 
-    private void applyDialogFocusFrame(ListView dialogList) {
+    private void applyDialogFocusFrame(AlertDialog dialog) {
+        if (dialog == null) return;
+        ListView dialogList = dialog.getListView();
         if (dialogList == null) return;
         ListAdapter source = dialogList.getAdapter();
         if (source == null) return;
@@ -361,6 +363,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         dialogList.setDrawSelectorOnTop(false);
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDividerHeight(dp(5));
+        dialogList.setPadding(dp(8), dp(6), dp(8), dp(6));
+        dialogList.setClipToPadding(false);
         dialogList.setAdapter(new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, actions) {
             @Override
@@ -382,9 +386,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     item.setGravity(Gravity.CENTER_VERTICAL);
                     item.setPadding(dp(9), dp(8), dp(9), dp(8));
                     item.setMinHeight(dp(48));
-                    item.setMaxWidth(Math.max(dp(120),
-                            getResources().getDisplayMetrics().widthPixels - dp(96)));
                     item.setTextSize(16);
+                    item.setSingleLine(true);
+                    item.setHorizontallyScrolling(true);
+                    item.setEllipsize(null);
+                    item.setMaxLines(1);
                     item.setFocusable(false);
                     item.setBackground(smbItemBackground());
                     row.addView(item, new LinearLayout.LayoutParams(
@@ -392,6 +398,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
                             ViewGroup.LayoutParams.WRAP_CONTENT));
                 }
                 item.setText(getItem(position));
+                item.setSingleLine(true);
+                item.setHorizontallyScrolling(true);
+                item.setEllipsize(null);
+                item.setMaxLines(1);
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setSelected(position == dialogList.getSelectedItemPosition());
@@ -414,8 +424,54 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 updateDialogActionFocus(dialogList, ListView.INVALID_POSITION);
             }
         });
+        fitActionDialogWidth(dialog, actions);
+        dialogList.post(() -> fitActionDialogWidth(dialog, actions));
         dialogList.setSelection(0);
         dialogList.requestFocus();
+    }
+
+    /**
+     * 长按菜单整板宽度：按最长菜单项真实单行测量结果自适应。
+     * 不猜百分比，不缩文字区域；窗口左右留白，且不超过屏幕安全宽度。
+     */
+    private void fitActionDialogWidth(AlertDialog dialog, List<String> actions) {
+        if (dialog == null || actions == null || actions.isEmpty()) return;
+        Window window = dialog.getWindow();
+        if (window == null) return;
+
+        TextView probe = new TextView(this);
+        probe.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        probe.setTextSize(16);
+        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
+        probe.setSingleLine(true);
+        probe.setHorizontallyScrolling(true);
+        probe.setEllipsize(null);
+        probe.setMaxLines(1);
+
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int maxItem = 0;
+        for (String action : actions) {
+            probe.setText(action == null ? "" : action);
+            probe.measure(widthSpec, heightSpec);
+            maxItem = Math.max(maxItem, probe.getMeasuredWidth());
+        }
+
+        // item 已含左右 padding；再加 ListView padding(8*2) + 对话框边框留白(12*2)
+        int width = maxItem + dp(8) * 2 + dp(12) * 2;
+        int screen = getResources().getDisplayMetrics().widthPixels;
+        int maxSafe = Math.max(dp(160), screen - dp(48));
+        int minW = dp(160);
+        width = Math.max(minW, Math.min(width, maxSafe));
+
+        window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+        WindowManager.LayoutParams attributes = window.getAttributes();
+        attributes.gravity = Gravity.CENTER;
+        attributes.width = width;
+        attributes.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        window.setAttributes(attributes);
     }
 
     private void updateDialogActionFocus(ListView dialogList, int position) {
@@ -738,7 +794,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         showDeleteConfirm(remote, directory);
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1061,7 +1117,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         persistFavorites();
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1118,7 +1174,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
@@ -1202,7 +1258,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                         hideHost(value);
                     }
                 }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog.getListView()));
+        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
         dialog.show();
     }
 
