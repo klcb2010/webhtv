@@ -1569,41 +1569,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
         host = value;
         loadRememberedCredentials(value);
         loginAttempted = false;
-        setStatus("正在连接 " + value + " …");
-        worker.execute(() -> {
-            try {
-                List<String> found = SmbClient.listShares(host, username, password, domain);
-                runOnUiThread(() -> {
-                    if (isFinishing()) return;
-                    shares.clear();
-                    for (String shareName : found) {
-                        if (!isHiddenShare(shareName)) shares.add(shareName);
-                    }
-                    mode = Mode.SHARES;
-                    path = "";
-                    title.setText(host);
-                    setItems(shares);
-                    if (found.isEmpty()) {
-                        // Login succeeded but no share list came back (Samba builds
-                        // without srvsvc). Enter the default share directly.
-                        String fallback = getDefaultShare();
-                        setStatus("未获取到共享列表，直接进入 " + fallback);
-                        openShare(fallback);
-                    } else {
-                        setStatus("选择共享目录");
-                    }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (isFinishing()) return;
-                    // Samba builds without srvsvc fail share enumeration here; do not
-                    // prompt, just enter the configured default share instead.
-                    String fallback = getDefaultShare();
-                    setStatus("枚举失败，直接进入 " + fallback + "（" + shortError(e) + "）");
-                    openShare(fallback);
-                });
-            }
-        });
+        // Samba builds without srvsvc make listShares() block on an RPC timeout for
+        // tens of seconds. The server maps every share name onto the main share
+        // ("default service"), so go straight there instead of enumerating.
+        String fallback = getDefaultShare();
+        setStatus("正在进入 " + value + " / " + fallback + " …");
+        openShare(fallback);
     }
 
     private void clearRememberedCredentials(String targetHost) {
