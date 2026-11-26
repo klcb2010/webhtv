@@ -373,47 +373,29 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 android.R.layout.simple_list_item_1, actions) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
-                LinearLayout row;
-                TextView item;
-                if (convertView instanceof LinearLayout
-                        && ((LinearLayout) convertView).getChildCount() > 0
-                        && ((LinearLayout) convertView).getChildAt(0) instanceof TextView) {
-                    row = (LinearLayout) convertView;
-                    item = (TextView) row.getChildAt(0);
-                } else {
-                    row = new LinearLayout(SmbBrowserActivity.this);
-                    row.setOrientation(LinearLayout.HORIZONTAL);
-                    row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-                    row.setBackgroundColor(Color.TRANSPARENT);
-                    row.setFocusable(false);
-                    item = new TextView(SmbBrowserActivity.this);
-                    item.setGravity(Gravity.CENTER_VERTICAL);
-                    item.setPadding(dp(9), dp(8), dp(9), dp(8));
-                    item.setMinHeight(dp(48));
-                    item.setTextSize(16);
-                    item.setSingleLine(true);
-                    item.setHorizontallyScrolling(true);
-                    item.setEllipsize(null);
-                    item.setMaxLines(1);
-                    item.setFocusable(false);
-                    item.setBackground(smbItemBackground());
-                    row.addView(item, new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT));
-                }
+                TextView item = convertView instanceof TextView
+                        ? (TextView) convertView : new TextView(SmbBrowserActivity.this);
                 item.setText(getItem(position));
-                item.setSingleLine(true);
-                item.setHorizontallyScrolling(true);
-                item.setEllipsize(null);
-                item.setMaxLines(1);
+                item.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+                item.setPadding(dp(9), dp(8), dp(9), dp(8));
+                item.setMinHeight(dp(48));
+                item.setTextSize(16);
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
+                // 必须直接作用于 ListView 的真实菜单项，避免 AlertController 的默认 MaterialTextView
+                // 在窗口重新测量时恢复多行/省略号行为。
+                item.setSingleLine(true);
+                item.setMaxLines(1);
+                item.setHorizontallyScrolling(true);
+                item.setEllipsize(null);
+                item.setFocusable(false);
+                item.setBackground(smbItemBackground());
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
-                row.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
+                item.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
-                return row;
+                return item;
             }
         });
         dialogList.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
@@ -431,11 +413,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         fitActionDialogWidth(dialog, actions);
         logActionDialogGeometry(dialog, "after-fit-immediate", actions);
         dialogList.post(() -> {
+            if (!dialog.isShowing()) return;
+            dialogList.requestLayout();
             fitActionDialogWidth(dialog, actions);
             logActionDialogGeometry(dialog, "after-fit-list-post", actions);
-            View decor = dialog.getWindow() == null ? null : dialog.getWindow().getDecorView();
+            Window window = dialog.getWindow();
+            View decor = window == null ? null : window.getDecorView();
             if (decor != null) {
-                decor.post(() -> logActionDialogGeometry(dialog, "after-decor-layout", actions));
+                decor.requestLayout();
+                decor.post(() -> {
+                    if (!dialog.isShowing()) return;
+                    // 等 DecorView 完成首次宽度切换后再校正一次，避免旧宽度残留。
+                    fitActionDialogWidth(dialog, actions);
+                    dialogList.requestLayout();
+                    decor.requestLayout();
+                    logActionDialogGeometry(dialog, "after-decor-layout", actions);
+                });
             }
         });
         dialogList.setSelection(0);
@@ -596,19 +589,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
         int minW = dp(160);
         width = Math.max(minW, Math.min(width, maxSafe));
 
-        window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
         WindowManager.LayoutParams attributes = window.getAttributes();
         attributes.gravity = Gravity.CENTER;
         attributes.width = width;
         attributes.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(attributes);
+        window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+        View decor = window.getDecorView();
+        decor.requestLayout();
     }
 
     private void updateDialogActionFocus(ListView dialogList, int position) {
         for (int i = 0; i < dialogList.getChildCount(); i++) {
-            View child = dialogList.getChildAt(i);
-            if (!(child instanceof LinearLayout) || ((LinearLayout) child).getChildCount() == 0) continue;
-            View item = ((LinearLayout) child).getChildAt(0);
+            View item = dialogList.getChildAt(i);
+            if (item == null) continue;
             boolean selected = dialogList.getFirstVisiblePosition() + i == position;
             item.setSelected(selected);
             item.setActivated(selected);
