@@ -453,7 +453,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (int i = 0; i < source.getCount(); i++) {
             actions.add(String.valueOf(source.getItem(i)));
         }
-        final int actionItemWidth = measureActionItemWidth(actions);
         dialogList.setSelector(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDrawSelectorOnTop(false);
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
@@ -491,9 +490,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
-                // 固定为最长菜单项的自然宽度，避免 ListView 按窗口剩余宽度压缩文字。
                 item.setLayoutParams(new AbsListView.LayoutParams(
-                        actionItemWidth, ViewGroup.LayoutParams.WRAP_CONTENT));
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
                 return item;
             }
         });
