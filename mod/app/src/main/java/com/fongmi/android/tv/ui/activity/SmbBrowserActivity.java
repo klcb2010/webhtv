@@ -162,7 +162,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         favoritesButton.setOnClickListener(v -> showFavorites());
         MaterialButton hiddenButton = themedButton("显示隐藏");
         hiddenButton.setOnClickListener(v -> showHiddenItems());
-        MaterialButton addButton = themedButton("添加");
+        MaterialButton addButton = themedButton("加SMB");
         addButton.setOnClickListener(v -> showAddSmbServerDialog());
         back.setId(View.generateViewId());
         favoritesButton.setId(View.generateViewId());
@@ -354,6 +354,95 @@ public class SmbBrowserActivity extends AppCompatActivity {
         return new MaterialAlertDialogBuilder(this).setBackground(smbDialogBackground());
     }
 
+    private interface ActionHandler { void onAction(int index); }
+
+    /**
+     * 自绘长按菜单：完全自己控宽度，不依赖 AlertController 的窗口约束，
+     * 因此菜单项不会被省略号截断，标题也能完整换行显示。
+     */
+    private void showSheet(String title, String[] actions, ActionHandler handler) {
+        Dialog dialog = new Dialog(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog);
+        FrameLayout panel = new FrameLayout(this);
+        panel.setBackground(smbDialogBackground());
+
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+        int textColor = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE);
+
+        if (title != null && !title.isEmpty()) {
+            TextView titleView = new TextView(this);
+            titleView.setText(title);
+            titleView.setTextColor(textColor);
+            titleView.setTextSize(16);
+            titleView.setPadding(dp(9), dp(8), dp(9), dp(6));
+            // 路径必须完整显示：不省略，长路径自然折行
+            titleView.setSingleLine(false);
+            titleView.setEllipsize(null);
+            column.addView(titleView, new LinearLayout.LayoutParams(-1, -2));
+        }
+
+        TextView[] items = new TextView[actions.length];
+        for (int i = 0; i < actions.length; i++) {
+            final int index = i;
+            TextView item = new TextView(this);
+            item.setText(actions[i]);
+            item.setTextColor(textColor);
+            item.setTextSize(16);
+            item.setSingleLine(true);
+            item.setMaxLines(1);
+            // 不省略：宽度按最长项算，宁可横向留白也不截断
+            item.setEllipsize(null);
+            item.setHorizontallyScrolling(true);
+            item.setPadding(dp(9), dp(8), dp(9), dp(8));
+            item.setBackground(smbItemBackground());
+            item.setFocusable(true);
+            item.setFocusableInTouchMode(false);
+            item.setOnClickListener(v -> {
+                dialog.dismiss();
+                handler.onAction(index);
+            });
+            LinearLayout.LayoutParams params =
+                    new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, -2);
+            params.topMargin = dp(5);
+            items[i] = item;
+            column.addView(item, params);
+        }
+        panel.addView(column, new FrameLayout.LayoutParams(-1, -2));
+
+        // 宽度 = 最长菜单项实际文字宽度 + 项内左右内边距 + 面板内边距
+        android.text.TextPaint paint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
+                getResources().getDisplayMetrics()));
+        int widest = 0;
+        for (String action : actions) {
+            widest = Math.max(widest, (int) Math.ceil(paint.measureText(action == null ? "" : action)));
+        }
+        int screen = getResources().getDisplayMetrics().widthPixels;
+        int panelWidth = Math.min(screen - dp(96),
+                Math.max(dp(200), widest + dp(18) + dp(12) + dp(2)));
+
+        dialog.setContentView(panel);
+        dialog.setCancelable(true);
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.getDecorView().setPadding(0, 0, 0, 0);
+            window.setLayout(panelWidth, WindowManager.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.CENTER);
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            attributes.dimAmount = 0.55f;
+            window.setAttributes(attributes);
+        }
+        dialog.show();
+        if (items.length > 0) {
+            final TextView first = items[0];
+            first.post(first::requestFocus);
+        }
+    }
+
     private void applyDialogFocusFrame(AlertDialog dialog) {
         if (dialog == null) return;
         ListView dialogList = dialog.getListView();
@@ -421,6 +510,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         });
         fitActionDialogWidth(dialog, actions);
+        tightenActionDialogTitle(dialog);
         dialogList.post(() -> {
             if (!dialog.isShowing()) return;
             dialogList.requestLayout();
@@ -444,27 +534,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
 
     /** 测量最长菜单项的自然宽度，包含菜单文字自身的左右内边距。 */
     private int measureActionItemWidth(List<String> actions) {
-        TextView probe = new TextView(this);
-        // measure() makes mLayout non-null; a later setText() then calls
-        // checkForRelayout() and dereferences mLayoutParams -> NPE if it is null.
-        probe.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        probe.setTextSize(16);
-        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
-        probe.setSingleLine(true);
-        probe.setMaxLines(1);
-        probe.setHorizontallyScrolling(true);
-        probe.setEllipsize(null);
-
-        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int maxWidth = 0;
+        // Measuring a throwaway TextView is unreliable here: with horizontallyScrolling
+        // set, its measured width under UNSPECIFIED often comes back too small, which is
+        // why "复制到 Download" ended up truncated. Measure with the real paint instead.
+        android.text.TextPaint paint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
+                getResources().getDisplayMetrics()));
+        float widest = 0f;
         for (String action : actions) {
-            probe.setText(action == null ? "" : action);
-            probe.measure(widthSpec, heightSpec);
-            maxWidth = Math.max(maxWidth, probe.getMeasuredWidth());
+            widest = Math.max(widest, paint.measureText(action == null ? "" : action));
         }
-        return maxWidth;
+        // + item horizontal padding (9dp each side)
+        return (int) Math.ceil(widest) + dp(18);
     }
 
     /**
@@ -485,7 +566,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         int listPadding = dialogList == null ? dp(16)
                 : dialogList.getPaddingLeft() + dialogList.getPaddingRight();
         // 焦点背景与菜单项同宽；按文字实测宽度还原菜单项宽度，再加列表和面板留白。
-        int width = maxItemWidth + listPadding + dp(24);
+        int width = maxItemWidth + listPadding + dp(48);
         int screen = getResources().getDisplayMetrics().widthPixels;
         int maxSafe = Math.max(dp(1), screen - dp(48));
         width = Math.max(dp(1), Math.min(width, maxSafe));
@@ -497,6 +578,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
         window.setAttributes(attributes);
         window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
         decor.requestLayout();
+    }
+
+    private void tightenActionDialogTitle(AlertDialog dialog) {
+        View titleView = dialog.findViewById(androidx.appcompat.R.id.alertTitle);
+        if (!(titleView instanceof TextView)) return;
+        TextView text = (TextView) titleView;
+        // Long paths must not wrap into two lines; ellipsize in the middle so both the
+        // share name and the tail of the path stay readable.
+        text.setSingleLine(true);
+        text.setMaxLines(1);
+        text.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
     }
 
     private void clearDialogMinimumWidth(View view) {
@@ -814,25 +906,22 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = directory
                 ? new String[]{"隐藏此文件夹", favoriteAction, "复制到 Download", "请确认删除"}
                 : new String[]{favoriteAction, "复制到 Download", "请确认删除"};
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle(remote).setItems(actions, (target, which) -> {
-                    if (directory && which == 0) {
-                        hideFolder(remote);
-                        return;
-                    }
-                    int favoriteIndex = directory ? 1 : 0;
-                    if (which == favoriteIndex) {
-                        if (saved) favorites.remove(key);
-                        else favorites.add(key);
-                        persistFavorites();
-                    } else if (which == favoriteIndex + 1) {
-                        copyToDownload(remote, directory);
-                    } else if (which == favoriteIndex + 2) {
-                        showDeleteConfirm(remote, directory);
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSheet(remote, actions, which -> {
+            if (directory && which == 0) {
+                hideFolder(remote);
+                return;
+            }
+            int favoriteIndex = directory ? 1 : 0;
+            if (which == favoriteIndex) {
+                if (saved) favorites.remove(key);
+                else favorites.add(key);
+                persistFavorites();
+            } else if (which == favoriteIndex + 1) {
+                copyToDownload(remote, directory);
+            } else if (which == favoriteIndex + 2) {
+                showDeleteConfirm(remote, directory);
+            }
+        });
     }
 
     private void copyToDownload(String remote, boolean directory) {
@@ -1138,25 +1227,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String key = host + "\n" + shareName + "\n\nD";
         boolean saved = favorites.contains(key);
         String favoriteAction = saved ? "取消收藏" : "加入收藏夹";
-        AlertDialog dialog = smbDialogBuilder()
-                .setBackground(smbDialogBackground())
-                .setTitle(shareName)
-                .setItems(new String[]{"隐藏此路径", favoriteAction}, (target, which) -> {
-                    if (which == 0) {
-                        hideShare(shareName);
-                    } else if (which == 1) {
-                        if (saved) {
-                            favorites.remove(key);
-                            Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
-                        } else {
-                            favorites.add(key);
-                            Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
-                        }
-                        persistFavorites();
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSheet(shareName, new String[]{"隐藏此路径", favoriteAction}, which -> {
+            if (which == 0) {
+                hideShare(shareName);
+            } else if (which == 1) {
+                if (saved) {
+                    favorites.remove(key);
+                    Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+                } else {
+                    favorites.add(key);
+                    Toast.makeText(this, "已加入收藏夹", Toast.LENGTH_SHORT).show();
+                }
+                persistFavorites();
+            }
+        });
     }
 
     private void hideShare(String shareName) {
@@ -1195,25 +1279,21 @@ public class SmbBrowserActivity extends AppCompatActivity {
         if (!remote.isEmpty()) actions.add("复制到 Download");
         actions.add("取消收藏");
 
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle("收藏项目操作")
-                .setItems(actions.toArray(new String[0]), (target, which) -> {
-                    String action = actions.get(which);
-                    if ("上移".equals(action)) {
-                        moveFavorite(position, -1);
-                    } else if ("下移".equals(action)) {
-                        moveFavorite(position, 1);
-                    } else if ("复制到 Download".equals(action)) {
-                        copyToDownload(remote, directory);
-                    } else if ("取消收藏".equals(action)) {
-                        if (!favorites.remove(favorite)) return;
-                        persistFavorites();
-                        showFavorites();
-                        Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSheet("收藏项目操作", actions.toArray(new String[0]), which -> {
+            String action = actions.get(which);
+            if ("上移".equals(action)) {
+                moveFavorite(position, -1);
+            } else if ("下移".equals(action)) {
+                moveFavorite(position, 1);
+            } else if ("复制到 Download".equals(action)) {
+                copyToDownload(remote, directory);
+            } else if ("取消收藏".equals(action)) {
+                if (!favorites.remove(favorite)) return;
+                persistFavorites();
+                showFavorites();
+                Toast.makeText(this, "已取消收藏", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void moveFavorite(int position, int offset) {
@@ -1283,21 +1363,17 @@ public class SmbBrowserActivity extends AppCompatActivity {
         String[] actions = saved
                 ? new String[]{"修改备注", "取消保存", "隐藏此地址"}
                 : new String[]{"保存并备注", "隐藏此地址"};
-        AlertDialog dialog = smbDialogBuilder()
-                .setTitle(value)
-                .setItems(actions, (target, which) -> {
-                    if (which == 0) {
-                        showHostNoteDialog(value);
-                    } else if (saved && which == 1) {
-                        savedHosts.remove(value);
-                        persistSavedHosts();
-                        setItems(hostLabels());
-                    } else {
-                        hideHost(value);
-                    }
-                }).create();
-        dialog.setOnShowListener(target -> applyDialogFocusFrame(dialog));
-        dialog.show();
+        showSheet(value, actions, which -> {
+            if (which == 0) {
+                showHostNoteDialog(value);
+            } else if (saved && which == 1) {
+                savedHosts.remove(value);
+                persistSavedHosts();
+                setItems(hostLabels());
+            } else {
+                hideHost(value);
+            }
+        });
     }
 
     private String getDefaultShare() {
@@ -1322,7 +1398,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         box.addView(note);
         box.addView(shareField);
         smbDialogBuilder()
-                .setTitle("添加 SMB 服务器")
+                .setTitle("添加 SMB 到收藏")
                 .setView(box)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("保存", (dialog, which) -> {
@@ -1330,7 +1406,13 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     if (value.isEmpty()) return;
                     savedHosts.put(value, note.getText().toString().trim());
                     persistSavedHosts();
-                    setDefaultShare(shareField.getText().toString().trim());
+                    String fallback = shareField.getText().toString().trim();
+                    if (fallback.isEmpty()) fallback = "Share";
+                    setDefaultShare(fallback);
+                    // Star entry so it shows up in 收藏夹 and opens the share root in one
+                    // click (host \n share \n "" \n D -> openShare).
+                    favorites.add(value + "\n" + fallback + "\n" + "" + "\n" + "D");
+                    persistFavorites();
                     if (!hosts.contains(value) && !isHiddenHost(value)) hosts.add(value);
                     mode = Mode.HOSTS;
                     setItems(hostLabels());
@@ -1515,9 +1597,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
-                    setStatus(getString(R.string.smb_connect_failed) + "：" + shortError(e));
-                    if (!loginAttempted) showAuthDialog();
-                    else Toast.makeText(this, R.string.smb_auth_failed, Toast.LENGTH_LONG).show();
+                    // Samba builds without srvsvc fail share enumeration here; do not
+                    // prompt, just enter the configured default share instead.
+                    String fallback = getDefaultShare();
+                    setStatus("枚举失败，直接进入 " + fallback + "（" + shortError(e) + "）");
+                    openShare(fallback);
                 });
             }
         });
