@@ -365,7 +365,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDividerHeight(dp(5));
         dialogList.setPadding(dp(8), dp(6), dp(8), dp(6));
-        dialogList.setMinimumWidth(0);
         dialogList.setClipToPadding(false);
         dialogList.setAdapter(new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, actions) {
@@ -387,7 +386,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setHorizontallyScrolling(true);
                 item.setEllipsize(null);
                 item.setFocusable(false);
-                item.setMinimumWidth(0);
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
@@ -444,43 +442,30 @@ public class SmbBrowserActivity extends AppCompatActivity {
         clearDialogMinimumWidth(decor);
 
         ListView dialogList = dialog.getListView();
-        int focusFrameWidth = 0;
-        if (dialogList != null) {
-            int position = dialogList.getSelectedItemPosition();
-            int childIndex = position - dialogList.getFirstVisiblePosition();
-            View focusFrame = childIndex >= 0 && childIndex < dialogList.getChildCount()
-                    ? dialogList.getChildAt(childIndex) : null;
-            if (focusFrame != null && focusFrame.getWidth() > 0) {
-                focusFrameWidth = focusFrame.getWidth();
-            }
-        }
+        TextView probe = new TextView(this);
+        probe.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        probe.setTextSize(16);
+        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
+        probe.setSingleLine(true);
+        probe.setHorizontallyScrolling(true);
+        probe.setEllipsize(null);
+        probe.setMaxLines(1);
 
-        // 首次显示时焦点框可能尚未完成布局，以同款 TextView 测量值作为临时宽度。
-        if (focusFrameWidth <= 0) {
-            TextView probe = new TextView(this);
-            probe.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT));
-            probe.setTextSize(16);
-            probe.setPadding(dp(9), dp(8), dp(9), dp(8));
-            probe.setSingleLine(true);
-            probe.setHorizontallyScrolling(true);
-            probe.setEllipsize(null);
-            probe.setMaxLines(1);
-
-            int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-            int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-            for (String action : actions) {
-                probe.setText(action == null ? "" : action);
-                probe.measure(widthSpec, heightSpec);
-                focusFrameWidth = Math.max(focusFrameWidth, probe.getMeasuredWidth());
-            }
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int maxItemWidth = 0;
+        for (String action : actions) {
+            probe.setText(action == null ? "" : action);
+            probe.measure(widthSpec, heightSpec);
+            maxItemWidth = Math.max(maxItemWidth, probe.getMeasuredWidth());
         }
 
         int listPadding = dialogList == null ? dp(16)
                 : dialogList.getPaddingLeft() + dialogList.getPaddingRight();
-        // 以焦点框外沿为基准，只额外保留 ListView 内边距和背景框两侧各 12dp。
-        int width = focusFrameWidth + listPadding + dp(24);
+        // 焦点背景与菜单项同宽；按文字实测宽度还原菜单项宽度，再加列表和面板留白。
+        int width = maxItemWidth + listPadding + dp(24);
         int screen = getResources().getDisplayMetrics().widthPixels;
         int maxSafe = Math.max(dp(1), screen - dp(48));
         width = Math.max(dp(1), Math.min(width, maxSafe));
