@@ -147,6 +147,15 @@ public class SmbBrowserActivity extends AppCompatActivity {
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setFocusable(false);
         toolbar.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        android.graphics.drawable.GradientDrawable toolbarBackground =
+                new android.graphics.drawable.GradientDrawable();
+        toolbarBackground.setColor(MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorSurface, 0xFF20242D));
+        toolbarBackground.setCornerRadius(dp(12));
+        toolbar.setBackground(toolbarBackground);
+        toolbar.setElevation(dp(5));
+        toolbar.setClipToPadding(false);
+        toolbar.setPadding(dp(5), dp(4), dp(5), dp(4));
 
         title = new TextView(this);
         title.setText(getString(R.string.smb_browser_title));
@@ -489,7 +498,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         MaterialButton button = new MaterialButton(this);
         button.setText(label);
         button.setTextColor(foreground);
-        button.setBackgroundTintList(ColorStateList.valueOf(background));
+        button.setBackgroundTintList(ColorStateList.valueOf(Color.TRANSPARENT));
         button.setStrokeWidth(dp(2));
         button.setStrokeColor(new ColorStateList(
                 new int[][]{
