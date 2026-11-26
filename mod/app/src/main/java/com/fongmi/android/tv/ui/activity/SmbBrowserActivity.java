@@ -365,6 +365,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDividerHeight(dp(5));
         dialogList.setPadding(dp(8), dp(6), dp(8), dp(6));
+        dialogList.setMinimumWidth(0);
         dialogList.setClipToPadding(false);
         dialogList.setAdapter(new ArrayAdapter<String>(this,
                 android.R.layout.simple_list_item_1, actions) {
@@ -386,6 +387,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 item.setHorizontallyScrolling(true);
                 item.setEllipsize(null);
                 item.setFocusable(false);
+                item.setMinimumWidth(0);
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == dialogList.getSelectedItemPosition());
                 item.setActivated(position == dialogList.getSelectedItemPosition());
@@ -430,40 +432,58 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     /**
-     * 长按菜单整板宽度：按最长菜单项真实单行测量结果自适应。
-     * 不猜百分比，不缩文字区域；窗口左右留白，且不超过屏幕安全宽度。
+     * 长按菜单背景宽度跟随实际焦点框。
+     * 首次布局尚未完成时才按最长菜单项测量，布局完成后改用真实菜单项宽度。
      */
     private void fitActionDialogWidth(AlertDialog dialog, List<String> actions) {
         if (dialog == null || actions == null || actions.isEmpty()) return;
         Window window = dialog.getWindow();
         if (window == null) return;
 
-        TextView probe = new TextView(this);
-        probe.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-        probe.setTextSize(16);
-        probe.setPadding(dp(9), dp(8), dp(9), dp(8));
-        probe.setSingleLine(true);
-        probe.setHorizontallyScrolling(true);
-        probe.setEllipsize(null);
-        probe.setMaxLines(1);
+        View decor = window.getDecorView();
+        clearDialogMinimumWidth(decor);
 
-        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
-        int maxItem = 0;
-        for (String action : actions) {
-            probe.setText(action == null ? "" : action);
-            probe.measure(widthSpec, heightSpec);
-            maxItem = Math.max(maxItem, probe.getMeasuredWidth());
+        ListView dialogList = dialog.getListView();
+        int focusFrameWidth = 0;
+        if (dialogList != null) {
+            int position = dialogList.getSelectedItemPosition();
+            int childIndex = position - dialogList.getFirstVisiblePosition();
+            View focusFrame = childIndex >= 0 && childIndex < dialogList.getChildCount()
+                    ? dialogList.getChildAt(childIndex) : null;
+            if (focusFrame != null && focusFrame.getWidth() > 0) {
+                focusFrameWidth = focusFrame.getWidth();
+            }
         }
 
-        // item 已含左右 padding；再加 ListView padding(8*2) + 对话框边框留白(12*2)
-        int width = maxItem + dp(8) * 2 + dp(12) * 2;
+        // 首次显示时焦点框可能尚未完成布局，以同款 TextView 测量值作为临时宽度。
+        if (focusFrameWidth <= 0) {
+            TextView probe = new TextView(this);
+            probe.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            probe.setTextSize(16);
+            probe.setPadding(dp(9), dp(8), dp(9), dp(8));
+            probe.setSingleLine(true);
+            probe.setHorizontallyScrolling(true);
+            probe.setEllipsize(null);
+            probe.setMaxLines(1);
+
+            int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+            int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+            for (String action : actions) {
+                probe.setText(action == null ? "" : action);
+                probe.measure(widthSpec, heightSpec);
+                focusFrameWidth = Math.max(focusFrameWidth, probe.getMeasuredWidth());
+            }
+        }
+
+        int listPadding = dialogList == null ? dp(16)
+                : dialogList.getPaddingLeft() + dialogList.getPaddingRight();
+        // 以焦点框外沿为基准，只额外保留 ListView 内边距和背景框两侧各 12dp。
+        int width = focusFrameWidth + listPadding + dp(24);
         int screen = getResources().getDisplayMetrics().widthPixels;
-        int maxSafe = Math.max(dp(160), screen - dp(48));
-        int minW = dp(160);
-        width = Math.max(minW, Math.min(width, maxSafe));
+        int maxSafe = Math.max(dp(1), screen - dp(48));
+        width = Math.max(dp(1), Math.min(width, maxSafe));
 
         WindowManager.LayoutParams attributes = window.getAttributes();
         attributes.gravity = Gravity.CENTER;
@@ -471,8 +491,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
         attributes.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(attributes);
         window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
-        View decor = window.getDecorView();
         decor.requestLayout();
+    }
+
+    private void clearDialogMinimumWidth(View view) {
+        if (view == null) return;
+        view.setMinimumWidth(0);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                clearDialogMinimumWidth(group.getChildAt(i));
+            }
+        }
     }
 
     private void updateDialogActionFocus(ListView dialogList, int position) {
