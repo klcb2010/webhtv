@@ -527,7 +527,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                     .append(" textSizePx=").append(text.getTextSize())
                     .append(" singleLine=").append(text.isSingleLine())
                     .append(" maxLines=").append(text.getMaxLines())
-                    .append(" horizScroll=").append(text.getHorizontallyScrolling())
+                    .append(" horizScroll=").append(text.isHorizontallyScrollable())
                     .append(" ellipsize=").append(text.getEllipsize())
                     .append(" lineCount=").append(text.getLineCount())
                     .append(" compoundPadding=").append(text.getCompoundPaddingLeft())
