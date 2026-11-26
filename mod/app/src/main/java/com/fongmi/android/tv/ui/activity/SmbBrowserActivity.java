@@ -147,15 +147,8 @@ public class SmbBrowserActivity extends AppCompatActivity {
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setFocusable(false);
         toolbar.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        android.graphics.drawable.GradientDrawable toolbarBackground =
-                new android.graphics.drawable.GradientDrawable();
-        toolbarBackground.setColor(MaterialColors.getColor(this,
-                com.google.android.material.R.attr.colorSurface, 0xFF20242D));
-        toolbarBackground.setCornerRadius(dp(12));
-        toolbar.setBackground(toolbarBackground);
-        toolbar.setElevation(dp(5));
+        toolbar.setClipChildren(false);
         toolbar.setClipToPadding(false);
-        toolbar.setPadding(dp(5), dp(4), dp(5), dp(4));
 
         title = new TextView(this);
         title.setText(getString(R.string.smb_browser_title));
@@ -498,7 +491,9 @@ public class SmbBrowserActivity extends AppCompatActivity {
         MaterialButton button = new MaterialButton(this);
         button.setText(label);
         button.setTextColor(foreground);
-        button.setBackgroundTintList(ColorStateList.valueOf(Color.TRANSPARENT));
+        // 与主页历史等功能按钮使用相同的半透明独立底色（black_20）。
+        button.setBackgroundTintList(ColorStateList.valueOf(
+                MaterialColors.getColor(this, R.color.black_20, 0x33000000)));
         button.setStrokeWidth(dp(2));
         button.setStrokeColor(new ColorStateList(
                 new int[][]{
@@ -507,7 +502,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 },
                 new int[]{0xFF8CCBFF, Color.TRANSPARENT}
         ));
-        button.setCornerRadius(dp(10));
+        button.setCornerRadius(dp(4));
         button.setInsetTop(0);
         button.setInsetBottom(0);
         return button;
