@@ -18,6 +18,7 @@ import android.os.Environment;
 import android.text.InputType;
 import android.view.Gravity;
 import android.util.TypedValue;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -72,6 +73,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SmbBrowserActivity extends AppCompatActivity {
 
     private enum Mode { HOSTS, SHARES, FILES, HIDDEN_FOLDERS, FAVORITES }
+
+    private static final String SMB_MENU_DIAG_TAG = "SMBMenuDiag";
 
     private static final int REQUEST_LOCAL_NETWORK = 7301;
     private static final int REQUEST_INSTALL_APK_PERMISSION = 7302;
@@ -359,6 +362,7 @@ public class SmbBrowserActivity extends AppCompatActivity {
             actions.add(String.valueOf(source.getItem(i)));
         }
 
+        logActionDialogGeometry(dialog, "apply-enter", actions);
         dialogList.setSelector(new ColorDrawable(Color.TRANSPARENT));
         dialogList.setDrawSelectorOnTop(false);
         dialogList.setDivider(new ColorDrawable(Color.TRANSPARENT));
@@ -425,9 +429,135 @@ public class SmbBrowserActivity extends AppCompatActivity {
             }
         });
         fitActionDialogWidth(dialog, actions);
-        dialogList.post(() -> fitActionDialogWidth(dialog, actions));
+        logActionDialogGeometry(dialog, "after-fit-immediate", actions);
+        dialogList.post(() -> {
+            fitActionDialogWidth(dialog, actions);
+            logActionDialogGeometry(dialog, "after-fit-list-post", actions);
+            View decor = dialog.getWindow() == null ? null : dialog.getWindow().getDecorView();
+            if (decor != null) {
+                decor.post(() -> logActionDialogGeometry(dialog, "after-decor-layout", actions));
+            }
+        });
         dialogList.setSelection(0);
         dialogList.requestFocus();
+    }
+
+    /**
+     * 记录长按菜单最终窗口、DecorView、ListView、菜单项及 Drawable 的真实尺寸。
+     * 日志统一使用 SMBMenuDiag，避免输出服务器地址、共享路径和菜单标题等隐私内容。
+     */
+    private void logActionDialogGeometry(AlertDialog dialog, String stage, List<String> actions) {
+        if (dialog == null) return;
+
+        Window window = dialog.getWindow();
+        View decor = window == null ? null : window.getDecorView();
+        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+        StringBuilder header = new StringBuilder();
+        header.append("stage=").append(stage)
+                .append(" density=").append(metrics.density)
+                .append(" screen=").append(metrics.widthPixels).append("x").append(metrics.heightPixels)
+                .append(" screenDp=").append(metrics.widthPixels / metrics.density)
+                .append(" dialogShowing=").append(dialog.isShowing());
+
+        if (window != null) {
+            WindowManager.LayoutParams attrs = window.getAttributes();
+            header.append(" windowAttrs=").append(attrs.width).append("x").append(attrs.height)
+                    .append(" gravity=").append(attrs.gravity)
+                    .append(" windowBackground=").append(drawableInfo(window.getDecorView().getBackground()));
+        } else {
+            header.append(" window=null");
+        }
+        Log.d(SMB_MENU_DIAG_TAG, header.toString());
+
+        if (decor != null) {
+            int[] location = new int[2];
+            decor.getLocationOnScreen(location);
+            Log.d(SMB_MENU_DIAG_TAG, "decor location=" + location[0] + "," + location[1]
+                    + " size=" + decor.getWidth() + "x" + decor.getHeight()
+                    + " measured=" + decor.getMeasuredWidth() + "x" + decor.getMeasuredHeight()
+                    + " lp=" + layoutParamsInfo(decor)
+                    + " minWidth=" + decor.getMinimumWidth()
+                    + " padding=" + decor.getPaddingLeft() + "," + decor.getPaddingTop()
+                    + "," + decor.getPaddingRight() + "," + decor.getPaddingBottom()
+                    + " bg=" + drawableInfo(decor.getBackground()));
+
+            int[] count = new int[]{0};
+            dumpActionDialogViewTree(decor, "decor", 0, count);
+        } else {
+            Log.d(SMB_MENU_DIAG_TAG, "decor=null");
+        }
+
+        if (actions != null) {
+            TextView probe = new TextView(this);
+            probe.setTextSize(16);
+            for (int i = 0; i < actions.size(); i++) {
+                String action = actions.get(i) == null ? "" : actions.get(i);
+                probe.setText(action);
+                Log.d(SMB_MENU_DIAG_TAG, "action[" + i + "] chars=" + action.length()
+                        + " paintWidthPx=" + probe.getPaint().measureText(action)
+                        + " textSizePx=" + probe.getTextSize());
+            }
+        }
+    }
+
+    private void dumpActionDialogViewTree(View view, String path, int depth, int[] count) {
+        if (view == null || count[0] >= 80 || depth > 8) return;
+        count[0]++;
+
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        StringBuilder line = new StringBuilder();
+        line.append(path).append(" class=").append(view.getClass().getSimpleName())
+                .append(" xy=").append(location[0]).append(",").append(location[1])
+                .append(" size=").append(view.getWidth()).append("x").append(view.getHeight())
+                .append(" measured=").append(view.getMeasuredWidth()).append("x").append(view.getMeasuredHeight())
+                .append(" lp=").append(layoutParamsInfo(view))
+                .append(" min=").append(view.getMinimumWidth()).append("x").append(view.getMinimumHeight())
+                .append(" padding=").append(view.getPaddingLeft()).append(",").append(view.getPaddingTop())
+                .append(",").append(view.getPaddingRight()).append(",").append(view.getPaddingBottom())
+                .append(" bg=").append(drawableInfo(view.getBackground()));
+
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            CharSequence value = text.getText();
+            String raw = value == null ? "" : value.toString();
+            android.text.Layout layout = text.getLayout();
+            line.append(" textChars=").append(raw.length())
+                    .append(" paintWidthPx=").append(text.getPaint().measureText(raw))
+                    .append(" textSizePx=").append(text.getTextSize())
+                    .append(" singleLine=").append(text.isSingleLine())
+                    .append(" maxLines=").append(text.getMaxLines())
+                    .append(" horizScroll=").append(text.getHorizontallyScrolling())
+                    .append(" ellipsize=").append(text.getEllipsize())
+                    .append(" lineCount=").append(text.getLineCount())
+                    .append(" compoundPadding=").append(text.getCompoundPaddingLeft())
+                    .append(",").append(text.getCompoundPaddingRight());
+            if (layout != null) {
+                line.append(" layoutWidth=").append(layout.getWidth());
+                for (int i = 0; i < layout.getLineCount(); i++) {
+                    line.append(" line").append(i).append("Width=").append(layout.getLineWidth(i))
+                            .append("Ellipsis=").append(layout.getEllipsisCount(i));
+                }
+            }
+        }
+        Log.d(SMB_MENU_DIAG_TAG, line.toString());
+
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount() && count[0] < 80; i++) {
+                dumpActionDialogViewTree(group.getChildAt(i), path + "/" + i, depth + 1, count);
+            }
+        }
+    }
+
+    private String layoutParamsInfo(View view) {
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        return params == null ? "null" : params.width + "x" + params.height;
+    }
+
+    private String drawableInfo(android.graphics.drawable.Drawable drawable) {
+        if (drawable == null) return "null";
+        return drawable.getClass().getSimpleName() + "@" + drawable.getBounds().toShortString();
     }
 
     /**
