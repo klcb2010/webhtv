@@ -368,7 +368,18 @@ public class SmbBrowserActivity extends AppCompatActivity {
     private void showSheet(String title, String[] actions, ActionHandler handler) {
         Dialog dialog = new Dialog(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog);
         FrameLayout panel = new FrameLayout(this);
-        panel.setBackground(smbDialogBackground());
+        // 直接复用 SMB 页面使用的壁纸视图，不再用提取色绘制纯色弹窗背景。
+        android.graphics.drawable.GradientDrawable clipBackground =
+                new android.graphics.drawable.GradientDrawable();
+        clipBackground.setColor(Color.TRANSPARENT);
+        clipBackground.setCornerRadius(dp(10));
+        panel.setBackground(clipBackground);
+        panel.setClipToOutline(true);
+        CustomWallView wallpaper = new CustomWallView(this, null).setMotionEnabled(false);
+        wallpaper.setFocusable(false);
+        wallpaper.setClickable(false);
+        panel.addView(wallpaper, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
