@@ -375,12 +375,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         clipBackground.setCornerRadius(dp(10));
         panel.setBackground(clipBackground);
         panel.setClipToOutline(true);
-        CustomWallView wallpaper = new CustomWallView(this, null).setMotionEnabled(false);
-        wallpaper.setFocusable(false);
-        wallpaper.setClickable(false);
-        panel.addView(wallpaper, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setPadding(dp(6), dp(6), dp(6), dp(6));
