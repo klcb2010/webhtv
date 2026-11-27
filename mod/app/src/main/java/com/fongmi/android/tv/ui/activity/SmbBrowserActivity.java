@@ -48,6 +48,7 @@ import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.smb.SmbClient;
 import com.fongmi.android.tv.smb.SmbNetworkScanner;
 import com.fongmi.android.tv.smb.SmbPlaybackProxy;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.custom.CustomWallView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.button.MaterialButton;
@@ -307,8 +308,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private android.graphics.drawable.Drawable smbDialogBackground() {
-        int background = MaterialColors.getColor(this,
-                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        // 使用应用当前动态主题色：优先自定义主题色，其次壁纸提取色，系统主题则回退到 Material 动态色。
+        int background = Setting.getDynamicColor();
+        if (background == 0) {
+            background = MaterialColors.getColor(this,
+                    com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
+        }
         android.graphics.drawable.GradientDrawable drawable =
                 new android.graphics.drawable.GradientDrawable();
         drawable.setColor(background);
