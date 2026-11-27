@@ -403,6 +403,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
             column.addView(titleView, new LinearLayout.LayoutParams(-1, -2));
         }
 
+        // 预先测量每个菜单项的自然宽度，给焦点背景明确的独立宽度。
+        android.text.TextPaint paint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
+                getResources().getDisplayMetrics()));
         TextView[] items = new TextView[actions.length];
         for (int i = 0; i < actions.length; i++) {
             final int index = i;
@@ -424,8 +428,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 handler.onAction(index);
             });
             // 焦点背景只包住当前操作文字；外层 panel 背景宽度保持原样。
+            int itemWidth = (int) Math.ceil(paint.measureText(actions[i] == null ? "" : actions[i]))
+                    + dp(18);
             LinearLayout.LayoutParams params =
-                    new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, -2);
+                    new LinearLayout.LayoutParams(itemWidth, -2);
             params.gravity = Gravity.START;
             params.topMargin = dp(5);
             items[i] = item;
@@ -440,9 +446,6 @@ public class SmbBrowserActivity extends AppCompatActivity {
         });
 
         // 宽度 = 最长菜单项实际文字宽度 + 项内左右内边距 + 面板内边距
-        android.text.TextPaint paint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16,
-                getResources().getDisplayMetrics()));
         int widest = 0;
         for (String action : actions) {
             widest = Math.max(widest, (int) Math.ceil(paint.measureText(action == null ? "" : action)));
