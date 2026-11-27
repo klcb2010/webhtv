@@ -193,38 +193,20 @@ public class SmbBrowserActivity extends AppCompatActivity {
         adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, displayItems) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
-                // ListView 的行容器保持整行宽度，焦点背景只包住内部文字，避免铺满整行。
-                FrameLayout row;
-                TextView item;
-                if (convertView instanceof FrameLayout) {
-                    row = (FrameLayout) convertView;
-                    item = (TextView) row.getChildAt(0);
-                    item = (TextView) super.getView(position, item, parent);
-                } else {
-                    row = new FrameLayout(SmbBrowserActivity.this);
-                    item = (TextView) super.getView(position, null, parent);
-                    row.addView(item, new FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            Gravity.START | Gravity.CENTER_VERTICAL));
-                }
+                TextView item = (TextView) super.getView(position, convertView, parent);
                 item.setTextColor(MaterialColors.getColor(SmbBrowserActivity.this,
                         com.google.android.material.R.attr.colorOnPrimaryContainer, Color.WHITE));
                 item.setTextSize(18);
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setPadding(dp(16), dp(10), dp(16), dp(10));
                 item.setMinHeight(dp(54));
-                item.setLayoutParams(new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                        Gravity.START | Gravity.CENTER_VERTICAL));
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setLayoutParams(new AbsListView.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 item.setBackground(smbItemBackground());
                 item.setSelected(position == focusedItemPosition);
                 item.setActivated(position == focusedItemPosition);
-                row.setLayoutParams(new AbsListView.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                row.setSelected(position == focusedItemPosition);
-                row.setActivated(position == focusedItemPosition);
-                return row;
+                return item;
             }
         };
         list.setSelector(new ColorDrawable(Color.TRANSPARENT));
@@ -441,8 +423,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
                 dialog.dismiss();
                 handler.onAction(index);
             });
+            // 焦点背景只包住当前操作文字；外层 panel 背景宽度保持原样。
             LinearLayout.LayoutParams params =
-                    new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, -2);
+                    new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, -2);
+            params.gravity = Gravity.START;
             params.topMargin = dp(5);
             items[i] = item;
             column.addView(item, params);
