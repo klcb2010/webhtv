@@ -378,9 +378,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
             titleView.setTextColor(textColor);
             titleView.setTextSize(16);
             titleView.setPadding(dp(9), dp(8), dp(9), dp(6));
-            // 路径必须完整显示：不省略，长路径自然折行
-            titleView.setSingleLine(false);
-            titleView.setEllipsize(null);
+            // 标题保持单行；面板宽度会同时按标题和菜单项的较宽者计算。
+            titleView.setSingleLine(true);
+            titleView.setMaxLines(1);
+            titleView.setHorizontallyScrolling(true);
+            titleView.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
             column.addView(titleView, new LinearLayout.LayoutParams(-1, -2));
         }
 
@@ -420,9 +422,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
         for (String action : actions) {
             widest = Math.max(widest, (int) Math.ceil(paint.measureText(action == null ? "" : action)));
         }
+        int titleWidth = title == null ? 0
+                : (int) Math.ceil(paint.measureText(title));
+        int contentWidth = Math.max(widest, titleWidth);
         int screen = getResources().getDisplayMetrics().widthPixels;
         int panelWidth = Math.min(screen - dp(96),
-                Math.max(dp(200), widest + dp(18) + dp(12) + dp(2)));
+                Math.max(dp(200), contentWidth + dp(18) + dp(12) + dp(2)));
 
         dialog.setContentView(panel);
         dialog.setCancelable(true);
