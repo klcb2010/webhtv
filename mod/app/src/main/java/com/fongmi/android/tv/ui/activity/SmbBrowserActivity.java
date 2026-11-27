@@ -307,10 +307,11 @@ public class SmbBrowserActivity extends AppCompatActivity {
     }
 
     private android.graphics.drawable.Drawable smbDialogBackground() {
-        // 固定使用 TV 端的紫色，避免手机端跟随系统动态主题变成其他颜色。
+        int background = MaterialColors.getColor(this,
+                com.google.android.material.R.attr.colorPrimaryContainer, 0xFF394B63);
         android.graphics.drawable.GradientDrawable drawable =
                 new android.graphics.drawable.GradientDrawable();
-        drawable.setColor(0xFF963CEB);
+        drawable.setColor(background);
         drawable.setCornerRadius(dp(10));
         return drawable;
     }
