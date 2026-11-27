@@ -378,8 +378,10 @@ public class SmbBrowserActivity extends AppCompatActivity {
         CustomWallView wallpaper = new CustomWallView(this, null).setMotionEnabled(false);
         wallpaper.setFocusable(false);
         wallpaper.setClickable(false);
-        panel.addView(wallpaper, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 初始高度设为 0，避免 MATCH_PARENT 子视图反向撑开 WRAP_CONTENT 面板。
+        FrameLayout.LayoutParams wallpaperParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0);
+        panel.addView(wallpaper, wallpaperParams);
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setPadding(dp(6), dp(6), dp(6), dp(6));
@@ -428,6 +430,12 @@ public class SmbBrowserActivity extends AppCompatActivity {
             column.addView(item, params);
         }
         panel.addView(column, new FrameLayout.LayoutParams(-1, -2));
+        // 等菜单内容确定面板高度后，再让壁纸铺满弹窗，不参与面板高度测量。
+        panel.post(() -> {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) wallpaper.getLayoutParams();
+            params.height = panel.getHeight();
+            wallpaper.setLayoutParams(params);
+        });
 
         // 宽度 = 最长菜单项实际文字宽度 + 项内左右内边距 + 面板内边距
         android.text.TextPaint paint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
