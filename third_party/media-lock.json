@@ -1,0 +1,224 @@
+{
+  "fongmi_media": {
+    "repo": "https://github.com/fish2018/webhtv",
+    "branch": "media/release-1.11.0-alpha01-fongmi",
+    "commit": "e3e922d5c01bc0b564849940fe589daf37360d15",
+    "version": "1.11.0-alpha01-fongmi",
+    "patches": [
+      {
+        "path": "third_party/patches/media3-danmaku-live.patch",
+        "sha256": "c7d3405851c975a7256e363047405e652ec24ffcba39181b5be410b6907db3a5"
+      },
+      {
+        "path": "third_party/patches/media3-dolby-vision-matroska.patch",
+        "sha256": "dda4ab64ac9982377545d23fbcf864d9e9d9308d5be09f86d94efde43a994cce"
+      },
+      {
+        "path": "third_party/patches/media3-upstream-playback-fixes-2026-08.patch",
+        "sha256": "1e09ef63b481af8b69b78c44fc6beea50fd0ae340d149ccf2028dc7804f684b5"
+      },
+      {
+        "path": "third_party/patches/media3-deferred-cues.patch",
+        "sha256": "ebbfbe0bcd1f002780b2db300bdcf42d9c3309c0738b43212ffa224eedcba8dd"
+      },
+      {
+        "path": "third_party/patches/media3-exo-hdr-parser-safety.patch",
+        "sha256": "a6a8bbf95630e70938dacde7e36c97ed330c5c426644893090cfc3280dc6ed20"
+      },
+      {
+        "path": "third_party/patches/media3-exo-pixel-eac3-joc-guard.patch",
+        "sha256": "3c5b6ca8294603a1dfa12404a236513497afd0a78cef938360304c8484f28791"
+      },
+      {
+        "path": "third_party/patches/media3-exo-dts-14bit-frame-size.patch",
+        "sha256": "328fe823b824fd36e359ea16eea4c77334ea707676e9a2803258f29b661e3d77"
+      },
+      {
+        "path": "third_party/patches/media3-exo-subtitle-byte-safety.patch",
+        "sha256": "8ed566a26b70609262d6c49ada2e8912997f36d75a166825e368182b5b7f35bf"
+      },
+      {
+        "path": "third_party/patches/media3-exo-cue-data-contract.patch",
+        "sha256": "a6389e0c34a9a3e895072f84c9ffd13d0c883c5909d8887873717c337066eb61"
+      },
+      {
+        "path": "third_party/patches/media3-exo-bounded-cache-writer.patch",
+        "sha256": "1b591c618fdbba91b0880284126ac8bd5c55f6fe6532187d891b4225a87cc200"
+      },
+      {
+        "path": "third_party/patches/media3-exo-iso-reader-safety.patch",
+        "sha256": "d042b6c177910604f7f251571909d018d0227abc4af7846b15a0b5d499be5893"
+      },
+      {
+        "path": "third_party/patches/media3-exo-iso-multi-extent.patch",
+        "sha256": "b4954d32f5c98dc5caf2a3cbc8cd72f72d24f4fdeec9425e5061a252d1ccaf68"
+      },
+      {
+        "path": "third_party/patches/media3-precache-hls-safety.patch",
+        "sha256": "9b48e895bd3923159f880152a54160e7c937b2b0369d717da559a7ad98fd14f7"
+      },
+      {
+        "path": "third_party/patches/media3-exo-av3a-mp4.patch",
+        "sha256": "b12123fe9dd09c83fc36e106bf7ebe64ab67404b165ceb6b0acbf45706d36874"
+      },
+      {
+        "path": "third_party/patches/media3-exo-av3a-dash-channel-config.patch",
+        "sha256": "76a1a876c8d8493a54826ad54a789ed487e9d11fe324c701af58821b4539b987"
+      },
+      {
+        "path": "third_party/patches/media3-exo-alac-wave.patch",
+        "sha256": "2b6de52af60d16f705c03963c3e40b872f899f1c1b17b21c48851f7ecfe571f3"
+      },
+      {
+        "path": "third_party/patches/media3-exo-ass-observer.patch",
+        "sha256": "5ceff44d31b67157b84ef2868ed1957279056eca4f0e7aee0ae2809fb53ba3ec"
+      },
+      {
+        "path": "third_party/patches/media3-playback-diagnostics.patch",
+        "sha256": "338ee1df1719d67eb7f679a4ff4f2070a7003ef9cc037ddae57e732e52a52b97"
+      },
+      {
+        "path": "third_party/patches/media3-exo-avs3.patch",
+        "sha256": "d3e867c2e41cb917a1876aef333167a48e369b2174b087e233185fe5bd37dcf3"
+      }
+    ],
+    "artifact_overrides": [
+      {
+        "coordinate": "androidx.media3:media3-common:1.11.0-alpha01-fongmi",
+        "aar_sha256": "4826fe94891fb584951c813a8e67a63aafe0816d6adf836317ed895c7eee9cfd",
+        "sources_sha256": "dc9aefdcf38b0b8a2a55a467476c67ac51094fe6a32995bd5e61bce079140bcc",
+        "reason": "C-AVS3 MIME/MP4/TS/Matroska support; all other committed class bytes preserved, including ASS and diagnostics"
+      },
+      {
+        "coordinate": "androidx.media3:media3-container:1.11.0-alpha01-fongmi",
+        "aar_sha256": "db23c133556a03df178090eef482ce427ae33f8e2d639ee82bdb6911b79b01e3",
+        "sources_sha256": "c681e7071d709b4826099388ae18d7d2713c2f55b768e4440d9c965734674da0",
+        "reason": "C-AVS3 MIME/MP4/TS/Matroska support; all other committed class bytes preserved, including ASS and diagnostics"
+      },
+      {
+        "coordinate": "androidx.media3:media3-extractor:1.11.0-alpha01-fongmi",
+        "aar_sha256": "c1eb0ab5118469c128d153665839fd4ecd3be1c22558e741d1670e1bb2ca2725",
+        "sources_sha256": "bc864243c03f29722dddf1bedf58f24e3d83189d3f90c883ec294350651e4559",
+        "reason": "C-AVS3 MIME/MP4/TS/Matroska support; all other committed class bytes preserved, including ASS and diagnostics"
+      },
+      {
+        "coordinate": "androidx.media3:media3-exoplayer:1.11.0-alpha01-fongmi",
+        "aar_sha256": "47f90bd4fc52567738847ceb59c435ddeb6d35b987866d6899de87de3170bdf6",
+        "sources_sha256": "4d158d63ab0a99688880d6acfdc73ed340f09fa9ac9dd1934fbaa0babfcad086",
+        "reason": "Committed local baseline including ASS; AV-DIAG-01 optional owner hooks, all unrelated class bytes preserved"
+      },
+      {
+        "coordinate": "androidx.media3:media3-exoplayer-dash:1.11.0-alpha01-fongmi",
+        "aar_sha256": "de557f0b91512a1e0726155bd0cbb23879279ce05a819ab27a49bea069225546",
+        "sources_sha256": "5462494d6ed12e64b5597070b86206727775c760ebe040ef6d3a3a51244431d4",
+        "reason": "E12 AVS3A P7 DASH AudioChannelConfiguration mapping"
+      },
+      {
+        "coordinate": "androidx.media3:media3-datasource:1.11.0-alpha01-fongmi",
+        "aar_sha256": "1b6b51e921577cb955db2ce05106a44001ad126b8f4cc67f997d1f3404ec3598",
+        "sources_sha256": "26306314752ff1b4297aea2f25e6ff0213497404564f23af95ec4bb5c25ada62",
+        "reason": "E6-1/E7-1 baseline plus E7-2 multi-extent ISO/UDF virtual data source"
+      }
+    ],
+    "upstream_repo": "https://github.com/FongMi/media.git",
+    "upstream_cherry_picks": [
+      "d1bf079238ae4a36d64f0f3b2129b1944a824317",
+      "8103b046bcc0d7e7b8972e709a8ec1002700c96c",
+      "8465e107ece2bb26d5fb45d8d302559fc8783fd8",
+      "6f542f2fa4ac8bd76b376da79dc84f0f98fff2e3",
+      "7745e47713505609a594d5355426b84d0f679c69",
+      "dad705254f16b5b276bf56929736f461359ca1ee",
+      "b33316303d3ef5ad0ede57cbc9dab6d8ab1e63a6",
+      "bb3d9921f14d900a2e76528f2d97cf82e925a499",
+      "fc38c2cda8789db646ae6a01e06494de059a2495"
+    ],
+    "upstream_partial_dependencies": [
+      {
+        "commit": "2fcf67cc83b295f389c0c9c4c5b5c40615781dcf",
+        "scope": "libraries/common Util.getSystemProperty public API hunk only",
+        "reason": "Required by bb3d9921; the unrelated HE-AAC offload behavior is intentionally excluded"
+      },
+      {
+        "commit": "dd00f94b58b7324ab29febb0b50f3a190d544a3b",
+        "scope": "libraries/datasource CacheWriter bounded read/count/end-position hunks and focused test only",
+        "reason": "E6-1 fixes bounded cache writes; progressive parallel download, DiskPreloadManager, priority setter, and factory/cancel changes are intentionally excluded"
+      },
+      {
+        "commit": "990abc2368fd74779f525ee345734470659f3d53",
+        "scope": "libraries/datasource IsoDataReader zero-length, prefetch bound, open/close, and EOF hunks plus focused tests only",
+        "reason": "E7-1 hardens the existing single-extent ISO reader; multi-extent UDF, virtual data source, and App resolver changes remain isolated to E7-2"
+      }
+    ]
+  },
+  "avs3_video": {
+    "high_decoder": {
+      "repo": "https://github.com/zzZ2001a/avs",
+      "commit": "0c7ac42edfac6d18b92b58a5ef43bca58526ca7a",
+      "subdirectory": "dependencies/hpm-HPM-15.0",
+      "archive": "third_party/avs3-hpm/vendor/hpm-15.0.tar.gz",
+      "sha256": "7cfd796f4052b491af0a53a3a82356b5886ab03fcde3eea1a2f5ac4060370afb",
+      "version": "HPM-15.0-webhtv-1",
+      "simd_adapter": {
+        "repo": "https://github.com/DLTcollab/sse2neon",
+        "commit": "3cf69760cc6fdc45a5d70f0d42a8f079489f9867",
+        "version": "1.8.0",
+        "header": "third_party/avs3-hpm/vendor/sse2neon.h",
+        "sha256": "07723c9f9457dd4316f1fde3dd4eb6f31dd67d9955f6c21f4e609ac1698be48a",
+        "license": "MIT"
+      },
+      "license": "LicenseRef-AVS-HPM-standards-testing-and-promotion",
+      "profiles": [
+        "0x32"
+      ],
+      "bit_depths": [
+        10
+      ],
+      "linkage": "static, separately built for Exo and MPV"
+    },
+    "decoder": {
+      "repo": "https://github.com/uavs3/uavs3d",
+      "commit": "0e20d2c291853f196c68922a264bcd8471d75b68",
+      "url": "https://codeload.github.com/uavs3/uavs3d/tar.gz/0e20d2c291853f196c68922a264bcd8471d75b68",
+      "sha256": "1c1eb778b6080bc01493180ea7ae671c6444ce3aa760b5d021ba882eb0f9e3a0",
+      "license": "BSD-3-Clause",
+      "profiles": [
+        "0x20",
+        "0x22"
+      ],
+      "bit_depths": [
+        8,
+        10
+      ],
+      "linkage": "static, separately built for Exo and MPV"
+    },
+    "ffmpeg_patch": {
+      "path": "third_party/patches/ffmpeg-avs3.patch",
+      "sha256": "26c1cfb7fc1bb26fd48ca6b2efc09ea837fd060bcc0e1f578ee97de870585544"
+    }
+  },
+  "nextlib": {
+    "repo": "https://github.com/anilbeesetti/nextlib.git",
+    "branch": "release/1.10.0-0.12.1",
+    "commit": "6ff6cf9d0820382b3c233d018c52e4163b09d345",
+    "version": "1.10.0-0.12.1-fongmi-softload-av3a-avs3-ffmpeg901-r5",
+    "upstream_version": "1.10.0-0.12.1",
+    "patches": [
+      "third_party/patches/nextlib-ffmpeg-soft-load-shedding.patch",
+      "third_party/patches/nextlib-av3a.patch",
+      "third_party/patches/nextlib-ape-support.patch",
+      "third_party/patches/nextlib-avs3.patch"
+    ],
+    "ffmpeg_repo": "https://github.com/FongMi/FFmpeg.git",
+    "ffmpeg_commit": "177f090e0503b7e013922ca903bde14b1c375f18",
+    "ndk": "28.2.13676358",
+    "cmake": "3.22.1",
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a"
+    ],
+    "avs3_artifact": {
+      "aar_sha256": "398a266d31ad756b66a05af8be077f77298436994408cf3644a5554ee73f4773",
+      "sources_sha256": "2a08cc5f58718a3da3dc437784891680a0710c376b322a385cd6e5adcde01492"
+    }
+  }
+}

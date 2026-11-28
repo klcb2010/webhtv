@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingLeft="22dp"
+    android:paddingRight="22dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="16dp"
+    android:background="@drawable/shape_child_lock_dialog">
+
+    <LinearLayout
+        android:id="@+id/childLockSwitchRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/selector_child_lock_row_focus"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:clickable="true"
+        android:nextFocusDown="@+id/childLockPassword">
+
+        <TextView
+            android:id="@+id/childLockEnableLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/child_lock_enable"
+            android:textColor="#FF1E88E5"
+            android:textSize="16sp"
+            android:duplicateParentState="true" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/childLockSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:nextFocusDown="@+id/childLockPassword" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <EditText
+            android:id="@+id/childLockPassword"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:hint="@string/child_lock_password_hint"
+            android:textColor="#FF263238"
+            android:textColorHint="#99263238"
+            android:textSize="15sp"
+            android:background="@drawable/selector_child_lock_edit"
+            android:nextFocusUp="@+id/childLockSwitchRow"
+            android:nextFocusDown="@+id/childLockPasswordConfirm" />
+
+        <ImageButton
+            android:id="@+id/childLockPasswordToggle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/selector_child_lock_focus"
+            android:contentDescription="@string/child_lock_toggle_password"
+            android:src="@drawable/ic_child_lock_eye_closed"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/childLockConfirmRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="14dp">
+
+        <EditText
+            android:id="@+id/childLockPasswordConfirm"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:hint="@string/child_lock_password_confirm_hint"
+            android:textColor="#FF263238"
+            android:textColorHint="#99263238"
+            android:textSize="15sp"
+            android:background="@drawable/selector_child_lock_edit"
+            android:nextFocusUp="@+id/childLockPassword"
+            android:nextFocusDown="@+id/childLockSave" />
+
+        <ImageButton
+            android:id="@+id/childLockPasswordConfirmToggle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/selector_child_lock_focus"
+            android:contentDescription="@string/child_lock_toggle_password"
+            android:src="@drawable/ic_child_lock_eye_closed"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/childLockHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/child_lock_setup_hint"
+        android:textColor="#FF78909C"
+        android:textSize="12sp"
+        android:lineSpacingExtra="2dp"
+        android:paddingBottom="18dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/childLockCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="64dp"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:layout_marginEnd="4dp"
+            android:text="@string/child_lock_cancel"
+            android:textColor="#FF1E88E5"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:background="@drawable/selector_child_lock_focus"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:nextFocusUp="@+id/childLockPasswordConfirm" />
+
+        <TextView
+            android:id="@+id/childLockSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="64dp"
+            android:gravity="center"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/child_lock_save"
+            android:textColor="#FF1E88E5"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:background="@drawable/selector_child_lock_focus"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:nextFocusUp="@+id/childLockPasswordConfirm" />
+    </LinearLayout>
+</LinearLayout>

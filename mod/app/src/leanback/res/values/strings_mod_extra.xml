@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_hdr_to_sdr">HDR to SDR</string>
+    <string name="play_screenshot">Screenshot</string>
+    <string name="setting_youtube_home_fallback">YouTube home recommendations fallback</string>
+</resources>

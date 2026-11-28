@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setting_hdr_to_sdr">HDR转码为SDR</string>
+    <string name="play_screenshot">截图</string>
+    <string name="setting_youtube_home_fallback">油管首页推荐兜底</string>
+</resources>
